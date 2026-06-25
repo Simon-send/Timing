@@ -1,0 +1,8 @@
+*.log
+.DS_Store
+
+**/.dart_tool/
+**/build/
+**/node_modules/
+**/.firebase/
+

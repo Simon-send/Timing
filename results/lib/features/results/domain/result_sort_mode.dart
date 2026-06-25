@@ -1,0 +1,1 @@
+enum ResultSortMode { cumulative, split }
