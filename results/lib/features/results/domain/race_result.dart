@@ -78,11 +78,13 @@ class SplitValue {
 class RaceResult {
   const RaceResult({
     required this.id,
+    this.athleteId,
     required this.rank,
     this.finishRank,
     required this.bib,
     required this.name,
     required this.club,
+    this.team = '',
     required this.totalMs,
     required this.totalText,
     required this.shooting,
@@ -104,6 +106,9 @@ class RaceResult {
 
     return RaceResult(
       id: id,
+      athleteId:
+          asNonEmptyString(data['athleteId']) ??
+          asNestedString(data['participant'], 'athleteId'),
       rank:
           asInt(data['rank']) ??
           asInt(data['Rank']) ??
@@ -126,12 +131,14 @@ class RaceResult {
           asNestedString(data['participant'], 'name') ??
           'Ukjent utover',
       club:
+          asNonEmptyString(data['clubName']) ??
+          asNonEmptyString(data['club']) ??
+          '',
+      team:
           asNonEmptyString(data['teamName']) ??
           asNonEmptyString(data['team']) ??
           asNonEmptyString(data['lagName']) ??
           asNonEmptyString(data['lag']) ??
-          asNonEmptyString(data['clubName']) ??
-          asNonEmptyString(data['club']) ??
           '',
       totalMs: asInt(data['totalMs']) ?? asInt(data['totalTimeMs']),
       totalText:
@@ -149,6 +156,7 @@ class RaceResult {
           asNonEmptyString(data['StatusTekst']) ??
           asNonEmptyString(data['resultStatus']) ??
           asNonEmptyString(data['statusText']) ??
+          _resultStatusFromSplitMaps(splitMaps) ??
           '',
       splitValues: splitValues,
       biathlon: BiathlonAnalysis.fromMaps(analysis, shootingData),
@@ -156,11 +164,13 @@ class RaceResult {
   }
 
   final String id;
+  final String? athleteId;
   final int? rank;
   final int? finishRank;
   final String bib;
   final String name;
   final String club;
+  final String team;
   final int? totalMs;
   final String totalText;
   final String shooting;
@@ -168,17 +178,32 @@ class RaceResult {
   final Map<String, SplitValue> splitValues;
   final BiathlonAnalysis biathlon;
 
+  String affiliationName(ResultAffiliationView view) {
+    return switch (view) {
+      ResultAffiliationView.club => club,
+      ResultAffiliationView.team => team,
+    };
+  }
+
+  bool matchesSearch(String query) {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) return true;
+    final searchableText = '$name $club $team'.toLowerCase();
+    return searchableText.contains(normalizedQuery);
+  }
+
   bool get isFinished {
-    final normalizedStatus = status.trim().toUpperCase();
-    if (normalizedStatus.contains('DNF') ||
-        normalizedStatus.contains('DNS') ||
-        normalizedStatus.contains('DSQ') ||
-        normalizedStatus.contains('BRUTT') ||
-        normalizedStatus.contains('IKKE FULLF')) {
-      return false;
-    }
+    if (_resultStatusSortOrder(status) > 0) return false;
     if (totalMs != null && totalMs! > 0) return true;
     return rank != null && totalText.trim().isNotEmpty;
+  }
+
+  /// Fullførte løpere kommer først. DNF og DNS får de to høyeste
+  /// verdiene slik at de alltid havner helt nederst i resultatlister.
+  int get statusSortOrder {
+    final statusOrder = _resultStatusSortOrder(status);
+    if (statusOrder > 0) return statusOrder;
+    return isFinished ? 0 : 1;
   }
 
   String get placementLabel {
@@ -196,6 +221,37 @@ class RaceResult {
     return '+${formatDurationMs(gap)}';
   }
 }
+
+/// Returns the explicit leg time, or derives it from consecutive cumulative
+/// passings for result documents imported before leg times were persisted.
+int? effectiveSplitLegMs(RaceResult result, String splitId) {
+  final split = result.splitValues[splitId];
+  if (split == null) return null;
+  final explicitLegMs = split.legMs;
+  if (explicitLegMs != null && explicitLegMs > 0) return explicitLegMs;
+
+  final cumulativeMs = split.cumMs;
+  if (cumulativeMs == null || cumulativeMs <= 0) return null;
+
+  SplitValue? previous;
+  for (final candidate in result.splitValues.values) {
+    final candidateMs = candidate.cumMs;
+    if (candidate.id == split.id ||
+        candidateMs == null ||
+        candidateMs <= 0 ||
+        candidateMs >= cumulativeMs) {
+      continue;
+    }
+    if (previous == null || candidateMs > previous.cumMs!) {
+      previous = candidate;
+    }
+  }
+
+  final previousMs = previous?.cumMs;
+  return previousMs == null ? cumulativeMs : cumulativeMs - previousMs;
+}
+
+enum ResultAffiliationView { club, team }
 
 class ShootingPass {
   const ShootingPass({
@@ -234,22 +290,26 @@ class ShootingPass {
 
 class BiathlonAnalysis {
   const BiathlonAnalysis({
+    required this.skiTimeMs,
     required this.netSkiTimeMs,
     required this.shootingTimeMs,
     required this.penaltyTimeMs,
     required this.missesTotal,
     required this.skiRank,
+    required this.netSkiRank,
     required this.shootingRank,
     required this.penaltyRank,
     required this.passes,
   });
 
   const BiathlonAnalysis.empty()
-    : netSkiTimeMs = null,
+    : skiTimeMs = null,
+      netSkiTimeMs = null,
       shootingTimeMs = null,
       penaltyTimeMs = null,
       missesTotal = null,
       skiRank = null,
+      netSkiRank = null,
       shootingRank = null,
       penaltyRank = null,
       passes = const [];
@@ -273,17 +333,20 @@ class BiathlonAnalysis {
         asInt(analysis['missesTotal']) ??
         asInt(analysis['penaltiesTotal']) ??
         _sumPassMisses(passes);
+    final netSkiTimeMs = asInt(analysis['netSkiTimeMs']);
+    final penaltyTimeMs = asInt(analysis['penaltyTimeMs']);
 
     return BiathlonAnalysis(
-      netSkiTimeMs:
-          asInt(analysis['netSkiTimeMs']) ??
+      skiTimeMs:
           asInt(analysis['skiTimeMs']) ??
-          asInt(analysis['courseSkiTimeMs']),
+          _deriveSkiTimeMs(netSkiTimeMs, penaltyTimeMs),
+      netSkiTimeMs: netSkiTimeMs,
       shootingTimeMs:
           asInt(analysis['shootingTimeMs']) ?? asInt(analysis['rangeTimeMs']),
-      penaltyTimeMs: asInt(analysis['penaltyTimeMs']),
+      penaltyTimeMs: penaltyTimeMs,
       missesTotal: missesTotal,
       skiRank: asInt(analysis['skiRank']),
+      netSkiRank: asInt(analysis['netSkiRank']) ?? asInt(analysis['skiRank']),
       shootingRank:
           asInt(analysis['shootRank']) ??
           asInt(analysis['rangeRank']) ??
@@ -293,17 +356,20 @@ class BiathlonAnalysis {
     );
   }
 
+  final int? skiTimeMs;
   final int? netSkiTimeMs;
   final int? shootingTimeMs;
   final int? penaltyTimeMs;
   final int? missesTotal;
   final int? skiRank;
+  final int? netSkiRank;
   final int? shootingRank;
   final int? penaltyRank;
   final List<ShootingPass> passes;
 
   bool get hasData {
-    return netSkiTimeMs != null ||
+    return skiTimeMs != null ||
+        netSkiTimeMs != null ||
         shootingTimeMs != null ||
         penaltyTimeMs != null ||
         missesTotal != null ||
@@ -316,6 +382,13 @@ class BiathlonAnalysis {
     }
     return null;
   }
+}
+
+int? _deriveSkiTimeMs(int? netSkiTimeMs, int? penaltyTimeMs) {
+  if (netSkiTimeMs == null) return null;
+  if (penaltyTimeMs == null) return netSkiTimeMs;
+  final skiTimeMs = netSkiTimeMs - penaltyTimeMs;
+  return skiTimeMs < 0 ? 0 : skiTimeMs;
 }
 
 int? _asNestedInt(Object? value) {
@@ -364,6 +437,42 @@ String? _shootingFromSplitMaps(List<Map<String, dynamic>> splitMaps) {
   return bestText;
 }
 
+String? _resultStatusFromSplitMaps(List<Map<String, dynamic>> splitMaps) {
+  String? latestStatus;
+  for (final split in splitMaps) {
+    final status =
+        asNonEmptyString(split['status']) ??
+        asNonEmptyString(split['StatusTekst']) ??
+        asNonEmptyString(split['statusText']);
+    if (status == null) continue;
+    latestStatus = status;
+    if (_resultStatusSortOrder(status) > 0) return status;
+  }
+  return latestStatus;
+}
+
+int _resultStatusSortOrder(String status) {
+  final normalized = status.trim().toUpperCase();
+  if (normalized.contains('DNS') ||
+      normalized.contains('DID NOT START') ||
+      normalized.contains('IKKE STARTET') ||
+      normalized.contains('STARTET IKKE')) {
+    return 3;
+  }
+  if (normalized.contains('DNF') ||
+      normalized.contains('DID NOT FINISH') ||
+      normalized.contains('BRUTT') ||
+      normalized.contains('IKKE FULLF')) {
+    return 2;
+  }
+  if (normalized.contains('DSQ') ||
+      normalized.contains('DQ') ||
+      normalized.contains('DISQUAL')) {
+    return 1;
+  }
+  return 0;
+}
+
 int? _indexFromShootingKey(String key) {
   final match = RegExp(r'(\d+)').firstMatch(key);
   if (match == null) return null;
@@ -398,6 +507,7 @@ List<SplitOption> buildSplitOptions(
       id: splitDef.id,
       label: splitDef.label,
       sort: splitDef.sort,
+      kind: splitDef.kind,
     );
   }
 
@@ -406,7 +516,12 @@ List<SplitOption> buildSplitOptions(
       if (hiddenSplitIds.contains(split.id)) continue;
       options.putIfAbsent(
         split.id,
-        () => SplitOption(id: split.id, label: split.label, sort: split.sort),
+        () => SplitOption(
+          id: split.id,
+          label: split.label,
+          sort: split.sort,
+          kind: _looksLikeFinishSplit(split.label) ? 'finish' : 'split',
+        ),
       );
     }
   }
@@ -417,6 +532,11 @@ List<SplitOption> buildSplitOptions(
       return a.label.compareTo(b.label);
     });
   return sorted;
+}
+
+bool _looksLikeFinishSplit(String value) {
+  final normalized = value.trim().toLowerCase().replaceAll('å', 'aa');
+  return normalized == 'maal' || normalized == 'finish' || normalized == 'goal';
 }
 
 List<Map<String, dynamic>> _readSplitMaps(Map<String, dynamic> data) {

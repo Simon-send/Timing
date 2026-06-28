@@ -29,16 +29,36 @@ jest.mock("@google-cloud/tasks", () => ({
 }));
 
 jest.mock("firebase-admin", () => {
+  const DELETE_FIELD = {__fieldValueDelete: true};
+
+  const isDeleteField = function(value) {
+    return value && value.__fieldValueDelete === true;
+  };
+
   const createFirestoreState = function() {
     const docs = new Map();
     const writes = [];
     let autoId = 0;
 
     const applySet = function(path, data, options) {
+      for (const [key, value] of Object.entries(data || {})) {
+        if (isDeleteField(value) && !(options && options.merge)) {
+          throw new Error(
+            "Value for argument \"data\" is not a valid Firestore document. " +
+            "FieldValue.delete() must appear at the top-level and can only be " +
+            `used in update() or set() with {merge:true} (found in field "${key}").`,
+          );
+        }
+      }
+
       const previous = docs.get(path) || {};
       const next = options && options.merge ?
         Object.assign({}, previous, data) :
-        data;
+        Object.assign({}, data);
+
+      for (const [key, value] of Object.entries(next)) {
+        if (isDeleteField(value)) delete next[key];
+      }
 
       docs.set(path, next);
       writes.push({path, data: next, options: options || null});
@@ -135,6 +155,7 @@ jest.mock("firebase-admin", () => {
       FieldValue: {
         serverTimestamp: jest.fn(() => "SERVER_TIMESTAMP"),
         arrayUnion: jest.fn((...values) => values),
+        delete: jest.fn(() => DELETE_FIELD),
       },
     }),
   };
@@ -756,6 +777,25 @@ const buildResultsOnlySubclassFixtures = function() {
 };
 
 describe("eq importer helpers", () => {
+  test("buildStationSetupMap treats MT passings as regular splits", () => {
+    const mod = loadModule();
+    const setupMap = mod._test.buildStationSetupMap({
+      Stasjoner: {
+        "10": {
+          Navn: "Mellomtid",
+          StasjonsOppsett: {
+            "20": {
+              EtappeUID: 30,
+              Navn: "MT1",
+            },
+          },
+        },
+      },
+    });
+
+    expect(setupMap.get(30).get(20).kind).toBe("split");
+  });
+
   test("buildEtappeMap maps etappeDeltakerUid to participantUid", () => {
     const mod = loadModule();
     const map = mod._test.buildEtappeMap({
@@ -1140,6 +1180,7 @@ describe("eq importer helpers", () => {
 
     expect(derived.analysis).toMatchObject({
       courseTimeMs: 400000,
+      skiTimeMs: 335000,
       netSkiTimeMs: 335000,
       rangeTimeMs: 65000,
       shootingTimeMs: 65000,
@@ -1191,27 +1232,58 @@ describe("eq importer helpers", () => {
     expect(derived.rawPasses).toEqual(expect.arrayContaining([
       expect.objectContaining({
         code: "INS1",
-        shooting: expect.objectContaining({
-          index: 1,
-          position: "prone",
-          misses: 1,
-          hits: 4,
-          rangeMs: 30000,
-        }),
+        cumMs: 100000,
       }),
       expect.objectContaining({
         code: "UTS2",
-        shooting: expect.objectContaining({
-          index: 2,
-          position: "standing",
-          misses: 1,
-          hits: 4,
-          rangeMs: 35000,
-        }),
+        cumMs: 285000,
       }),
     ]));
-    expect(derived.rawPasses.some((pass) => pass.diff || pass.placement)).toBe(false);
-    expect(derived.courseSplits).toBeUndefined();
+    expect(derived.rawPasses.some((pass) =>
+      pass.diff || pass.placement || pass.shooting || pass.stationUid)).toBe(false);
+  });
+
+  test("buildDerivedResultMetrics calculates and ranks penalty time", () => {
+    const mod = loadModule();
+    const withPenalty = mod._test.buildDerivedResultMetrics({
+      "1": {code: "INS1", cumMs: 100000},
+      "2": {code: "S1", cumMs: 130000, addition: "1"},
+      "3": {code: "US1", cumMs: 200000, addition: "1"},
+      "4": {
+        code: "Maal",
+        cumMs: 400000,
+        cumMsWithoutAddition: 390000,
+        addition: "1",
+      },
+    }, 400000);
+    const withoutPenalty = mod._test.buildDerivedResultMetrics({
+      "1": {code: "INS1", cumMs: 90000},
+      "2": {code: "S1", cumMs: 120000, addition: "0"},
+      "3": {code: "US1", cumMs: 160000, addition: "0"},
+      "4": {code: "Maal", cumMs: 350000, addition: "0"},
+    }, 350000);
+
+    expect(withPenalty.analysis.netSkiTimeMs).toBe(370000);
+    expect(withPenalty.analysis.skiTimeMs).toBe(290000);
+    expect(withPenalty.analysis.penaltyTimeMs).toBe(80000);
+    expect(withPenalty.shooting.shoot1.penaltyMs).toBe(70000);
+    expect(withoutPenalty.analysis.netSkiTimeMs).toBe(320000);
+    expect(withoutPenalty.analysis.skiTimeMs).toBe(320000);
+    expect(withoutPenalty.analysis.penaltyTimeMs).toBe(0);
+
+    const ranked = [withPenalty, withoutPenalty].map((derived) => ({
+      analysis: derived.analysis,
+    }));
+    mod._test.addMetricRanks(ranked, "skiTimeMs", "skiRank");
+    mod._test.addMetricRanks(ranked, "netSkiTimeMs", "netSkiRank");
+    mod._test.addMetricRanks(ranked, "penaltyTimeMs", "penaltyRank");
+
+    expect(withPenalty.analysis.skiRank).toBe(1);
+    expect(withoutPenalty.analysis.skiRank).toBe(2);
+    expect(withoutPenalty.analysis.netSkiRank).toBe(1);
+    expect(withPenalty.analysis.netSkiRank).toBe(2);
+    expect(withoutPenalty.analysis.penaltyRank).toBe(1);
+    expect(withPenalty.analysis.penaltyRank).toBe(2);
   });
 });
 
@@ -1298,6 +1370,7 @@ describe("eq importer core import", () => {
           standingHits: null,
           standingMisses: null,
           skiRank: 1,
+          netSkiRank: 1,
           shootRank: null,
         },
       ],
@@ -1318,23 +1391,20 @@ describe("eq importer core import", () => {
       resultCount: 1,
       participantCount: 1,
       hasResults: true,
-      results: expect.objectContaining({
-        collectionPath: "events/80088/classes/1224375/results",
-        count: 1,
-        ids: ["101"],
-        containsAthletes: true,
-        eachAthleteHasSplits: true,
-      }),
       timingSummary: expect.objectContaining({
         sources: expect.objectContaining({
           stationFetches: expect.any(Array),
         }),
       }),
     });
+    expect(classDoc.results).toBeUndefined();
     expect(classDoc.splitDefs).toBeUndefined();
     expect(classDoc.splitOrder).toBeUndefined();
     expect(classDoc.splitCount).toBeUndefined();
     expect(classDoc.splitTimes).toBeUndefined();
+    const classWrites = mockState.writes.filter((write) =>
+      write.path === "events/80088/classes/1224375");
+    expect(classWrites[classWrites.length - 1].options).toEqual({merge: true});
 
     const resultDoc = mockState.docs.get("events/80088/classes/1224375/results/101");
     expect(resultDoc).toMatchObject({
@@ -1496,6 +1566,33 @@ describe("eq importer core import", () => {
     ]));
   });
 
+  test("importEqTimingFromUrls tolerates null station payloads from EQ Timing", async () => {
+    const mod = loadModule();
+    const fixtures = buildImportFixtures();
+
+    mockAxiosGet
+      .mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants})
+      .mockResolvedValueOnce({data: null})
+      .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+
+    const result = await mod._import({
+      eventId: 80088,
+      classId: 1224375,
+      eventUrl: "https://example.test/event",
+      participantsUrl: "https://example.test/participants",
+      timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.normalizedCount).toBe(1);
+    expect(mockState.docs.get("events/80088/classes/1224375/results/101")).toMatchObject({
+      participantUid: 101,
+      totalMs: 120000,
+      totalText: "2:00.0",
+    });
+  });
+
   test("importEqTimingFromUrls keeps participant metadata without writing participant docs", async () => {
     const mod = loadModule();
     const fixtures = buildImportFixtures();
@@ -1531,13 +1628,8 @@ describe("eq importer core import", () => {
       resultCount: 0,
       participantCount: 1,
       hasResults: false,
-      results: expect.objectContaining({
-        count: 0,
-        ids: [],
-        containsAthletes: true,
-        eachAthleteHasSplits: true,
-      }),
     });
+    expect(mockState.docs.get("events/80088/classes/1224375").results).toBeUndefined();
     expect(mockState.docs.has("events/80088/classes/1224375/participants/101")).toBe(false);
   });
 
@@ -1624,7 +1716,7 @@ describe("eq importer core import", () => {
           code: "Maal",
           cumMs: 120000,
           addition: "1+0",
-          additionTotal: 1,
+          additionParts: [1, 0],
         }),
       ]),
     });
@@ -1737,11 +1829,8 @@ describe("eq importer core import", () => {
     expect(mockState.docs.get("events/80088/classes/1224375")).toMatchObject({
       resultCount: 1,
       hasResults: true,
-      results: expect.objectContaining({
-        count: 1,
-        ids: ["101"],
-      }),
     });
+    expect(mockState.docs.get("events/80088/classes/1224375").results).toBeUndefined();
     expect(mockState.docs.get("events/80088/classes/1224375/results/101")).toMatchObject({
       participantUid: 101,
       totalMs: 120000,
@@ -1784,11 +1873,8 @@ describe("eq importer core import", () => {
     expect(mockState.docs.get("events/80088/classes/1224375")).toMatchObject({
       resultCount: 1,
       participantCount: 1,
-      results: expect.objectContaining({
-        count: 1,
-        ids: ["9901"],
-      }),
     });
+    expect(mockState.docs.get("events/80088/classes/1224375").results).toBeUndefined();
     expect(mockState.docs.has("events/80088/classes/1224375/participants/101")).toBe(false);
     const unmappedResultDoc = mockState.docs.get("events/80088/classes/1224375/results/9901");
     expect(unmappedResultDoc).toMatchObject({
@@ -2079,6 +2165,63 @@ describe("eq importer http handlers", () => {
 
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({error: "Job not found"});
+  });
+
+  test("runImportEventChunk clears stale lastError after a successful retry", async () => {
+    const mod = loadModule();
+    const fixtures = buildImportFixtures();
+
+    mockAxiosGet
+      .mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants});
+
+    const startReq = {
+      method: "POST",
+      body: {
+        eventId: 80088,
+        classCount: 1,
+      },
+    };
+    const startRes = makeResponse();
+
+    await mod.startImportEvent(startReq, startRes);
+
+    const jobId = startRes.json.mock.calls[0][0].jobId;
+    mockState.docs.set("importJobs/" + jobId, Object.assign(
+      {},
+      mockState.docs.get("importJobs/" + jobId),
+      {lastError: "Old EQ Timing error"},
+    ));
+
+    mockAxiosGet
+      .mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants})
+      .mockResolvedValueOnce({data: fixtures.stationOneTimes})
+      .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+
+    const chunkReq = {
+      method: "POST",
+      body: {
+        jobId,
+        eventId: 80088,
+        classIndex: 0,
+        classCount: 1,
+      },
+    };
+    const chunkRes = makeResponse();
+
+    await mod.runImportEventChunk(chunkReq, chunkRes);
+
+    expect(chunkRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      ok: true,
+      jobId,
+    }));
+    expect(mockState.docs.get("importJobs/" + jobId)).toMatchObject({
+      status: "done",
+      done: true,
+      nextClassIndex: 1,
+    });
+    expect(mockState.docs.get("importJobs/" + jobId).lastError).toBeUndefined();
   });
 
   test("startImportEvent enqueues a job and returns queued response", async () => {

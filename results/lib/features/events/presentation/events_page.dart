@@ -9,6 +9,7 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/loading_state.dart';
 import '../../auth/presentation/account_menu.dart';
+import '../../results/domain/result_sort_mode.dart';
 import '../../settings/presentation/settings_menu.dart';
 import '../domain/result_event.dart';
 import 'event_card.dart';
@@ -57,6 +58,9 @@ class _EventsPageState extends ConsumerState<EventsPage> {
                 ref
                     .read(settingsControllerProvider.notifier)
                     .setDefaultEvent(event.id);
+                ref.read(resultSortModeProvider(event.id).notifier).state =
+                    ResultSortMode.cumulative;
+                ref.read(splitRangeSelectionProvider.notifier).state = null;
                 context.go('/events/${event.id}/results');
               },
             );

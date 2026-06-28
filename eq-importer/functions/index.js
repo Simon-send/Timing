@@ -46,7 +46,9 @@ async function fetchAllForStation(baseUrl, stationUid) {
     const url = withStation(baseUrl, stationUid, startAt, pageSize);
     const data = await fetchJson(url);
 
-    const itemsRaw = data.Items || data.items || [];
+    const itemsRaw = data && typeof data === "object" ?
+      firstDefined(data.Items, data.items, []) :
+      [];
     const items = Array.isArray(itemsRaw) ? itemsRaw : Object.values(itemsRaw);
 
     if (!items || items.length === 0) break;
@@ -441,7 +443,7 @@ function classifySplitKind(code, meta) {
   if (/^UTS\d+$/i.test(normalized)) return "rangeOut";
   if (/^US\d+$/i.test(normalized)) return "rangeExit";
   if (/^R\d+$/i.test(normalized)) return "lap";
-  if (/^MT/i.test(normalized)) return "courseSplit";
+  if (/^MT/i.test(normalized)) return "split";
   if (meta && meta.isShootingStation) return "shooting";
   if (meta && meta.isStart) return "start";
   if (meta && meta.isStop) return "finish";
@@ -867,6 +869,7 @@ function buildAthleteEventResultEntry(result, context) {
     standingHits: firstDefined(analysis.standingHits, null),
     standingMisses: firstDefined(analysis.standingMisses, null),
     skiRank: firstDefined(analysis.skiRank, null),
+    netSkiRank: firstDefined(analysis.netSkiRank, analysis.skiRank, null),
     shootRank: firstDefined(analysis.shootRank, null),
   };
 }
@@ -1188,7 +1191,6 @@ function buildResultClassDoc(args) {
     {},
     buildCompactResultIdentity(args.participantSummary, args.identityFields),
     {
-    resultId: args.docId,
     eventId: args.eventId,
     classId: args.classId,
     etappeUid: args.etappeUid,
@@ -1196,21 +1198,13 @@ function buildResultClassDoc(args) {
     hasTimingData: true,
     totalMs: args.totalMs,
     totalText: args.totalText,
+    status: args.status,
     rawPasses: args.derived.rawPasses,
     analysis: args.derived.analysis,
     shooting: args.derived.shooting,
-    laps: args.derived.laps,
-    source: {
-      provider: "eqtiming",
-      eventId: args.eventId,
-      classId: args.classId,
-      etappeUid: args.etappeUid,
-      participantUid: args.participantSummary &&
-        args.participantSummary.participantUid != null ?
-        args.participantSummary.participantUid :
-        null,
-      etappeDeltakerUid: args.etappeDeltakerUid,
-    },
+    resultId: admin.firestore.FieldValue.delete(),
+    laps: admin.firestore.FieldValue.delete(),
+    source: admin.firestore.FieldValue.delete(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
@@ -1479,6 +1473,7 @@ function ensureShootingEntry(shooting, shotIndex) {
       rangeExitCumMs: null,
       rangeMs: null,
       rangeExitMs: null,
+      penaltyMs: null,
       misses: null,
       cumulativeMisses: null,
       hits: null,
@@ -1500,23 +1495,27 @@ function sumAdditionParts(parts, count) {
   return parts.slice(0, useCount).reduce((sum, value) => sum + value, 0);
 }
 
-function buildRawPassShootingInfo(split, shooting) {
-  const shotIndex = getShotIndexFromCode(split && split.code);
-  if (shotIndex == null) return null;
-
-  const shot = shooting && shooting[`shoot${shotIndex}`] ? shooting[`shoot${shotIndex}`] : null;
-  if (!shot) return null;
-
+function buildPersistedRawPass(split) {
   return {
-    index: shot.index,
-    position: firstDefined(shot.position, null),
-    misses: firstDefined(shot.misses, null),
-    hits: firstDefined(shot.hits, null),
-    cumulativeMisses: firstDefined(shot.cumulativeMisses, null),
-    addition: firstDefined(shot.addition, null),
-    rangeMs: firstDefined(shot.rangeMs, null),
-    rangeExitMs: firstDefined(shot.rangeExitMs, null),
+    setupUid: firstDefined(split.setupUid, null),
+    code: firstDefined(split.code, null),
+    sort: firstDefined(split.sort, null),
+    cumRank: firstDefined(split.cumRank, null),
+    legRank: firstDefined(split.legRank, null),
+    cumMs: firstDefined(split.cumMs, null),
+    legMs: firstDefined(split.legMs, null),
+    cumText: firstDefined(split.cumText, null),
+    legText: firstDefined(split.legText, null),
+    status: firstDefined(split.status, null),
+    addition: firstDefined(split.addition, null),
+    additionParts: firstDefined(split.additionParts, null),
   };
+}
+
+function deriveSkiTimeMs(netSkiTimeMs, penaltyTimeMs) {
+  if (typeof netSkiTimeMs !== "number") return null;
+  if (typeof penaltyTimeMs !== "number") return netSkiTimeMs;
+  return Math.max(0, netSkiTimeMs - penaltyTimeMs);
 }
 
 function buildDerivedResultMetrics(splits, totalMs) {
@@ -1592,6 +1591,8 @@ function buildDerivedResultMetrics(splits, totalMs) {
   let standingMisses = 0;
   let proneHits = 0;
   let standingHits = 0;
+  let penaltyTimeMs = 0;
+  let hasCompletePenaltyTime = shootingCount > 0 && finalMissesTotal != null;
   const shootingResultParts = [];
 
   for (const shootKey of shootKeys) {
@@ -1634,6 +1635,21 @@ function buildDerivedResultMetrics(splits, totalMs) {
 
     if (typeof shot.inCumMs === "number" && typeof shot.rangeExitCumMs === "number") {
       shot.rangeExitMs = shot.rangeExitCumMs - shot.inCumMs;
+    }
+
+    // EQ Timing does not expose a dedicated penalty-loop duration. For a
+    // missed shooting, the interval from S/UTS to US covers that segment.
+    if (typeof shot.misses !== "number") {
+      hasCompletePenaltyTime = false;
+    } else if (shot.misses === 0) {
+      shot.penaltyMs = 0;
+    } else if (typeof rangeEndMs === "number" &&
+      typeof shot.rangeExitCumMs === "number" &&
+      shot.rangeExitCumMs >= rangeEndMs) {
+      shot.penaltyMs = shot.rangeExitCumMs - rangeEndMs;
+      penaltyTimeMs += shot.penaltyMs;
+    } else {
+      hasCompletePenaltyTime = false;
     }
 
     if (typeof shot.misses === "number") {
@@ -1701,23 +1717,29 @@ function buildDerivedResultMetrics(splits, totalMs) {
     Math.max(0, targetsTotal - finalMissesTotal) :
     null;
 
-  const persistedSplitEntries = splitEntries.map((split) => {
-    const copy = Object.assign({}, split);
-    const shootingInfo = buildRawPassShootingInfo(copy, shooting);
-    if (shootingInfo) copy.shooting = shootingInfo;
-    delete copy.diff;
-    delete copy.placement;
-    return copy;
-  });
+  const persistedSplitEntries = splitEntries.map(buildPersistedRawPass);
+  const explicitPenaltyTimeMs = splitEntries.reduce((largest, split) => {
+    if (typeof split.cumMs !== "number" ||
+      typeof split.cumMsWithoutAddition !== "number") {
+      return largest;
+    }
+    return Math.max(largest, split.cumMs - split.cumMsWithoutAddition);
+  }, 0);
+  const measuredPenaltyTimeMs = hasCompletePenaltyTime ? penaltyTimeMs : null;
+  const totalPenaltyTimeMs = explicitPenaltyTimeMs > 0 ?
+    (measuredPenaltyTimeMs || 0) + explicitPenaltyTimeMs :
+    measuredPenaltyTimeMs;
+  const skiTimeMs = deriveSkiTimeMs(netSkiTimeMs, totalPenaltyTimeMs);
 
   return {
     rawPasses: persistedSplitEntries,
     analysis: {
       courseTimeMs: (typeof totalMs === "number" ? totalMs : null),
+      skiTimeMs,
       netSkiTimeMs,
       rangeTimeMs: hasAnyRangeTime ? rangeTimeMs : null,
       shootingTimeMs: hasAnyRangeTime ? rangeTimeMs : null,
-      penaltyTimeMs: null,
+      penaltyTimeMs: totalPenaltyTimeMs,
       missesTotal: finalMissesTotal,
       hitsTotal,
       targetsTotal,
@@ -1730,6 +1752,7 @@ function buildDerivedResultMetrics(splits, totalMs) {
       standingHits: shootingResultParts.length ? standingHits : null,
       shootingCount: shootingCount || null,
       skiRank: null,
+      netSkiRank: null,
       rangeRank: null,
       shootRank: null,
       penaltyRank: null,
@@ -1874,6 +1897,7 @@ function buildDerivedResultMetricsLegacy(splits, totalMs) {
   } else if (typeof totalMs === "number" && hasAnyRangeTime) {
     netSkiTimeMs = totalMs - rangeTimeMs;
   }
+  const skiTimeMs = deriveSkiTimeMs(netSkiTimeMs, null);
 
   return {
     rawPasses: splitEntries.map((split) => {
@@ -1885,6 +1909,7 @@ function buildDerivedResultMetricsLegacy(splits, totalMs) {
     }),
     analysis: {
       courseTimeMs: (typeof totalMs === "number" ? totalMs : null),
+      skiTimeMs,
       netSkiTimeMs,
       rangeTimeMs: hasAnyRangeTime ? rangeTimeMs : null,
       shootingTimeMs: hasAnyRangeTime ? rangeTimeMs : null,
@@ -1898,6 +1923,7 @@ function buildDerivedResultMetricsLegacy(splits, totalMs) {
       standingMisses: shootingResultParts.length ? standingMisses : null,
       shootingCount: shootKeys.length || null,
       skiRank: null,
+      netSkiRank: null,
       rangeRank: null,
       shootRank: null,
       penaltyRank: null,
@@ -2307,7 +2333,7 @@ function buildEventDoc(event, eventId) {
       nameFormat: firstDefined(resultSetup.NavnFormat, null),
       clubFormat: firstDefined(resultSetup.KlubbFormat, event && event.KlubbFormat, null),
     },
-    source: { provider: "eqtiming", eventId },
+    source: admin.firestore.FieldValue.delete(),
   };
 }
 
@@ -2349,7 +2375,6 @@ function buildClassDoc(event, classId, etappeUid) {
 
 function buildClassStructureDoc(args) {
   const resultIds = Array.from(args.resultDocIds || []).sort();
-  const classPath = args.classDocRef.path;
 
   return {
     schemaVersion: 2,
@@ -2360,13 +2385,7 @@ function buildClassStructureDoc(args) {
     participantCount: args.participantCount || 0,
     hasResults: resultIds.length > 0,
     hasTimingData: resultIds.length > 0,
-    results: {
-      collectionPath: `${classPath}/results`,
-      count: resultIds.length,
-      ids: resultIds,
-      containsAthletes: true,
-      eachAthleteHasSplits: true,
-    },
+    results: admin.firestore.FieldValue.delete(),
     timingSummary: {
       stationsFetched: args.stationsFetched,
       timeItemsFetched: args.timeItemsFetched,
@@ -2546,8 +2565,14 @@ async function importEqTimingFromUrls(params) {
     let totalText = null;
     let finishTotalMs = null;
     let finishTotalText = null;
+    let resultStatus = null;
 
     for (const r of recs) {
+      if (isNonFinishStatus(r.status)) {
+        resultStatus = r.status;
+      } else if (resultStatus == null && r.status != null && String(r.status).trim()) {
+        resultStatus = r.status;
+      }
       const key = String(r.soUid);
       const meta = splitMetaByUid[key] || {
         code: key,
@@ -2647,6 +2672,7 @@ async function importEqTimingFromUrls(params) {
         docId,
         totalMs,
         totalText,
+        status: resultStatus,
         splits,
         derived,
       }),
@@ -2660,7 +2686,8 @@ async function importEqTimingFromUrls(params) {
   );
 
   addClassRanks(preparedResults.map((r) => r.data));
-  addMetricRanks(preparedResults.map((r) => r.data), "netSkiTimeMs", "skiRank");
+  addMetricRanks(preparedResults.map((r) => r.data), "skiTimeMs", "skiRank");
+  addMetricRanks(preparedResults.map((r) => r.data), "netSkiTimeMs", "netSkiRank");
   addMetricRanks(preparedResults.map((r) => r.data), "rangeTimeMs", "rangeRank");
   addMetricRanks(preparedResults.map((r) => r.data), "shootingTimeMs", "shootRank");
   addMetricRanks(preparedResults.map((r) => r.data), "penaltyTimeMs", "penaltyRank");
@@ -2715,7 +2742,7 @@ async function importEqTimingFromUrls(params) {
     {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
-  ));
+  ), { merge: true });
 
   // 13) return debug
   return {
@@ -2890,6 +2917,7 @@ module.exports._test = {
   normalizeTimes,
   normalizeClubName,
   buildDerivedResultMetrics,
+  addMetricRanks,
   buildClubDoc,
   buildAffiliationDoc,
   buildAthleteDoc,
@@ -3013,6 +3041,8 @@ exports.runImportEventChunk = functions.https.onRequest({
   memory: "1GiB",
   timeoutSeconds: 540,
 }, async (req, res) => {
+  let jobId = "";
+
   try {
     if (req.method !== "POST") {
       res.status(405).send("Use POST");
@@ -3020,7 +3050,7 @@ exports.runImportEventChunk = functions.https.onRequest({
     }
 
     const body = req.body || {};
-    const jobId = String(body.jobId || "");
+    jobId = String(body.jobId || "");
     const eventId = Number(body.eventId);
     const classIndex = Number(body.classIndex || 0);
     const classCount = Number(body.classCount || 1);
@@ -3042,6 +3072,7 @@ exports.runImportEventChunk = functions.https.onRequest({
     await jobRef.set(
       {
         status: "running",
+        lastError: admin.firestore.FieldValue.delete(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true }
@@ -3068,6 +3099,7 @@ exports.runImportEventChunk = functions.https.onRequest({
         done: chunkResult.done,
         lastResult: chunkResult,
         classResults,
+        lastError: admin.firestore.FieldValue.delete(),
         status: chunkResult.done ? "done" : "running",
       },
       { merge: true }
@@ -3080,6 +3112,17 @@ exports.runImportEventChunk = functions.https.onRequest({
     res.json({ ok: true, jobId, chunk: chunkResult });
   } catch (e) {
     console.error(e);
+    if (jobId) {
+      try {
+        await getDb().collection("importJobs").doc(jobId).set({
+          status: "error",
+          lastError: e?.message || String(e),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      } catch (statusError) {
+        console.error("Failed to persist import job error", statusError);
+      }
+    }
     res.status(500).json({ error: e?.message || String(e) });
   }
 });

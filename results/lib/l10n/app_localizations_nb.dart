@@ -75,10 +75,13 @@ class AppLocalizationsNb extends AppLocalizations {
   String get split => 'Split';
 
   @override
+  String get searchResults => 'Søk etter utøver, klubb eller team';
+
+  @override
   String get athlete => 'Utøver';
 
   @override
-  String get club => 'Team';
+  String get club => 'Klubb';
 
   @override
   String get shooting => 'Skyting';

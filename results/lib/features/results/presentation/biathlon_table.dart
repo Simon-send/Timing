@@ -12,9 +12,12 @@ class BiathlonTable extends StatelessWidget {
     required this.sortKey,
     required this.onSortKeyChanged,
     required this.tableDensity,
+    required this.affiliationView,
+    required this.onAffiliationViewToggle,
     this.disabledResultId,
     this.onLoadMore,
     this.isLoadingMore = false,
+    this.searchQuery = '',
     required this.onAthleteTap,
   });
 
@@ -22,9 +25,12 @@ class BiathlonTable extends StatelessWidget {
   final String sortKey;
   final ValueChanged<String> onSortKeyChanged;
   final TableDensity tableDensity;
+  final ResultAffiliationView affiliationView;
+  final VoidCallback onAffiliationViewToggle;
   final String? disabledResultId;
   final VoidCallback? onLoadMore;
   final bool isLoadingMore;
+  final String searchQuery;
   final ValueChanged<ResultTableRow> onAthleteTap;
 
   @override
@@ -34,6 +40,9 @@ class BiathlonTable extends StatelessWidget {
         ? sortKey
         : columns.firstOrNull?.key ?? 'ski';
     final sortedRows = _sortedRows(rows, activeSortKey);
+    final visibleRows = sortedRows.indexed
+        .where((entry) => entry.$2.result.matchesSearch(searchQuery))
+        .toList();
     final rowHeight = tableDensity == TableDensity.compact ? 42.0 : 54.0;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -57,7 +66,14 @@ class BiathlonTable extends StatelessWidget {
               columns: [
                 const DataColumn(label: Text('STARTNR')),
                 const DataColumn(label: Text('UTOVER')),
-                const DataColumn(label: Text('TEAM')),
+                DataColumn(
+                  label: ResultAffiliationHeader(
+                    view: affiliationView,
+                    clubLabel: 'KLUBB/TEAM',
+                    teamLabel: 'TEAM/KLUBB',
+                    onToggle: onAffiliationViewToggle,
+                  ),
+                ),
                 for (final column in columns)
                   DataColumn(
                     label: Text(column.label),
@@ -66,17 +82,18 @@ class BiathlonTable extends StatelessWidget {
                   ),
               ],
               rows: [
-                for (var index = 0; index < sortedRows.length; index++)
+                for (final (index, row) in visibleRows)
                   DataRow(
-                    color: _rowColor(context, sortedRows[index]),
-                    onSelectChanged: _isDisabled(sortedRows[index])
+                    color: _rowColor(context, row),
+                    onSelectChanged: _isDisabled(row)
                         ? null
-                        : (_) => onAthleteTap(sortedRows[index]),
+                        : (_) => onAthleteTap(row),
                     cells: _cellsForResult(
                       sortedRows,
                       index,
                       columns,
                       activeSortKey,
+                      affiliationView,
                     ),
                   ),
               ],
@@ -96,10 +113,21 @@ class BiathlonTable extends StatelessWidget {
     BuildContext context,
     ResultTableRow row,
   ) {
-    if (!_isDisabled(row)) return null;
-    return WidgetStatePropertyAll(
-      Theme.of(context).disabledColor.withValues(alpha: 0.16),
-    );
+    if (_isDisabled(row)) {
+      return WidgetStatePropertyAll(
+        Theme.of(context).disabledColor.withValues(alpha: 0.16),
+      );
+    }
+    final color = switch (row.highlight) {
+      ResultRowHighlight.self => Theme.of(context).colorScheme.primary,
+      ResultRowHighlight.affiliationMate => Theme.of(
+        context,
+      ).colorScheme.secondary,
+      ResultRowHighlight.none => null,
+    };
+    if (color == null) return null;
+    final alpha = row.highlight == ResultRowHighlight.self ? 0.22 : 0.14;
+    return WidgetStatePropertyAll(color.withValues(alpha: alpha));
   }
 
   List<DataCell> _cellsForResult(
@@ -107,6 +135,7 @@ class BiathlonTable extends StatelessWidget {
     int index,
     List<_BiathlonColumn> columns,
     String activeSortKey,
+    ResultAffiliationView affiliationView,
   ) {
     final row = sortedRows[index];
     final result = row.result;
@@ -124,10 +153,18 @@ class BiathlonTable extends StatelessWidget {
           ),
         ),
       ),
-      DataCell(Text(result.club.isEmpty ? '-' : result.club)),
+      DataCell(Text(_affiliationText(result, affiliationView))),
       for (final column in columns)
         DataCell(_MonoText(column.text(analysis), alignEnd: true)),
     ];
+  }
+
+  static String _affiliationText(
+    RaceResult result,
+    ResultAffiliationView view,
+  ) {
+    final value = result.affiliationName(view);
+    return value.isEmpty ? '-' : value;
   }
 
   static bool hasBiathlonData(List<ResultTableRow> rows) {
@@ -136,12 +173,12 @@ class BiathlonTable extends StatelessWidget {
 
   static List<_BiathlonColumn> _visibleColumns(List<ResultTableRow> rows) {
     final columns = <_BiathlonColumn>[];
-    if (rows.any((row) => row.result.biathlon.netSkiTimeMs != null)) {
+    if (rows.any((row) => row.result.biathlon.skiTimeMs != null)) {
       columns.add(
         _BiathlonColumn(
           key: 'ski',
           label: 'SKITID',
-          text: (analysis) => _timeText(analysis.netSkiTimeMs),
+          text: (analysis) => _timeText(analysis.skiTimeMs),
         ),
       );
     }
@@ -200,9 +237,10 @@ class BiathlonTable extends StatelessWidget {
   ) {
     final sorted = [...rows];
     sorted.sort((a, b) {
-      if (a.result.isFinished != b.result.isFinished) {
-        return a.result.isFinished ? -1 : 1;
-      }
+      final statusCompare = a.result.statusSortOrder.compareTo(
+        b.result.statusSortOrder,
+      );
+      if (statusCompare != 0) return statusCompare;
       final aValue = _sortValue(a.result, sortKey);
       final bValue = _sortValue(b.result, sortKey);
       if (aValue != null && bValue != null && aValue != bValue) {
@@ -217,7 +255,7 @@ class BiathlonTable extends StatelessWidget {
 
   static int? _sortValue(RaceResult result, String sortKey) {
     final analysis = result.biathlon;
-    if (sortKey == 'ski') return analysis.netSkiTimeMs;
+    if (sortKey == 'ski') return analysis.skiTimeMs;
     if (sortKey == 'shooting') return analysis.shootingTimeMs;
     if (sortKey == 'penalty') return analysis.penaltyTimeMs;
     if (sortKey == 'misses') return analysis.missesTotal;
@@ -226,7 +264,7 @@ class BiathlonTable extends StatelessWidget {
       if (index == null) return null;
       return analysis.passAt(index)?.rangeMs;
     }
-    return analysis.netSkiTimeMs;
+    return analysis.skiTimeMs;
   }
 
   static String _timeText(int? ms) {

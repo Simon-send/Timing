@@ -23,6 +23,8 @@ class AthleteSummaryPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final palette = context.palette;
+    final clubName = result.club.trim();
+    final teamName = result.team.trim();
     return ShellPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,14 +55,19 @@ class AthleteSummaryPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            result.club.isEmpty ? '-' : result.club,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: palette.mutedText,
-              fontWeight: FontWeight.w600,
-            ),
+          Wrap(
+            spacing: 16,
+            runSpacing: 6,
+            children: [
+              _AffiliationText(
+                label: l10n.club,
+                value: clubName.isEmpty ? '-' : clubName,
+              ),
+              _AffiliationText(
+                label: 'Team',
+                value: teamName.isEmpty ? '-' : teamName,
+              ),
+            ],
           ),
           const SizedBox(height: 18),
           Wrap(
@@ -86,6 +93,38 @@ class AthleteSummaryPanel extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AffiliationText extends StatelessWidget {
+  const _AffiliationText({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 170),
+      child: RichText(
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        text: TextSpan(
+          style: TextStyle(
+            color: palette.mutedText,
+            fontWeight: FontWeight.w600,
+          ),
+          children: [
+            TextSpan(
+              text: '$label: ',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            TextSpan(text: value),
+          ],
+        ),
       ),
     );
   }

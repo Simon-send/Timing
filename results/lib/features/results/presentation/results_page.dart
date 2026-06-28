@@ -19,8 +19,8 @@ import '../domain/result_sort_mode.dart';
 import '../domain/split_def.dart';
 import 'biathlon_table.dart';
 import 'class_selector.dart';
-import 'result_locations.dart';
 import 'result_distribution_button.dart';
+import 'result_locations.dart';
 import 'results_table.dart';
 import 'split_selector.dart';
 
@@ -116,13 +116,13 @@ class _ResultsContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(settingsControllerProvider);
+    final athleteEvent = ref.watch(linkedAthleteEventProvider(eventId));
     final compareSelection = _CompareSelection.tryParse(
       classId: compareBaseClassId,
       resultId: compareBaseResultId,
     );
     final activeClass = _activeClass(
-      compareSelection?.classId ?? selectedClassId ?? settings.defaultClassId,
+      compareSelection?.classId ?? selectedClassId ?? athleteEvent?.classId,
     );
     final classId = activeClass.id;
     final splitDefs = ref.watch(
@@ -169,7 +169,7 @@ class _ResultsContent extends ConsumerWidget {
                     resultsLocation(
                       eventId: eventId,
                       classId: value,
-                      splitId: selectedSplitId ?? settings.preferredSplitId,
+                      splitId: selectedSplitId,
                     ),
                   );
                 },
@@ -184,11 +184,7 @@ class _ResultsContent extends ConsumerWidget {
   }
 
   ResultClass _activeClass(String? preferredClassId) {
-    for (final raceClass in classes) {
-      if (raceClass.id == preferredClassId) return raceClass;
-    }
-    final withResults = classes.where((raceClass) => raceClass.resultCount > 0);
-    return withResults.isNotEmpty ? withResults.first : classes.first;
+    return initialResultClass(classes, preferredClassId: preferredClassId);
   }
 }
 
@@ -219,13 +215,31 @@ class _ResultsArea extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final settings = ref.watch(settingsControllerProvider);
-    final sortMode = ref.watch(resultSortModeProvider);
+    final sortMode = ref.watch(resultSortModeProvider(eventId));
     final biathlonSortKey = ref.watch(biathlonSortKeyProvider);
+    final affiliationView = ref.watch(resultAffiliationViewProvider);
+    final linkedAthleteId = ref.watch(linkedAthleteIdProvider).asData?.value;
+    final linkedAthleteProfile = linkedAthleteId == null
+        ? null
+        : ref.watch(athleteProfileProvider(linkedAthleteId)).asData?.value;
+    final linkedAffiliations = linkedAthleteProfile == null
+        ? null
+        : ref
+              .watch(
+                athleteAffiliationsProvider((
+                  clubId: linkedAthleteProfile.primaryClubId,
+                  teamId: linkedAthleteProfile.primaryTeamId,
+                )),
+              )
+              .asData
+              ?.value;
     final comparisonClassIds = compareSelection == null
         ? ref.watch(comparisonClassIdsProvider)
         : <String>[];
     final requestedSplitRange = ref.watch(splitRangeSelectionProvider);
     final classId = activeClass.id;
+    final searchArgs = (eventId: eventId, classId: classId);
+    final searchQuery = ref.watch(resultSearchQueryProvider(searchArgs));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -245,7 +259,7 @@ class _ResultsArea extends ConsumerWidget {
                 resultsLocation(
                   eventId: eventId,
                   classId: value,
-                  splitId: selectedSplitId ?? settings.preferredSplitId,
+                  splitId: selectedSplitId,
                 ),
               );
             },
@@ -291,6 +305,9 @@ class _ResultsArea extends ConsumerWidget {
                   final tableRows = _buildTableRows(
                     primaryResults: loadedResults,
                     comparisons: comparisonRead.rows,
+                    linkedAthleteId: linkedAthleteId,
+                    linkedClubName: linkedAffiliations?.clubName,
+                    linkedTeamName: linkedAffiliations?.teamName,
                   );
                   final baseRow = compareSelection == null
                       ? null
@@ -307,7 +324,7 @@ class _ResultsArea extends ConsumerWidget {
                     hasBiathlonData,
                   );
                   final activeSplitId = _activeSplitId(
-                    selectedSplitId ?? settings.preferredSplitId,
+                    selectedSplitId,
                     splitOptions,
                   );
                   final isBiathlonSplit = activeSplitId == _biathlonSplitId;
@@ -341,6 +358,9 @@ class _ResultsArea extends ConsumerWidget {
                       splitRange: activeSplitRange,
                       sortMode: sortMode,
                       biathlonSortKey: biathlonSortKey,
+                      linkedAthleteId: linkedAthleteId,
+                      linkedClubName: linkedAffiliations?.clubName,
+                      linkedTeamName: linkedAffiliations?.teamName,
                     );
                   }
 
@@ -380,6 +400,25 @@ class _ResultsArea extends ConsumerWidget {
                         splitRange: activeSplitRange,
                         distributionData: distributionData,
                         loadFullDistributionData: loadFullDistributionData,
+                        searchField: _ResultSearchField(
+                          key: ValueKey(
+                            '${searchArgs.eventId}/${searchArgs.classId}',
+                          ),
+                          initialQuery: searchQuery,
+                          onChanged: (value) {
+                            ref
+                                    .read(
+                                      resultSearchQueryProvider(
+                                        searchArgs,
+                                      ).notifier,
+                                    )
+                                    .state =
+                                value;
+                            if (value.trim().isNotEmpty) {
+                              _loadAllResultsForSearch(ref, comparisonClassIds);
+                            }
+                          },
+                        ),
                         onSplitChanged: (value) {
                           ref.read(splitRangeSelectionProvider.notifier).state =
                               null;
@@ -452,6 +491,7 @@ class _ResultsArea extends ConsumerWidget {
                         child: isBiathlonSplit
                             ? BiathlonTable(
                                 rows: tableRows,
+                                searchQuery: searchQuery,
                                 sortKey: biathlonSortKey,
                                 onSortKeyChanged: (value) {
                                   ref
@@ -462,6 +502,19 @@ class _ResultsArea extends ConsumerWidget {
                                       value;
                                 },
                                 tableDensity: settings.tableDensity,
+                                affiliationView: affiliationView,
+                                onAffiliationViewToggle: () {
+                                  ref
+                                          .read(
+                                            resultAffiliationViewProvider
+                                                .notifier,
+                                          )
+                                          .state =
+                                      affiliationView ==
+                                          ResultAffiliationView.club
+                                      ? ResultAffiliationView.team
+                                      : ResultAffiliationView.club;
+                                },
                                 disabledResultId: compareSelection?.resultId,
                                 onLoadMore: loadMoreResults,
                                 isLoadingMore: isLoadingMore,
@@ -476,16 +529,34 @@ class _ResultsArea extends ConsumerWidget {
                               )
                             : ResultsTable(
                                 rows: tableRows,
+                                searchQuery: searchQuery,
                                 selectedSplitId: selectedResultSplitId,
                                 splitRange: activeSplitRange,
                                 sortMode: sortMode,
                                 onSortModeChanged: (value) {
                                   ref
-                                          .read(resultSortModeProvider.notifier)
+                                          .read(
+                                            resultSortModeProvider(
+                                              eventId,
+                                            ).notifier,
+                                          )
                                           .state =
                                       value;
                                 },
                                 tableDensity: settings.tableDensity,
+                                affiliationView: affiliationView,
+                                onAffiliationViewToggle: () {
+                                  ref
+                                          .read(
+                                            resultAffiliationViewProvider
+                                                .notifier,
+                                          )
+                                          .state =
+                                      affiliationView ==
+                                          ResultAffiliationView.club
+                                      ? ResultAffiliationView.team
+                                      : ResultAffiliationView.club;
+                                },
                                 disabledResultId: compareSelection?.resultId,
                                 onLoadMore: loadMoreResults,
                                 isLoadingMore: isLoadingMore,
@@ -551,6 +622,7 @@ class _ResultsArea extends ConsumerWidget {
         id: _biathlonSplitId,
         label: 'Skiskytinganalyse',
         sort: 1000000,
+        kind: 'analysis',
       ),
     ];
   }
@@ -559,6 +631,9 @@ class _ResultsArea extends ConsumerWidget {
     if (options.isEmpty) return null;
     for (final split in options) {
       if (split.id == preferredSplitId) return split.id;
+    }
+    for (final split in options.reversed) {
+      if (split.kind.toLowerCase() == 'finish') return split.id;
     }
     for (final split in options.reversed) {
       if (split.id != _biathlonSplitId) return split.id;
@@ -664,10 +739,27 @@ class _ResultsArea extends ConsumerWidget {
         .whereType<int>()
         .where((value) => value > 0)
         .toList();
+    final currentAthleteValue = tableRows
+        .where(
+          (row) =>
+              row.result.isFinished && row.highlight == ResultRowHighlight.self,
+        )
+        .map((row) {
+          return _resultSortValue(
+            row.result,
+            activeSplitId,
+            splitRange,
+            sortMode,
+          );
+        })
+        .whereType<int>()
+        .where((value) => value > 0)
+        .firstOrNull;
     return ResultDistributionData(
       title: 'Fordeling: $valueLabel',
       values: values,
       formatValue: formatDurationMs,
+      currentAthleteValue: currentAthleteValue,
       regression: _resultRegressionData(
         tableRows: tableRows,
         activeSplitId: activeSplitId,
@@ -691,6 +783,17 @@ class _ResultsArea extends ConsumerWidget {
       title: 'Fordeling: ${selected.label}',
       values: selected.values,
       formatValue: selected.isTime ? formatDurationMs : (value) => '$value',
+      currentAthleteLabel: selected.isTime ? 'Din tid' : 'Din verdi',
+      currentAthleteValue: tableRows
+          .where(
+            (row) =>
+                row.result.isFinished &&
+                row.highlight == ResultRowHighlight.self,
+          )
+          .map((row) => _biathlonMetricValue(row.result.biathlon, selected.key))
+          .whereType<int>()
+          .where((value) => selected.isTime ? value > 0 : value >= 0)
+          .firstOrNull,
       regression: _biathlonRegressionData(tableRows, selected),
     );
   }
@@ -715,6 +818,7 @@ class _ResultsArea extends ConsumerWidget {
           y: value,
           label: row.result.name,
           color: row.color,
+          isCurrentAthlete: row.highlight == ResultRowHighlight.self,
         ),
       );
     }
@@ -761,7 +865,7 @@ class _ResultsArea extends ConsumerWidget {
       key: 'ski',
       label: 'Skitid',
       isTime: true,
-      read: (analysis) => analysis.netSkiTimeMs,
+      read: (analysis) => analysis.skiTimeMs,
     );
     addMetric(
       key: 'shooting',
@@ -813,7 +917,7 @@ class _ResultsArea extends ConsumerWidget {
   }
 
   int? _biathlonMetricValue(BiathlonAnalysis analysis, String key) {
-    if (key == 'ski') return analysis.netSkiTimeMs;
+    if (key == 'ski') return analysis.skiTimeMs;
     if (key == 'shooting') return analysis.shootingTimeMs;
     if (key == 'penalty') return analysis.penaltyTimeMs;
     if (key == 'misses') return analysis.missesTotal;
@@ -822,7 +926,7 @@ class _ResultsArea extends ConsumerWidget {
       if (index == null) return null;
       return analysis.passAt(index)?.rangeMs;
     }
-    return analysis.netSkiTimeMs;
+    return analysis.skiTimeMs;
   }
 
   String _resultValueLabel({
@@ -865,6 +969,7 @@ class _ResultsArea extends ConsumerWidget {
           y: rankedTimeOnYAxis ? rankedMs : totalMs,
           label: row.result.name,
           color: row.color,
+          isCurrentAthlete: row.highlight == ResultRowHighlight.self,
         ),
       );
     }
@@ -920,6 +1025,23 @@ class _ResultsArea extends ConsumerWidget {
     }
   }
 
+  void _loadAllResultsForSearch(
+    WidgetRef ref,
+    List<String> comparisonClassIds,
+  ) {
+    final classIds = {activeClass.id, ...comparisonClassIds};
+    for (final raceClass in classes.where(
+      (raceClass) => classIds.contains(raceClass.id),
+    )) {
+      if (raceClass.resultCount <= 0) continue;
+      final args = (eventId: eventId, classId: raceClass.id);
+      final currentLimit = ref.read(raceResultsLimitProvider(args));
+      if (currentLimit >= raceClass.resultCount) continue;
+      ref.read(raceResultsLimitProvider(args).notifier).state =
+          raceClass.resultCount;
+    }
+  }
+
   void _loadMoreClassResults(
     WidgetRef ref,
     ResultClass raceClass,
@@ -944,6 +1066,9 @@ class _ResultsArea extends ConsumerWidget {
     required SplitRangeSelection? splitRange,
     required ResultSortMode sortMode,
     required String biathlonSortKey,
+    required String? linkedAthleteId,
+    required String? linkedClubName,
+    required String? linkedTeamName,
   }) async {
     final repository = ref.read(resultsRepositoryProvider);
     final primaryResults = await repository.fetchResults(
@@ -958,6 +1083,9 @@ class _ResultsArea extends ConsumerWidget {
     final tableRows = _buildTableRows(
       primaryResults: primaryResults,
       comparisons: comparisons,
+      linkedAthleteId: linkedAthleteId,
+      linkedClubName: linkedClubName,
+      linkedTeamName: linkedTeamName,
     );
     if (tableRows.isEmpty) return null;
     if (isBiathlonSplit && !BiathlonTable.hasBiathlonData(tableRows)) {
@@ -1060,6 +1188,9 @@ class _ResultsArea extends ConsumerWidget {
   List<ResultTableRow> _buildTableRows({
     required List<RaceResult> primaryResults,
     required List<_ComparisonRows> comparisons,
+    String? linkedAthleteId,
+    String? linkedClubName,
+    String? linkedTeamName,
   }) {
     final hasComparison = comparisons.isNotEmpty;
     final rows = [
@@ -1070,6 +1201,12 @@ class _ResultsArea extends ConsumerWidget {
           className: activeClass.name,
           color: hasComparison ? _classColor(0) : null,
           originalPlacementLabel: '',
+          highlight: resultHighlightFor(
+            result,
+            linkedAthleteId: linkedAthleteId,
+            linkedClubName: linkedClubName,
+            linkedTeamName: linkedTeamName,
+          ),
         ),
     ];
 
@@ -1083,6 +1220,12 @@ class _ResultsArea extends ConsumerWidget {
             className: comparison.raceClass.name,
             color: _classColor(i + 1),
             originalPlacementLabel: '',
+            highlight: resultHighlightFor(
+              result,
+              linkedAthleteId: linkedAthleteId,
+              linkedClubName: linkedClubName,
+              linkedTeamName: linkedTeamName,
+            ),
           ),
         );
       }
@@ -1289,6 +1432,8 @@ class _ClassSidebar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final palette = context.palette;
+    final sortedClasses = sortResultClassesByDistance(classes);
+    final disciplineLabel = combinedDisciplineLabel(sortedClasses);
     final comparisonClassIds = ref.watch(comparisonClassIdsProvider);
     final activeSplitDefData = activeSplitDefs.asData?.value;
     final activeSignature = activeSplitDefData == null
@@ -1305,18 +1450,36 @@ class _ClassSidebar extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.all(14),
-            child: Text(
-              l10n.classes,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  disciplineLabel ?? l10n.classes,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (disciplineLabel != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    l10n.classes,
+                    style: TextStyle(
+                      color: palette.mutedText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              itemCount: classes.length,
+              itemCount: sortedClasses.length,
               separatorBuilder: (context, index) => const SizedBox(height: 6),
               itemBuilder: (context, index) {
-                final raceClass = classes[index];
+                final raceClass = sortedClasses[index];
                 final selected = raceClass.id == selectedClassId;
                 return _ClassTile(
                   eventId: eventId,
@@ -1490,6 +1653,30 @@ class _ResultTitle extends StatelessWidget {
   }
 }
 
+class _ResultSearchField extends StatelessWidget {
+  const _ResultSearchField({
+    super.key,
+    required this.initialQuery,
+    required this.onChanged,
+  });
+
+  final String initialQuery;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      key: const Key('result-search-field'),
+      initialValue: initialQuery,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        hintText: AppLocalizations.of(context).searchResults,
+        prefixIcon: const Icon(Icons.search),
+      ),
+    );
+  }
+}
+
 class _SplitAndInfoRow extends StatelessWidget {
   const _SplitAndInfoRow({
     required this.event,
@@ -1501,6 +1688,7 @@ class _SplitAndInfoRow extends StatelessWidget {
     required this.splitRange,
     required this.distributionData,
     required this.loadFullDistributionData,
+    required this.searchField,
     required this.onSplitChanged,
     required this.onRangeToggle,
     required this.onRangeFromChanged,
@@ -1516,6 +1704,7 @@ class _SplitAndInfoRow extends StatelessWidget {
   final SplitRangeSelection? splitRange;
   final ResultDistributionData? distributionData;
   final Future<ResultDistributionData?> Function() loadFullDistributionData;
+  final Widget searchField;
   final ValueChanged<String?> onSplitChanged;
   final VoidCallback onRangeToggle;
   final ValueChanged<String?> onRangeFromChanged;
@@ -1561,6 +1750,8 @@ class _SplitAndInfoRow extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
+              searchField,
+              const SizedBox(height: 10),
               infoCard,
             ],
           );
@@ -1569,9 +1760,22 @@ class _SplitAndInfoRow extends StatelessWidget {
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: splitSelector),
-            const SizedBox(width: 10),
-            distributionButton,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: splitSelector),
+                      const SizedBox(width: 10),
+                      distributionButton,
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  searchField,
+                ],
+              ),
+            ),
             const SizedBox(width: 12),
             SizedBox(width: 260, child: infoCard),
           ],

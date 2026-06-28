@@ -131,6 +131,7 @@ class AthleteHeadToHeadPanel extends StatelessWidget {
                           child: _HeadToHeadComparisonChart(
                             rows: comparisonRows,
                             displayMode: displayMode,
+                            onSplitSelected: onSplitSelected,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -356,10 +357,12 @@ class _HeadToHeadComparisonChart extends StatelessWidget {
   const _HeadToHeadComparisonChart({
     required this.rows,
     required this.displayMode,
+    required this.onSplitSelected,
   });
 
   final List<_ComparisonRow> rows;
   final HeadToHeadDisplayMode displayMode;
+  final ValueChanged<String> onSplitSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -428,16 +431,89 @@ class _HeadToHeadComparisonChart extends StatelessWidget {
               ),
             ),
             Expanded(
-              child: CustomPaint(
-                painter: _HeadToHeadComparisonPainter(
-                  rows: chartRows,
-                  displayMode: displayMode,
-                  palette: palette,
-                ),
-                child: const SizedBox.expand(),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final chartSize = Size(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
+                  );
+                  final chart = _ComparisonChartLayout.chartRect(chartSize);
+                  return Stack(
+                    children: [
+                      CustomPaint(
+                        painter: _HeadToHeadComparisonPainter(
+                          rows: chartRows,
+                          displayMode: displayMode,
+                          palette: palette,
+                        ),
+                        child: const SizedBox.expand(),
+                      ),
+                      for (var index = 0; index < chartRows.length; index++)
+                        _HeadToHeadHoverTarget(
+                          row: chartRows[index],
+                          displayMode: displayMode,
+                          left: _comparisonTargetLeft(
+                            index,
+                            chart,
+                            chartRows.length,
+                          ),
+                          top: chart.top,
+                          width: _comparisonTargetWidth(
+                            chart,
+                            chartRows.length,
+                          ),
+                          height: chart.height,
+                          onTap: () {
+                            onSplitSelected(chartRows[index].splitId!);
+                          },
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeadToHeadHoverTarget extends StatelessWidget {
+  const _HeadToHeadHoverTarget({
+    required this.row,
+    required this.displayMode,
+    required this.left,
+    required this.top,
+    required this.width,
+    required this.height,
+    required this.onTap,
+  });
+
+  final _ComparisonRow row;
+  final HeadToHeadDisplayMode displayMode;
+  final double left;
+  final double top;
+  final double width;
+  final double height;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: left,
+      top: top,
+      width: width,
+      height: height,
+      child: Tooltip(
+        message:
+            '${row.label}\nSplit ${_comparisonValueText(row.split, displayMode)}\nTid ${_comparisonValueText(row.cumulative, displayMode)}\nKlikk for a apne splitten',
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: onTap,
+          ),
         ),
       ),
     );
@@ -619,7 +695,7 @@ class _HeadToHeadComparisonPainter extends CustomPainter {
     for (var index = 0; index < rows.length; index++) {
       final value = _valueFor(rows[index].split);
       if (value == null) continue;
-      final x = chart.left + slotWidth * index + slotWidth / 2;
+      final x = _xForIndex(index, chart, rows.length);
       final y = _yForSignedValue(value, maxAbs, chart);
       final rect = Rect.fromLTRB(
         x - barWidth / 2,
@@ -761,8 +837,19 @@ class _ComparisonChartLayout {
 }
 
 double _xForIndex(int index, Rect chart, int count) {
-  if (count <= 1) return chart.left + chart.width / 2;
-  return chart.left + chart.width * index / (count - 1);
+  if (count <= 0) return chart.left + chart.width / 2;
+  final slotWidth = chart.width / count;
+  return chart.left + slotWidth * index + slotWidth / 2;
+}
+
+double _comparisonTargetLeft(int index, Rect chart, int count) {
+  if (count <= 0) return chart.left;
+  return chart.left + chart.width * index / count;
+}
+
+double _comparisonTargetWidth(Rect chart, int count) {
+  if (count <= 0) return chart.width;
+  return chart.width / count;
 }
 
 double _yForSignedValue(double value, double maxAbs, Rect chart) {
@@ -902,7 +989,7 @@ class _ComparisonValuePill extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            '${value.baseText} ${_diffText()}',
+            _comparisonValueText(value, displayMode),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontWeight: FontWeight.w900),
@@ -923,22 +1010,32 @@ class _ComparisonValuePill extends StatelessWidget {
         : const Color(0xFFFF5C5C);
     return color.withValues(alpha: opacity);
   }
+}
 
-  String _diffText() {
-    final diffMs = value.diffMs;
-    final diffPercent = value.diffPercent;
-    if (diffMs == null || diffPercent == null) return '-';
-    if (displayMode == HeadToHeadDisplayMode.percent) {
-      final sign = diffPercent > 0 ? '+' : '';
-      return '$sign${diffPercent.toStringAsFixed(1)}%';
-    }
-    final sign = diffMs > 0
-        ? '+'
-        : diffMs < 0
-        ? '-'
-        : '+';
-    return '$sign${formatDurationMs(diffMs.abs())}';
+String _comparisonValueText(
+  _ComparisonValue value,
+  HeadToHeadDisplayMode displayMode,
+) {
+  return '${value.baseText} ${_comparisonDiffText(value, displayMode)}';
+}
+
+String _comparisonDiffText(
+  _ComparisonValue value,
+  HeadToHeadDisplayMode displayMode,
+) {
+  final diffMs = value.diffMs;
+  final diffPercent = value.diffPercent;
+  if (diffMs == null || diffPercent == null) return '-';
+  if (displayMode == HeadToHeadDisplayMode.percent) {
+    final sign = diffPercent > 0 ? '+' : '';
+    return '$sign${diffPercent.toStringAsFixed(1)}%';
   }
+  final sign = diffMs > 0
+      ? '+'
+      : diffMs < 0
+      ? '-'
+      : '+';
+  return '$sign${formatDurationMs(diffMs.abs())}';
 }
 
 int _compareResults(RaceResult a, RaceResult b) {

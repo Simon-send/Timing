@@ -246,6 +246,12 @@ abstract class AppLocalizations {
   /// **'Split'**
   String get split;
 
+  /// No description provided for @searchResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Search athlete, club or team'**
+  String get searchResults;
+
   /// No description provided for @athlete.
   ///
   /// In en, this message translates to:
@@ -255,7 +261,7 @@ abstract class AppLocalizations {
   /// No description provided for @club.
   ///
   /// In en, this message translates to:
-  /// **'Team'**
+  /// **'Club'**
   String get club;
 
   /// No description provided for @shooting.

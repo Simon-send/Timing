@@ -8,6 +8,8 @@ import 'app_theme.dart';
 import '../features/auth/data/auth_repository.dart';
 import '../features/events/data/events_repository.dart';
 import '../features/events/domain/result_event.dart';
+import '../features/profile/data/athlete_profile_repository.dart';
+import '../features/profile/domain/athlete_profile.dart';
 import '../features/results/data/results_repository.dart';
 import '../features/results/domain/race_result.dart';
 import '../features/results/domain/result_class.dart';
@@ -56,6 +58,14 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   );
 });
 
+final athleteProfileRepositoryProvider = Provider<AthleteProfileRepository>((
+  ref,
+) {
+  return FirestoreAthleteProfileRepository(
+    firestore: ref.watch(firebaseFirestoreProvider),
+  );
+});
+
 final settingsControllerProvider =
     StateNotifierProvider<SettingsController, UserSettings>((ref) {
       return SettingsController(ref.watch(settingsRepositoryProvider));
@@ -64,6 +74,56 @@ final settingsControllerProvider =
 final eventsProvider = StreamProvider<List<ResultEvent>>((ref) {
   return ref.watch(eventsRepositoryProvider).watchEvents();
 });
+
+final linkedAthleteIdProvider = StreamProvider<String?>((ref) {
+  final user = ref.watch(authStateProvider).asData?.value;
+  if (user == null) return Stream.value(null);
+  return ref
+      .watch(athleteProfileRepositoryProvider)
+      .watchLinkedAthleteId(user.uid);
+});
+
+final athleteProfileProvider = StreamProvider.family<AthleteProfile?, String>((
+  ref,
+  athleteId,
+) {
+  return ref.watch(athleteProfileRepositoryProvider).watchAthlete(athleteId);
+});
+
+final athleteRacesProvider = StreamProvider.family<List<AthleteRace>, String>((
+  ref,
+  athleteId,
+) {
+  return ref
+      .watch(athleteProfileRepositoryProvider)
+      .watchAthleteRaces(athleteId);
+});
+
+final linkedAthleteEventProvider = Provider.family<AthleteEvent?, String>((
+  ref,
+  eventId,
+) {
+  final athleteId = ref.watch(linkedAthleteIdProvider).asData?.value;
+  if (athleteId == null) return null;
+
+  final profile = ref.watch(athleteProfileProvider(athleteId)).asData?.value;
+  if (profile == null) return null;
+
+  for (final event in profile.events) {
+    if (event.eventId == eventId && event.classId.isNotEmpty) return event;
+  }
+  return null;
+});
+
+final athleteAffiliationsProvider =
+    FutureProvider.family<
+      AthleteAffiliations,
+      ({String? clubId, String? teamId})
+    >((ref, args) {
+      return ref
+          .watch(athleteProfileRepositoryProvider)
+          .fetchAffiliations(clubId: args.clubId, teamId: args.teamId);
+    });
 
 final classesProvider = StreamProvider.family<List<ResultClass>, String>((
   ref,
@@ -86,7 +146,14 @@ const raceResultsPageSize = resultsPageSize;
 
 final raceResultsLimitProvider =
     StateProvider.family<int, ({String eventId, String classId})>((ref, args) {
-      return initialResultsLimit;
+      final athleteEvent = ref.watch(linkedAthleteEventProvider(args.eventId));
+      if (athleteEvent?.classId != args.classId) return initialResultsLimit;
+
+      final rank = athleteEvent!.rank;
+      if (rank == null || rank <= initialResultsLimit) {
+        return initialResultsLimit;
+      }
+      return rank;
     });
 
 final raceResultsProvider =
@@ -109,7 +176,10 @@ final raceResultProvider =
           .watchResult(args.eventId, args.classId, args.resultId);
     });
 
-final resultSortModeProvider = StateProvider<ResultSortMode>((ref) {
+final resultSortModeProvider = StateProvider.family<ResultSortMode, String>((
+  ref,
+  eventId,
+) {
   return ResultSortMode.cumulative;
 });
 
@@ -126,6 +196,17 @@ final comparisonClassIdsProvider = StateProvider<List<String>>((ref) {
 final biathlonSortKeyProvider = StateProvider<String>((ref) {
   return 'ski';
 });
+
+final resultAffiliationViewProvider = StateProvider<ResultAffiliationView>((
+  ref,
+) {
+  return ResultAffiliationView.club;
+});
+
+final resultSearchQueryProvider = StateProvider.autoDispose
+    .family<String, ({String eventId, String classId})>((ref, args) {
+      return '';
+    });
 
 final splitRangeSelectionProvider = StateProvider<SplitRangeSelection?>((ref) {
   return null;

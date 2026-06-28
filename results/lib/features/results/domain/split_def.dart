@@ -45,11 +45,13 @@ class SplitOption {
     required this.id,
     required this.label,
     required this.sort,
+    required this.kind,
   });
 
   final String id;
   final String label;
   final int sort;
+  final String kind;
 }
 
 class SplitRangeSelection {

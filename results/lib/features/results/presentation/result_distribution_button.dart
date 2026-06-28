@@ -10,12 +10,16 @@ class ResultDistributionData {
     required this.values,
     required this.formatValue,
     this.regression,
+    this.currentAthleteValue,
+    this.currentAthleteLabel = 'Din tid',
   });
 
   final String title;
   final List<int> values;
   final String Function(int value) formatValue;
   final ResultRegressionData? regression;
+  final int? currentAthleteValue;
+  final String currentAthleteLabel;
 
   bool get hasDistribution => values.length >= 2;
   bool get hasRegression => regression?.hasEnoughData ?? false;
@@ -50,12 +54,14 @@ class ResultRegressionPoint {
     required this.y,
     required this.label,
     this.color,
+    this.isCurrentAthlete = false,
   });
 
   final int x;
   final int y;
   final String label;
   final Color? color;
+  final bool isCurrentAthlete;
 }
 
 class ResultDistributionButton extends StatelessWidget {
@@ -348,6 +354,8 @@ class _DistributionDialogState extends State<_DistributionDialog> {
                   painter: _HistogramPainter(
                     buckets: buckets,
                     averageValue: averageValue,
+                    currentAthleteValue: widget.data.currentAthleteValue,
+                    currentAthleteLabel: widget.data.currentAthleteLabel,
                     palette: palette,
                     formatValue: widget.data.formatValue,
                     firstSelection: firstSelection,
@@ -740,22 +748,29 @@ class _RegressionPainter extends CustomPainter {
   ) {
     final usePointColors = data.points.any((point) => point.color != null);
     final radius = data.points.length > 80 ? 2.8 : 3.8;
-    for (final point in data.points) {
-      final color = usePointColors
+    final orderedPoints = [
+      ...data.points.where((point) => !point.isCurrentAthlete),
+      ...data.points.where((point) => point.isCurrentAthlete),
+    ];
+    for (final point in orderedPoints) {
+      final color = point.isCurrentAthlete
+          ? palette.danger
+          : usePointColors
           ? point.color ?? palette.primary
           : palette.primary;
+      final pointRadius = point.isCurrentAthlete ? radius + 1.8 : radius;
       final center = Offset(
         _xForValue(point.x, xRange, chart),
         _yForValue(point.y, yRange, chart),
       );
       canvas.drawCircle(
         center,
-        radius,
+        pointRadius,
         Paint()..color = color.withValues(alpha: 0.84),
       );
       canvas.drawCircle(
         center,
-        radius,
+        pointRadius,
         Paint()
           ..color = palette.panelAlt
           ..style = PaintingStyle.stroke
@@ -1065,6 +1080,8 @@ class _HistogramPainter extends CustomPainter {
   const _HistogramPainter({
     required this.buckets,
     required this.averageValue,
+    required this.currentAthleteValue,
+    required this.currentAthleteLabel,
     required this.palette,
     required this.formatValue,
     required this.firstSelection,
@@ -1076,6 +1093,8 @@ class _HistogramPainter extends CustomPainter {
 
   final List<_HistogramBucket> buckets;
   final double averageValue;
+  final int? currentAthleteValue;
+  final String currentAthleteLabel;
   final AppPalette palette;
   final String Function(int value) formatValue;
   final _PercentileSelection firstSelection;
@@ -1098,6 +1117,9 @@ class _HistogramPainter extends CustomPainter {
     final averagePaint = Paint()
       ..color = averageColor
       ..strokeWidth = 2.4;
+    final currentAthletePaint = Paint()
+      ..color = palette.danger
+      ..strokeWidth = 3.0;
     final linePaint = Paint()
       ..color = palette.primary
       ..strokeWidth = 2.2;
@@ -1211,6 +1233,40 @@ class _HistogramPainter extends CustomPainter {
       Offset(averageX, chart.bottom),
       averagePaint,
     );
+    final currentValue = currentAthleteValue;
+    if (currentValue != null) {
+      final currentX = _valueToX(currentValue, chartValues, chart);
+      final currentValueText = formatValue(currentValue);
+      final currentSize = _badgeSize(
+        currentAthleteLabel,
+        currentValueText,
+        titleFontSize: 12,
+        valueFontSize: 13,
+      );
+      final currentBadgeCenter = _badgeCenterWithin(
+        size.width,
+        currentX,
+        currentSize.width,
+      );
+      canvas.drawLine(
+        Offset(currentX, chart.top),
+        Offset(currentX, chart.bottom),
+        currentAthletePaint,
+      );
+      _paintBadge(
+        textPainter,
+        canvas,
+        currentAthleteLabel,
+        currentValueText,
+        currentBadgeCenter,
+        showPercentileSystem ? chart.top + 52 : chart.top + 8,
+        palette,
+        fill: palette.danger.withValues(alpha: 0.16),
+        stroke: palette.danger,
+        titleFontSize: 12,
+        valueFontSize: 13,
+      );
+    }
     _paintBadge(
       textPainter,
       canvas,
@@ -1466,6 +1522,8 @@ class _HistogramPainter extends CustomPainter {
   bool shouldRepaint(covariant _HistogramPainter oldDelegate) {
     return oldDelegate.buckets != buckets ||
         oldDelegate.averageValue != averageValue ||
+        oldDelegate.currentAthleteValue != currentAthleteValue ||
+        oldDelegate.currentAthleteLabel != currentAthleteLabel ||
         oldDelegate.palette != palette ||
         oldDelegate.firstSelection != firstSelection ||
         oldDelegate.secondSelection != secondSelection ||

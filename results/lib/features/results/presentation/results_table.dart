@@ -16,9 +16,12 @@ class ResultsTable extends StatelessWidget {
     required this.sortMode,
     required this.onSortModeChanged,
     required this.tableDensity,
+    required this.affiliationView,
+    required this.onAffiliationViewToggle,
     this.disabledResultId,
     this.onLoadMore,
     this.isLoadingMore = false,
+    this.searchQuery = '',
     required this.onAthleteTap,
   });
 
@@ -28,15 +31,21 @@ class ResultsTable extends StatelessWidget {
   final ResultSortMode sortMode;
   final ValueChanged<ResultSortMode> onSortModeChanged;
   final TableDensity tableDensity;
+  final ResultAffiliationView affiliationView;
+  final VoidCallback onAffiliationViewToggle;
   final String? disabledResultId;
   final VoidCallback? onLoadMore;
   final bool isLoadingMore;
+  final String searchQuery;
   final ValueChanged<ResultTableRow> onAthleteTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final sortedRows = _sortedRows(rows, selectedSplitId, splitRange, sortMode);
+    final visibleRows = sortedRows.indexed
+        .where((entry) => entry.$2.result.matchesSearch(searchQuery))
+        .toList();
     final winnerMs = _winnerMs(
       sortedRows,
       selectedSplitId,
@@ -64,7 +73,14 @@ class ResultsTable extends StatelessWidget {
               columns: [
                 DataColumn(label: Text(l10n.bib.toUpperCase())),
                 DataColumn(label: Text(l10n.athlete.toUpperCase())),
-                DataColumn(label: Text(l10n.club.toUpperCase())),
+                DataColumn(
+                  label: ResultAffiliationHeader(
+                    view: affiliationView,
+                    clubLabel: '${l10n.club.toUpperCase()}/TEAM',
+                    teamLabel: 'TEAM/${l10n.club.toUpperCase()}',
+                    onToggle: onAffiliationViewToggle,
+                  ),
+                ),
                 DataColumn(label: Text(l10n.shooting.toUpperCase())),
                 DataColumn(
                   label: Text(l10n.split.toUpperCase()),
@@ -82,19 +98,21 @@ class ResultsTable extends StatelessWidget {
                 DataColumn(label: Text(l10n.gap.toUpperCase()), numeric: true),
               ],
               rows: [
-                for (var index = 0; index < sortedRows.length; index++)
+                for (final (index, row) in visibleRows)
                   DataRow(
-                    color: _rowColor(context, sortedRows[index]),
-                    onSelectChanged: _isDisabled(sortedRows[index])
+                    color: _rowColor(context, row),
+                    onSelectChanged: _isDisabled(row)
                         ? null
-                        : (_) => onAthleteTap(sortedRows[index]),
+                        : (_) => onAthleteTap(row),
                     cells: _cellsForResult(
-                      sortedRows[index],
+                      row,
+                      sortedRows,
                       selectedSplitId,
                       splitRange,
                       sortMode,
                       winnerMs,
                       index,
+                      affiliationView,
                     ),
                   ),
               ],
@@ -114,28 +132,34 @@ class ResultsTable extends StatelessWidget {
     BuildContext context,
     ResultTableRow row,
   ) {
-    if (!_isDisabled(row)) return null;
-    return WidgetStatePropertyAll(
-      Theme.of(context).disabledColor.withValues(alpha: 0.16),
-    );
+    if (_isDisabled(row)) {
+      return WidgetStatePropertyAll(
+        Theme.of(context).disabledColor.withValues(alpha: 0.16),
+      );
+    }
+    final color = switch (row.highlight) {
+      ResultRowHighlight.self => Theme.of(context).colorScheme.primary,
+      ResultRowHighlight.affiliationMate => Theme.of(
+        context,
+      ).colorScheme.secondary,
+      ResultRowHighlight.none => null,
+    };
+    if (color == null) return null;
+    final alpha = row.highlight == ResultRowHighlight.self ? 0.22 : 0.14;
+    return WidgetStatePropertyAll(color.withValues(alpha: alpha));
   }
 
   List<DataCell> _cellsForResult(
     ResultTableRow row,
+    List<ResultTableRow> sortedRows,
     String? selectedSplitId,
     SplitRangeSelection? splitRange,
     ResultSortMode sortMode,
     int? winnerMs,
     int index,
+    ResultAffiliationView affiliationView,
   ) {
     final result = row.result;
-    final displayRow = row.copyWith(
-      activeSplitRankLabel: _activeSplitRankLabel(
-        result,
-        selectedSplitId,
-        splitRange,
-      ),
-    );
     final showOriginalPlacement = !_isFinalTimeSort(
       result,
       selectedSplitId,
@@ -146,15 +170,19 @@ class ResultsTable extends StatelessWidget {
       DataCell(_MonoText(result.bib.isEmpty ? '-' : result.bib)),
       DataCell(
         _NameCell(
-          row: displayRow,
+          row: row,
           placement: _placement(
-            displayRow,
+            row,
+            sortedRows,
             index,
+            selectedSplitId: selectedSplitId,
+            splitRange: splitRange,
+            sortMode: sortMode,
             showOriginalPlacement: showOriginalPlacement,
           ),
         ),
       ),
-      DataCell(Text(result.club.isEmpty ? '-' : result.club)),
+      DataCell(Text(_affiliationText(result, affiliationView))),
       DataCell(_MonoText(_shootingText(result, selectedSplitId, splitRange))),
       DataCell(
         _MonoText(
@@ -172,6 +200,14 @@ class ResultsTable extends StatelessWidget {
     ];
   }
 
+  static String _affiliationText(
+    RaceResult result,
+    ResultAffiliationView view,
+  ) {
+    final value = result.affiliationName(view);
+    return value.isEmpty ? '-' : value;
+  }
+
   static List<ResultTableRow> _sortedRows(
     List<ResultTableRow> rows,
     String? selectedSplitId,
@@ -180,9 +216,10 @@ class ResultsTable extends StatelessWidget {
   ) {
     final sorted = [...rows];
     sorted.sort((a, b) {
-      if (a.result.isFinished != b.result.isFinished) {
-        return a.result.isFinished ? -1 : 1;
-      }
+      final statusCompare = a.result.statusSortOrder.compareTo(
+        b.result.statusSortOrder,
+      );
+      if (statusCompare != 0) return statusCompare;
       final aMs = _sortMs(a.result, selectedSplitId, splitRange, sortMode);
       final bMs = _sortMs(b.result, selectedSplitId, splitRange, sortMode);
       if (aMs != null && bMs != null && aMs != bMs) {
@@ -222,8 +259,12 @@ class ResultsTable extends StatelessWidget {
     }
     if (selectedSplitId == null) return '-';
     final split = result.splitValues[selectedSplitId];
-    if (split == null || split.legText.isEmpty) return '-';
-    return split.legText;
+    if (split == null) return '-';
+    if (split.legText.isNotEmpty) return split.legText;
+    final derivedText = formatDurationMs(
+      effectiveSplitLegMs(result, selectedSplitId),
+    );
+    return derivedText.isEmpty ? '-' : derivedText;
   }
 
   static String _timeText(RaceResult result, String? selectedSplitId) {
@@ -271,7 +312,7 @@ class ResultsTable extends StatelessWidget {
     final split = result.splitValues[selectedSplitId];
     return switch (sortMode) {
       ResultSortMode.cumulative => split?.cumMs,
-      ResultSortMode.split => split?.legMs,
+      ResultSortMode.split => effectiveSplitLegMs(result, selectedSplitId),
     };
   }
 
@@ -296,14 +337,38 @@ class ResultsTable extends StatelessWidget {
 
   static String _placement(
     ResultTableRow row,
+    List<ResultTableRow> sortedRows,
     int index, {
+    required String? selectedSplitId,
+    required SplitRangeSelection? splitRange,
+    required ResultSortMode sortMode,
     required bool showOriginalPlacement,
   }) {
     final result = row.result;
     if (result.isFinished) {
-      final sortedPlacement = '${index + 1}';
-      final originalPlacement =
-          row.activeSplitRankLabel ?? row.originalPlacementLabel;
+      final currentTime = _sortMs(
+        result,
+        selectedSplitId,
+        splitRange,
+        sortMode,
+      );
+      var rank = index + 1;
+      if (currentTime != null) {
+        for (var previousIndex = 0; previousIndex < index; previousIndex++) {
+          final previousTime = _sortMs(
+            sortedRows[previousIndex].result,
+            selectedSplitId,
+            splitRange,
+            sortMode,
+          );
+          if (previousTime == currentTime) {
+            rank = previousIndex + 1;
+            break;
+          }
+        }
+      }
+      final sortedPlacement = '$rank';
+      final originalPlacement = row.originalPlacementLabel;
       if (!showOriginalPlacement || originalPlacement.isEmpty) {
         return sortedPlacement;
       }
@@ -349,17 +414,6 @@ class ResultsTable extends StatelessWidget {
     if (fromMs == null) return null;
     final delta = toMs - fromMs;
     return delta >= 0 ? delta : null;
-  }
-
-  static String? _activeSplitRankLabel(
-    RaceResult result,
-    String? selectedSplitId,
-    SplitRangeSelection? splitRange,
-  ) {
-    final effectiveSplitId = splitRange?.toSplitId ?? selectedSplitId;
-    if (effectiveSplitId == null) return null;
-    final rank = result.splitValues[effectiveSplitId]?.cumRank;
-    return rank != null && rank > 0 ? '$rank' : null;
   }
 
   static String? _rangeShootingText(
@@ -472,6 +526,47 @@ class _ResultsLoadMoreScrollViewState extends State<ResultsLoadMoreScrollView> {
   }
 }
 
+class ResultAffiliationHeader extends StatelessWidget {
+  const ResultAffiliationHeader({
+    super.key,
+    required this.view,
+    required this.clubLabel,
+    required this.teamLabel,
+    required this.onToggle,
+  });
+
+  final ResultAffiliationView view;
+  final String clubLabel;
+  final String teamLabel;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = view == ResultAffiliationView.club ? clubLabel : teamLabel;
+    final tooltip = view == ResultAffiliationView.club
+        ? 'Vis team'
+        : 'Vis klubb';
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label),
+              const SizedBox(width: 4),
+              const Icon(Icons.swap_horiz, size: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _NameCell extends StatelessWidget {
   const _NameCell({required this.row, required this.placement});
 
@@ -517,7 +612,7 @@ class ResultTableRow {
     required this.className,
     required this.color,
     required this.originalPlacementLabel,
-    this.activeSplitRankLabel,
+    this.highlight = ResultRowHighlight.none,
   });
 
   final RaceResult result;
@@ -525,12 +620,9 @@ class ResultTableRow {
   final String className;
   final Color? color;
   final String originalPlacementLabel;
-  final String? activeSplitRankLabel;
+  final ResultRowHighlight highlight;
 
-  ResultTableRow copyWith({
-    String? originalPlacementLabel,
-    String? activeSplitRankLabel,
-  }) {
+  ResultTableRow copyWith({String? originalPlacementLabel}) {
     return ResultTableRow(
       result: result,
       classId: classId,
@@ -538,9 +630,45 @@ class ResultTableRow {
       color: color,
       originalPlacementLabel:
           originalPlacementLabel ?? this.originalPlacementLabel,
-      activeSplitRankLabel: activeSplitRankLabel ?? this.activeSplitRankLabel,
+      highlight: highlight,
     );
   }
+}
+
+enum ResultRowHighlight { none, self, affiliationMate }
+
+ResultRowHighlight resultHighlightFor(
+  RaceResult result, {
+  required String? linkedAthleteId,
+  required String? linkedClubName,
+  required String? linkedTeamName,
+}) {
+  final athleteId = result.athleteId?.trim();
+  final currentAthleteId = linkedAthleteId?.trim();
+  if (athleteId != null &&
+      athleteId.isNotEmpty &&
+      currentAthleteId != null &&
+      athleteId == currentAthleteId) {
+    return ResultRowHighlight.self;
+  }
+
+  final resultClub = _normalizedAffiliation(result.club);
+  final currentClub = _normalizedAffiliation(linkedClubName);
+  final resultTeam = _normalizedAffiliation(result.team);
+  final currentTeam = _normalizedAffiliation(linkedTeamName);
+  if ((resultClub != null && resultClub == currentClub) ||
+      (resultTeam != null && resultTeam == currentTeam)) {
+    return ResultRowHighlight.affiliationMate;
+  }
+  return ResultRowHighlight.none;
+}
+
+String? _normalizedAffiliation(String? value) {
+  final normalized = value
+      ?.trim()
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .toLowerCase();
+  return normalized == null || normalized.isEmpty ? null : normalized;
 }
 
 class _MonoText extends StatelessWidget {

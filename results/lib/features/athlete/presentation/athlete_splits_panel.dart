@@ -36,6 +36,8 @@ class _AthleteSplitsPanelState extends State<AthleteSplitsPanel> {
       _AverageComparisonDisplayMode.graph;
   _AverageComparisonValueMode _averageComparisonValueMode =
       _AverageComparisonValueMode.time;
+  _AverageComparisonGroupMode _averageComparisonGroupMode =
+      _AverageComparisonGroupMode.all;
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +84,7 @@ class _AthleteSplitsPanelState extends State<AthleteSplitsPanel> {
                   splits: splits,
                   displayMode: _averageComparisonDisplayMode,
                   valueMode: _averageComparisonValueMode,
+                  groupMode: _averageComparisonGroupMode,
                   onDisplayModeChanged: (value) {
                     setState(() {
                       _averageComparisonDisplayMode = value;
@@ -90,6 +93,11 @@ class _AthleteSplitsPanelState extends State<AthleteSplitsPanel> {
                   onValueModeChanged: (value) {
                     setState(() {
                       _averageComparisonValueMode = value;
+                    });
+                  },
+                  onGroupModeChanged: (value) {
+                    setState(() {
+                      _averageComparisonGroupMode = value;
                     });
                   },
                   onSplitSelected: widget.onSplitSelected,
@@ -136,6 +144,8 @@ enum _AverageComparisonDisplayMode { table, graph }
 
 enum _AverageComparisonValueMode { time, percent }
 
+enum _AverageComparisonGroupMode { all, better, worse }
+
 class _ClassAverageComparison extends StatelessWidget {
   const _ClassAverageComparison({
     required this.result,
@@ -143,8 +153,10 @@ class _ClassAverageComparison extends StatelessWidget {
     required this.splits,
     required this.displayMode,
     required this.valueMode,
+    required this.groupMode,
     required this.onDisplayModeChanged,
     required this.onValueModeChanged,
+    required this.onGroupModeChanged,
     required this.onSplitSelected,
   });
 
@@ -153,13 +165,27 @@ class _ClassAverageComparison extends StatelessWidget {
   final List<SplitValue> splits;
   final _AverageComparisonDisplayMode displayMode;
   final _AverageComparisonValueMode valueMode;
+  final _AverageComparisonGroupMode groupMode;
   final ValueChanged<_AverageComparisonDisplayMode> onDisplayModeChanged;
   final ValueChanged<_AverageComparisonValueMode> onValueModeChanged;
+  final ValueChanged<_AverageComparisonGroupMode> onGroupModeChanged;
   final ValueChanged<String> onSplitSelected;
 
   @override
   Widget build(BuildContext context) {
-    final rows = _averageComparisonRows(result, classResults, splits);
+    final availableGroupModes = _availableAverageGroupModes(
+      result,
+      classResults,
+    );
+    final effectiveGroupMode = availableGroupModes.contains(groupMode)
+        ? groupMode
+        : _AverageComparisonGroupMode.all;
+    final rows = _averageComparisonRows(
+      result,
+      classResults,
+      splits,
+      effectiveGroupMode,
+    );
     final palette = context.palette;
     if (rows.length <= 1) return const SizedBox.shrink();
 
@@ -202,6 +228,42 @@ class _ClassAverageComparison extends StatelessWidget {
                     selected: {valueMode},
                     onSelectionChanged: (values) {
                       onValueModeChanged(values.first);
+                    },
+                  ),
+                  SegmentedButton<_AverageComparisonGroupMode>(
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: WidgetStateProperty.all(
+                        const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    segments: [
+                      const ButtonSegment(
+                        value: _AverageComparisonGroupMode.all,
+                        label: Text('Gj.snitt'),
+                      ),
+                      ButtonSegment(
+                        value: _AverageComparisonGroupMode.better,
+                        label: const Text('Bedre'),
+                        enabled: availableGroupModes.contains(
+                          _AverageComparisonGroupMode.better,
+                        ),
+                      ),
+                      ButtonSegment(
+                        value: _AverageComparisonGroupMode.worse,
+                        label: const Text('Dårligere'),
+                        enabled: availableGroupModes.contains(
+                          _AverageComparisonGroupMode.worse,
+                        ),
+                      ),
+                    ],
+                    selected: {effectiveGroupMode},
+                    onSelectionChanged: (values) {
+                      onGroupModeChanged(values.first);
                     },
                   ),
                   SegmentedButton<_AverageComparisonDisplayMode>(
@@ -436,7 +498,7 @@ class _ClassAverageComparisonPainter extends CustomPainter {
     final chart = _AverageComparisonLayout.chartRect(size);
     if (chart.width <= 0 || chart.height <= 0 || rows.isEmpty) return;
 
-    final maxAbs = _niceSignedAxisMax(_maxAbsValue());
+    final axisRange = _AverageAxisRange.fromValues(_chartValues());
     final axisPaint = Paint()
       ..color = palette.border
       ..strokeWidth = 1.2;
@@ -458,38 +520,38 @@ class _ClassAverageComparisonPainter extends CustomPainter {
       ellipsis: '...',
     );
 
-    _paintGrid(canvas, chart, maxAbs, gridPaint, axisPaint, textPainter);
-    _paintBars(canvas, chart, maxAbs, fasterPaint, slowerPaint);
-    _paintLine(canvas, chart, maxAbs, linePaint, pointPaint);
+    _paintGrid(canvas, chart, axisRange, gridPaint, axisPaint, textPainter);
+    _paintBars(canvas, chart, axisRange, fasterPaint, slowerPaint);
+    _paintLine(canvas, chart, axisRange, linePaint, pointPaint);
     _paintLabels(canvas, chart, textPainter);
   }
 
-  double _maxAbsValue() {
-    var maxAbs = 1.0;
+  List<double> _chartValues() {
+    final values = <double>[];
     for (final row in rows) {
       final split = row.splitDiffValue(valueMode);
       final cumulative = row.cumulativeDiffValue(valueMode);
-      if (split != null) maxAbs = math.max(maxAbs, split.abs());
-      if (cumulative != null) maxAbs = math.max(maxAbs, cumulative.abs());
+      if (split != null) values.add(split);
+      if (cumulative != null) values.add(cumulative);
     }
-    return maxAbs;
+    return values;
   }
 
   void _paintGrid(
     Canvas canvas,
     Rect chart,
-    double maxAbs,
+    _AverageAxisRange axisRange,
     Paint gridPaint,
     Paint axisPaint,
     TextPainter textPainter,
   ) {
-    for (final ratio in const [-1.0, -0.5, 0.0, 0.5, 1.0]) {
-      final value = maxAbs * ratio;
-      final y = _yForSignedValue(value, maxAbs, chart);
+    for (final value in axisRange.ticks) {
+      final isZero = value.abs() < 0.000001;
+      final y = _yForAverageValue(value, axisRange, chart);
       canvas.drawLine(
         Offset(chart.left, y),
         Offset(chart.right, y),
-        ratio == 0 ? axisPaint : gridPaint,
+        isZero ? axisPaint : gridPaint,
       );
       _paintAverageText(
         textPainter,
@@ -497,7 +559,7 @@ class _ClassAverageComparisonPainter extends CustomPainter {
         _formatAverageAxisValue(value, valueMode),
         Offset(chart.left - 8, y - 7),
         alignRight: true,
-        color: ratio == 0 ? palette.primary : palette.mutedText,
+        color: isZero ? palette.primary : palette.mutedText,
         fontSize: 10,
       );
     }
@@ -509,18 +571,18 @@ class _ClassAverageComparisonPainter extends CustomPainter {
   void _paintBars(
     Canvas canvas,
     Rect chart,
-    double maxAbs,
+    _AverageAxisRange axisRange,
     Paint fasterPaint,
     Paint slowerPaint,
   ) {
-    final zeroY = _yForSignedValue(0, maxAbs, chart);
+    final zeroY = _yForAverageValue(0, axisRange, chart);
     final slotWidth = chart.width / rows.length;
     final barWidth = math.max(4.0, math.min(28.0, slotWidth * 0.54));
     for (var index = 0; index < rows.length; index++) {
       final value = rows[index].splitDiffValue(valueMode);
       if (value == null) continue;
       final x = _xForAverageIndex(index, chart, rows.length);
-      final y = _yForSignedValue(value, maxAbs, chart);
+      final y = _yForAverageValue(value, axisRange, chart);
       final rect = Rect.fromLTRB(
         x - barWidth / 2,
         math.min(y, zeroY),
@@ -537,7 +599,7 @@ class _ClassAverageComparisonPainter extends CustomPainter {
   void _paintLine(
     Canvas canvas,
     Rect chart,
-    double maxAbs,
+    _AverageAxisRange axisRange,
     Paint linePaint,
     Paint pointPaint,
   ) {
@@ -548,7 +610,7 @@ class _ClassAverageComparisonPainter extends CustomPainter {
       if (value == null) continue;
       final point = Offset(
         _xForAverageIndex(index, chart, rows.length),
-        _yForSignedValue(value, maxAbs, chart),
+        _yForAverageValue(value, axisRange, chart),
       );
       if (started) {
         path.lineTo(point.dx, point.dy);
@@ -564,7 +626,7 @@ class _ClassAverageComparisonPainter extends CustomPainter {
       if (value == null) continue;
       final point = Offset(
         _xForAverageIndex(index, chart, rows.length),
-        _yForSignedValue(value, maxAbs, chart),
+        _yForAverageValue(value, axisRange, chart),
       );
       canvas.drawCircle(point, 3.4, pointPaint);
       canvas.drawCircle(
@@ -950,7 +1012,6 @@ class _SplitRankHistogram extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final maxRank = _maxRank(splits);
-    final maxLegMs = _maxLegMs(splits);
     return LayoutBuilder(
       builder: (context, constraints) {
         final height = _splitRankChartHeight(
@@ -997,13 +1058,13 @@ class _SplitRankHistogram extends StatelessWidget {
                       chartConstraints.maxHeight,
                     );
                     final chart = _SplitRankLayout.chartRect(chartSize);
+                    final barRects = _splitRankBarRects(chart, splits);
                     return Stack(
                       children: [
                         CustomPaint(
                           painter: _SplitRankHistogramPainter(
                             splits: splits,
                             maxRank: maxRank,
-                            maxLegMs: maxLegMs,
                             palette: palette,
                           ),
                           child: const SizedBox.expand(),
@@ -1011,9 +1072,9 @@ class _SplitRankHistogram extends StatelessWidget {
                         for (var index = 0; index < splits.length; index++)
                           _SplitHoverTarget(
                             split: splits[index],
-                            left: _splitTargetLeft(index, chart, splits.length),
+                            left: barRects[index].left,
                             top: chart.top,
-                            width: _splitTargetWidth(chart, splits.length),
+                            width: barRects[index].width,
                             height: chart.height,
                             onTap: () => onSplitSelected(splits[index].id),
                           ),
@@ -1034,13 +1095,11 @@ class _SplitRankHistogramPainter extends CustomPainter {
   const _SplitRankHistogramPainter({
     required this.splits,
     required this.maxRank,
-    required this.maxLegMs,
     required this.palette,
   });
 
   final List<SplitValue> splits;
   final int maxRank;
-  final int maxLegMs;
   final AppPalette palette;
 
   @override
@@ -1105,20 +1164,24 @@ class _SplitRankHistogramPainter extends CustomPainter {
     Paint barPaint,
     TextPainter textPainter,
   ) {
-    final slotWidth = chart.width / splits.length;
+    final bars = _splitRankBarRects(chart, splits);
     for (var index = 0; index < splits.length; index++) {
       final split = splits[index];
       final rank = _validRank(split.legRank);
       if (rank == null) continue;
-      final legMs = split.legMs;
-      final widthRatio = legMs == null || legMs <= 0
-          ? 0.12
-          : (legMs / math.max(1, maxLegMs)).clamp(0.12, 1.0).toDouble();
-      final barWidth = math.max(2.0, slotWidth * widthRatio);
-      final left = chart.left + slotWidth * index;
       final y = _yForRank(rank, maxRank, chart);
-      final rect = Rect.fromLTRB(left, y, left + barWidth, chart.bottom);
-      canvas.drawRect(rect, barPaint);
+      final visualHeight = math.max(3.0, chart.bottom - y);
+      final target = bars[index];
+      final rect = Rect.fromLTRB(
+        target.left,
+        chart.bottom - visualHeight,
+        target.right,
+        chart.bottom,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(4)),
+        barPaint,
+      );
     }
   }
 
@@ -1133,7 +1196,7 @@ class _SplitRankHistogramPainter extends CustomPainter {
     for (var index = 0; index < splits.length; index++) {
       final rank = _validRank(splits[index].cumRank);
       if (rank == null) continue;
-      final x = _xForSplitIndex(index, chart, splits.length);
+      final x = _splitRankBarCenterX(index, chart, splits);
       final y = _yForRank(rank, maxRank, chart);
       if (started) {
         path.lineTo(x, y);
@@ -1148,7 +1211,7 @@ class _SplitRankHistogramPainter extends CustomPainter {
       final rank = _validRank(splits[index].cumRank);
       if (rank == null) continue;
       final point = Offset(
-        _xForSplitIndex(index, chart, splits.length),
+        _splitRankBarCenterX(index, chart, splits),
         _yForRank(rank, maxRank, chart),
       );
       canvas.drawCircle(point, 3.4, pointPaint);
@@ -1174,7 +1237,7 @@ class _SplitRankHistogramPainter extends CustomPainter {
         textPainter,
         canvas,
         splits[index].label,
-        Offset(_xForSplitIndex(index, chart, splits.length), chart.bottom + 10),
+        Offset(_splitRankBarCenterX(index, chart, splits), chart.bottom + 10),
         center: true,
         color: palette.mutedText,
         fontSize: 10,
@@ -1213,7 +1276,6 @@ class _SplitRankHistogramPainter extends CustomPainter {
   bool shouldRepaint(covariant _SplitRankHistogramPainter oldDelegate) {
     return oldDelegate.splits != splits ||
         oldDelegate.maxRank != maxRank ||
-        oldDelegate.maxLegMs != maxLegMs ||
         oldDelegate.palette != palette;
   }
 }
@@ -1402,7 +1464,9 @@ class _SplitMetric extends StatelessWidget {
   }
 }
 
-enum _DispositionDisplayMode { time, percentOfFirstRound }
+enum _DispositionValueMode { absolute, difference }
+
+enum _DispositionMetricMode { time, percent }
 
 class _DispositionHistogram extends StatefulWidget {
   const _DispositionHistogram({
@@ -1418,31 +1482,37 @@ class _DispositionHistogram extends StatefulWidget {
 }
 
 class _DispositionHistogramState extends State<_DispositionHistogram> {
-  _DispositionDisplayMode _displayMode = _DispositionDisplayMode.time;
+  _DispositionValueMode _valueMode = _DispositionValueMode.absolute;
+  _DispositionMetricMode _metricMode = _DispositionMetricMode.time;
+  int _baselineLapNumber = 1;
 
   @override
   Widget build(BuildContext context) {
     final groups = widget.groups;
     if (groups.isEmpty) return const SizedBox.shrink();
     final palette = context.palette;
-    final maxValue = _maxDispositionValue(groups, _displayMode);
-    final wantedHeight =
-        58.0 +
-        groups.fold<double>(
-          0,
-          (height, group) => height + _dispositionRowHeight(group) + 8,
-        );
-    final height = math.max(112.0, wantedHeight);
+    final availableBaselineLaps = _availableDispositionBaselineLaps(groups);
+    final baselineLapNumber = availableBaselineLaps.contains(_baselineLapNumber)
+        ? _baselineLapNumber
+        : availableBaselineLaps.first;
+    final axisRange = _dispositionAxisRange(
+      groups,
+      _valueMode,
+      _metricMode,
+      baselineLapNumber,
+    );
+    final colors = _lapColors(palette);
 
     return Container(
-      height: height,
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       decoration: BoxDecoration(
         color: palette.panelAlt,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: palette.border),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
@@ -1450,152 +1520,277 @@ class _DispositionHistogramState extends State<_DispositionHistogram> {
                 'Disponering',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
               ),
-              const Spacer(),
-              SegmentedButton<_DispositionDisplayMode>(
-                style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  textStyle: WidgetStateProperty.all(
-                    const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  _dispositionModeSummary(
+                    _valueMode,
+                    _metricMode,
+                    baselineLapNumber,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    color: palette.mutedText,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SegmentedButton<_DispositionValueMode>(
+                style: _compactSegmentedButtonStyle(),
                 segments: const [
                   ButtonSegment(
-                    value: _DispositionDisplayMode.time,
-                    label: Text('Tid'),
+                    value: _DispositionValueMode.absolute,
+                    label: Text('Absolutt'),
                   ),
                   ButtonSegment(
-                    value: _DispositionDisplayMode.percentOfFirstRound,
-                    label: Text('% 1.r'),
+                    value: _DispositionValueMode.difference,
+                    label: Text('Differanse'),
                   ),
                 ],
-                selected: {_displayMode},
+                selected: {_valueMode},
                 onSelectionChanged: (values) {
                   setState(() {
-                    _displayMode = values.first;
+                    _valueMode = values.first;
                   });
                 },
               ),
+              SegmentedButton<_DispositionMetricMode>(
+                style: _compactSegmentedButtonStyle(),
+                segments: const [
+                  ButtonSegment(
+                    value: _DispositionMetricMode.time,
+                    label: Text('Tid'),
+                  ),
+                  ButtonSegment(
+                    value: _DispositionMetricMode.percent,
+                    label: Text('%'),
+                  ),
+                ],
+                selected: {_metricMode},
+                onSelectionChanged: (values) {
+                  setState(() {
+                    _metricMode = values.first;
+                  });
+                },
+              ),
+              if (_valueMode == _DispositionValueMode.difference ||
+                  _metricMode == _DispositionMetricMode.percent)
+                SegmentedButton<int>(
+                  style: _compactSegmentedButtonStyle(),
+                  segments: [
+                    for (final lapNumber in availableBaselineLaps)
+                      ButtonSegment(
+                        value: lapNumber,
+                        label: Text('R$lapNumber'),
+                      ),
+                  ],
+                  selected: {baselineLapNumber},
+                  onSelectionChanged: (values) {
+                    setState(() {
+                      _baselineLapNumber = values.first;
+                    });
+                  },
+                ),
             ],
           ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              _axisLabel(_displayMode),
-              style: TextStyle(
-                color: palette.mutedText,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _axisLabel(_valueMode, _metricMode, baselineLapNumber),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: palette.mutedText,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
-            ),
+              _DispositionLegend(
+                colors: colors,
+                valueMode: _valueMode,
+                baselineLapNumber: baselineLapNumber,
+              ),
+            ],
           ),
           const SizedBox(height: 8),
-          Column(
-            children: [
-              for (var index = 0; index < groups.length; index++) ...[
-                _DispositionRow(
-                  group: groups[index],
-                  maxValue: maxValue,
-                  displayMode: _displayMode,
-                  colors: _lapColors(palette),
-                  onSplitSelected: widget.onSplitSelected,
-                ),
-                if (index < groups.length - 1) const SizedBox(height: 8),
-              ],
-            ],
+          _DispositionChart(
+            groups: groups,
+            axisRange: axisRange,
+            valueMode: _valueMode,
+            metricMode: _metricMode,
+            baselineLapNumber: baselineLapNumber,
+            colors: colors,
+            onSplitSelected: widget.onSplitSelected,
           ),
-          const SizedBox(height: 4),
-          _DispositionAxis(maxValue: maxValue, displayMode: _displayMode),
         ],
       ),
     );
   }
 }
 
-class _DispositionRow extends StatelessWidget {
-  const _DispositionRow({
-    required this.group,
-    required this.maxValue,
-    required this.displayMode,
+class _DispositionLegend extends StatelessWidget {
+  const _DispositionLegend({
+    required this.colors,
+    required this.valueMode,
+    required this.baselineLapNumber,
+  });
+
+  final List<Color> colors;
+  final _DispositionValueMode valueMode;
+  final int baselineLapNumber;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    if (valueMode == _DispositionValueMode.difference) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _DispositionLegendItem(
+            color: _lapColorForLap(colors, baselineLapNumber),
+            label: '0=R$baselineLapNumber',
+          ),
+          const SizedBox(width: 6),
+          _DispositionLegendItem(
+            color: _fasterDispositionColor(palette),
+            label: 'Mindre',
+          ),
+          const SizedBox(width: 6),
+          _DispositionLegendItem(
+            color: _slowerDispositionColor(palette),
+            label: 'Mer',
+          ),
+        ],
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var index = 0; index < 3; index++) ...[
+          if (index > 0) const SizedBox(width: 6),
+          _DispositionLegendItem(
+            color: colors[index % colors.length],
+            label: 'R${index + 1}',
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _DispositionLegendItem extends StatelessWidget {
+  const _DispositionLegendItem({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.78),
+            borderRadius: BorderRadius.circular(2),
+            border: Border.all(color: color, width: 1),
+          ),
+        ),
+        const SizedBox(width: 3),
+        Text(
+          label,
+          style: TextStyle(
+            color: palette.mutedText,
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DispositionChart extends StatelessWidget {
+  const _DispositionChart({
+    required this.groups,
+    required this.axisRange,
+    required this.valueMode,
+    required this.metricMode,
+    required this.baselineLapNumber,
     required this.colors,
     required this.onSplitSelected,
   });
 
-  final _DispositionGroup group;
-  final double maxValue;
-  final _DispositionDisplayMode displayMode;
+  final List<_DispositionGroup> groups;
+  final _DispositionAxisRange axisRange;
+  final _DispositionValueMode valueMode;
+  final _DispositionMetricMode metricMode;
+  final int baselineLapNumber;
   final List<Color> colors;
   final ValueChanged<String> onSplitSelected;
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
-    final rowHeight = _dispositionRowHeight(group);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        SizedBox(
-          width: 118,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 360.0;
+        final height = _dispositionChartHeight(width, groups.length);
+        final size = Size(width, height);
+        final chart = _DispositionChartLayout.chartRect(size);
+        final bars = _dispositionBarTargets(
+          chart: chart,
+          groups: groups,
+          axisRange: axisRange,
+          valueMode: valueMode,
+          metricMode: metricMode,
+          baselineLapNumber: baselineLapNumber,
+          colors: colors,
+          palette: context.palette,
+          onSplitSelected: onSplitSelected,
+        );
+
+        return SizedBox(
+          height: height,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Text(
-                group.label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              if (displayMode == _DispositionDisplayMode.percentOfFirstRound &&
-                  group.usesFallbackBaseline)
-                Text(
-                  'Bruker runde ${group.baselineLap.lapNumber}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: palette.mutedText,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w700,
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _DispositionHistogramPainter(
+                    groups: groups,
+                    axisRange: axisRange,
+                    valueMode: valueMode,
+                    metricMode: metricMode,
+                    baselineLapNumber: baselineLapNumber,
+                    palette: context.palette,
                   ),
                 ),
+              ),
+              ...bars,
             ],
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: SizedBox(
-            height: rowHeight,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(color: palette.border, width: 1),
-                  bottom: BorderSide(color: palette.border, width: 1),
-                ),
-              ),
-              child: Stack(
-                children: [
-                  for (var index = 0; index < group.laps.length; index++)
-                    _DispositionBar(
-                      group: group,
-                      lap: group.laps[index],
-                      maxValue: maxValue,
-                      displayMode: displayMode,
-                      color:
-                          colors[math.max(0, group.laps[index].lapNumber - 1) %
-                              colors.length],
-                      top: _barTop(index, group.laps.length, rowHeight),
-                      height: _barHeight(group.laps.length),
-                      onSplitSelected: onSplitSelected,
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -1604,60 +1799,47 @@ class _DispositionBar extends StatelessWidget {
   const _DispositionBar({
     required this.group,
     required this.lap,
-    required this.maxValue,
-    required this.displayMode,
+    required this.valueMode,
+    required this.metricMode,
+    required this.baselineLapNumber,
     required this.color,
-    required this.top,
-    required this.height,
     required this.onSplitSelected,
   });
 
   final _DispositionGroup group;
   final _DispositionLap lap;
-  final double maxValue;
-  final _DispositionDisplayMode displayMode;
+  final _DispositionValueMode valueMode;
+  final _DispositionMetricMode metricMode;
+  final int baselineLapNumber;
   final Color color;
-  final double top;
-  final double height;
   final ValueChanged<String> onSplitSelected;
 
   @override
   Widget build(BuildContext context) {
-    final value = group.valueFor(lap, displayMode);
-    final widthFactor = math
-        .max(0.015, value / math.max(maxValue, 1))
-        .clamp(0.0, 1.0)
-        .toDouble();
-    return Positioned(
-      left: 0,
-      right: 0,
-      top: top,
-      child: Tooltip(
-        message:
-            '${lap.tooltipText(displayMode, value)}'
-            '${group.usesFallbackBaseline && displayMode == _DispositionDisplayMode.percentOfFirstRound ? '\nMangler runde 1 for denne strekningen' : ''}'
-            '\nKlikk for a apne splitten',
-        child: FractionallySizedBox(
-          alignment: Alignment.centerLeft,
-          widthFactor: widthFactor,
-          child: Semantics(
-            link: true,
-            button: true,
-            label: 'Apne ${lap.splitLabel}',
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onSplitSelected(lap.splitId),
-                child: Container(
-                  height: height,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.78),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: color, width: 1),
-                  ),
-                ),
+    final baselineLap = group.baselineLapFor(baselineLapNumber);
+    final percent = group.percentFor(lap, baselineLapNumber);
+    final diff = group.differenceFor(lap, metricMode, baselineLapNumber);
+    return Tooltip(
+      message:
+          '${lap.tooltipText(valueMode: valueMode, metricMode: metricMode, baselineLap: baselineLap, percent: percent, difference: diff)}'
+          '${group.usesFallbackBaseline(baselineLapNumber) ? '\nMangler valgt 0-runde for denne strekningen' : ''}'
+          '\nKlikk for a apne splitten',
+      child: Semantics(
+        link: true,
+        button: true,
+        label: 'Apne ${lap.splitLabel}',
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onSplitSelected(lap.splitId),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.78),
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(color: color, width: 1),
               ),
+              child: const SizedBox.expand(),
             ),
           ),
         ),
@@ -1666,36 +1848,214 @@ class _DispositionBar extends StatelessWidget {
   }
 }
 
-class _DispositionAxis extends StatelessWidget {
-  const _DispositionAxis({required this.maxValue, required this.displayMode});
+class _DispositionChartLayout {
+  static const left = 58.0;
+  static const top = 12.0;
+  static const right = 10.0;
+  static const bottom = 50.0;
 
-  final double maxValue;
-  final _DispositionDisplayMode displayMode;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final middleValue = maxValue / 2;
-    final style = TextStyle(
-      color: palette.mutedText,
-      fontSize: 9,
-      fontWeight: FontWeight.w800,
+  static Rect chartRect(Size size) {
+    return Rect.fromLTWH(
+      left,
+      top,
+      math.max(0, size.width - left - right),
+      math.max(0, size.height - top - bottom),
     );
-    return Row(
-      children: [
-        const SizedBox(width: 126),
-        Expanded(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_formatAxisValue(0, displayMode), style: style),
-              Text(_formatAxisValue(middleValue, displayMode), style: style),
-              Text(_formatAxisValue(maxValue, displayMode), style: style),
-            ],
+  }
+}
+
+List<Widget> _dispositionBarTargets({
+  required Rect chart,
+  required List<_DispositionGroup> groups,
+  required _DispositionAxisRange axisRange,
+  required _DispositionValueMode valueMode,
+  required _DispositionMetricMode metricMode,
+  required int baselineLapNumber,
+  required List<Color> colors,
+  required AppPalette palette,
+  required ValueChanged<String> onSplitSelected,
+}) {
+  if (groups.isEmpty || colors.isEmpty) return const [];
+  final widgets = <Widget>[];
+  final slotWidth = chart.width / groups.length;
+
+  for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+    final group = groups[groupIndex];
+    final slotLeft = chart.left + slotWidth * groupIndex;
+    final innerPadding = math.min(18.0, slotWidth * 0.16);
+    final innerWidth = math.max(12.0, slotWidth - innerPadding * 2);
+    final gap = innerWidth < 58 ? 3.0 : 5.0;
+    final barWidth = math.max(5.0, math.min(24.0, (innerWidth - gap * 2) / 3));
+    final barsWidth = barWidth * 3 + gap * 2;
+    final barsLeft = slotLeft + (slotWidth - barsWidth) / 2;
+
+    final laps = group.histogramLaps;
+    for (var lapIndex = 0; lapIndex < laps.length; lapIndex++) {
+      final lap = laps[lapIndex];
+      final slotIndex = lap.lapNumber >= 1 && lap.lapNumber <= 3
+          ? lap.lapNumber - 1
+          : lapIndex;
+      if (slotIndex < 0 || slotIndex > 2) continue;
+      final value = group.chartValueFor(
+        lap,
+        valueMode,
+        metricMode,
+        baselineLapNumber,
+      );
+      final isBaseline = group.isBaselineLap(lap, baselineLapNumber);
+      final zeroY = _yForDispositionValue(0, axisRange, chart);
+      final valueY = _yForDispositionValue(value, axisRange, chart);
+      final barHeight =
+          valueMode == _DispositionValueMode.difference && isBaseline
+          ? 4.0
+          : math.max(7.0, (valueY - zeroY).abs());
+      final top = valueMode == _DispositionValueMode.difference
+          ? isBaseline
+                ? zeroY - barHeight / 2
+                : math.min(valueY, zeroY)
+          : valueY;
+      widgets.add(
+        Positioned(
+          left: barsLeft + slotIndex * (barWidth + gap),
+          top: top.clamp(chart.top, chart.bottom - barHeight).toDouble(),
+          width: barWidth,
+          height: barHeight,
+          child: _DispositionBar(
+            group: group,
+            lap: lap,
+            valueMode: valueMode,
+            metricMode: metricMode,
+            baselineLapNumber: baselineLapNumber,
+            color: _dispositionBarColor(
+              lap: lap,
+              group: group,
+              valueMode: valueMode,
+              metricMode: metricMode,
+              baselineLapNumber: baselineLapNumber,
+              colors: colors,
+              palette: palette,
+              slotIndex: slotIndex,
+            ),
+            onSplitSelected: onSplitSelected,
           ),
         ),
-      ],
+      );
+    }
+  }
+
+  return widgets;
+}
+
+class _DispositionHistogramPainter extends CustomPainter {
+  const _DispositionHistogramPainter({
+    required this.groups,
+    required this.axisRange,
+    required this.valueMode,
+    required this.metricMode,
+    required this.baselineLapNumber,
+    required this.palette,
+  });
+
+  final List<_DispositionGroup> groups;
+  final _DispositionAxisRange axisRange;
+  final _DispositionValueMode valueMode;
+  final _DispositionMetricMode metricMode;
+  final int baselineLapNumber;
+  final AppPalette palette;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final chart = _DispositionChartLayout.chartRect(size);
+    final gridPaint = Paint()
+      ..color = palette.border.withValues(alpha: 0.42)
+      ..strokeWidth = 1;
+    final axisPaint = Paint()
+      ..color = palette.border
+      ..strokeWidth = 1.1;
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '...',
     );
+    for (final value in axisRange.ticks) {
+      final y = _yForDispositionValue(value, axisRange, chart);
+      final isZero = value.abs() < 0.000001;
+      canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), gridPaint);
+      textPainter.text = TextSpan(
+        text: _formatAxisValue(value, valueMode, metricMode),
+        style: TextStyle(
+          color: isZero ? palette.primary : palette.mutedText,
+          fontSize: 8,
+          fontWeight: FontWeight.w800,
+        ),
+      );
+      textPainter.layout(maxWidth: chart.left - 6);
+      textPainter.paint(
+        canvas,
+        Offset(chart.left - textPainter.width - 6, math.max(0, y - 11)),
+      );
+    }
+
+    final zeroY = _yForDispositionValue(0, axisRange, chart);
+    canvas.drawLine(
+      Offset(chart.left, zeroY),
+      Offset(chart.right, zeroY),
+      axisPaint,
+    );
+    canvas.drawLine(chart.bottomLeft, chart.topLeft, axisPaint);
+    _paintGroupLabels(canvas, chart, textPainter);
+  }
+
+  void _paintGroupLabels(Canvas canvas, Rect chart, TextPainter textPainter) {
+    if (groups.isEmpty) return;
+    final labelEvery = chart.width < 520
+        ? math.max(1, (groups.length / 4).ceil())
+        : 1;
+    final slotWidth = chart.width / groups.length;
+    for (var index = 0; index < groups.length; index++) {
+      if (index % labelEvery != 0 && index != groups.length - 1) continue;
+      final group = groups[index];
+      textPainter.text = TextSpan(
+        text: group.label,
+        style: TextStyle(
+          color: palette.mutedText,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+        ),
+      );
+      textPainter.layout(maxWidth: math.max(42, slotWidth - 4));
+      final x = chart.left + slotWidth * index + slotWidth / 2;
+      textPainter.paint(
+        canvas,
+        Offset(x - textPainter.width / 2, chart.bottom + 8),
+      );
+      if (group.usesFallbackBaseline(baselineLapNumber)) {
+        final actualBaseline = group.baselineLapFor(baselineLapNumber);
+        textPainter.text = TextSpan(
+          text: '0=R${actualBaseline.lapNumber}',
+          style: TextStyle(
+            color: palette.mutedText.withValues(alpha: 0.82),
+            fontSize: 8,
+            fontWeight: FontWeight.w800,
+          ),
+        );
+        textPainter.layout(maxWidth: slotWidth);
+        textPainter.paint(
+          canvas,
+          Offset(x - textPainter.width / 2, chart.bottom + 23),
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DispositionHistogramPainter oldDelegate) {
+    return oldDelegate.groups != groups ||
+        oldDelegate.axisRange != axisRange ||
+        oldDelegate.valueMode != valueMode ||
+        oldDelegate.metricMode != metricMode ||
+        oldDelegate.baselineLapNumber != baselineLapNumber ||
+        oldDelegate.palette != palette;
   }
 }
 
@@ -1723,19 +2083,81 @@ class _DispositionGroup {
     return null;
   }
 
-  bool get usesFallbackBaseline => firstRoundLap == null;
-
-  int get maxLegMs {
-    return laps.fold<int>(1, (maxValue, lap) => math.max(maxValue, lap.legMs));
+  _DispositionLap baselineLapFor(int lapNumber) {
+    for (final lap in laps) {
+      if (lap.lapNumber == lapNumber) return lap;
+    }
+    return baselineLap;
   }
 
-  double valueFor(_DispositionLap lap, _DispositionDisplayMode displayMode) {
-    if (displayMode == _DispositionDisplayMode.time) {
-      return lap.legMs.toDouble();
+  bool usesFallbackBaseline(int lapNumber) {
+    return baselineLapFor(lapNumber).lapNumber != lapNumber;
+  }
+
+  List<_DispositionLap> get histogramLaps {
+    final visible = [
+      for (final lap in laps)
+        if (lap.lapNumber >= 1 && lap.lapNumber <= 3) lap,
+    ]..sort((a, b) => a.lapNumber - b.lapNumber);
+    if (visible.isNotEmpty) return visible;
+    return laps.take(3).toList();
+  }
+
+  double percentFor(_DispositionLap lap, int baselineLapNumber) {
+    final baselineMs = baselineLapFor(baselineLapNumber).legMs;
+    if (baselineMs <= 0) return 0;
+    return lap.legMs * 100 / baselineMs;
+  }
+
+  double valueFor(
+    _DispositionLap lap,
+    _DispositionMetricMode metricMode,
+    int baselineLapNumber,
+  ) {
+    if (metricMode == _DispositionMetricMode.time) return lap.legMs.toDouble();
+    return percentFor(lap, baselineLapNumber);
+  }
+
+  double differenceFor(
+    _DispositionLap lap,
+    _DispositionMetricMode metricMode,
+    int baselineLapNumber,
+  ) {
+    final baselineLap = baselineLapFor(baselineLapNumber);
+    if (metricMode == _DispositionMetricMode.time) {
+      return (lap.legMs - baselineLap.legMs).toDouble();
     }
     final baselineMs = baselineLap.legMs;
     if (baselineMs <= 0) return 0;
-    return lap.legMs * 100 / baselineMs;
+    return (lap.legMs - baselineMs) * 100 / baselineMs;
+  }
+
+  double barMagnitudeFor(
+    _DispositionLap lap,
+    _DispositionValueMode valueMode,
+    _DispositionMetricMode metricMode,
+    int baselineLapNumber,
+  ) {
+    if (valueMode == _DispositionValueMode.absolute) {
+      return valueFor(lap, metricMode, baselineLapNumber);
+    }
+    return differenceFor(lap, metricMode, baselineLapNumber).abs();
+  }
+
+  double chartValueFor(
+    _DispositionLap lap,
+    _DispositionValueMode valueMode,
+    _DispositionMetricMode metricMode,
+    int baselineLapNumber,
+  ) {
+    if (valueMode == _DispositionValueMode.absolute) {
+      return valueFor(lap, metricMode, baselineLapNumber);
+    }
+    return differenceFor(lap, metricMode, baselineLapNumber);
+  }
+
+  bool isBaselineLap(_DispositionLap lap, int baselineLapNumber) {
+    return lap.splitId == baselineLapFor(baselineLapNumber).splitId;
   }
 }
 
@@ -1758,16 +2180,28 @@ class _DispositionLap {
   final int lapNumber;
   final int? legRank;
 
-  String tooltipText(_DispositionDisplayMode displayMode, double value) {
+  String tooltipText({
+    required _DispositionValueMode valueMode,
+    required _DispositionMetricMode metricMode,
+    required _DispositionLap baselineLap,
+    required double percent,
+    required double difference,
+  }) {
     final rankText = legRank == null || legRank! <= 0 ? '-' : '$legRank';
-    final valueText = displayMode == _DispositionDisplayMode.time
-        ? 'Tid ${formatDurationMs(legMs)}'
-        : 'Prosent ${_formatPercent(value)}';
-    final timeText = displayMode == _DispositionDisplayMode.time
-        ? ''
-        : '\nTid ${formatDurationMs(legMs)}';
-    return '$from -> $to\nRunde $lapNumber\n$valueText'
-        '$timeText\nPlass $rankText\n$splitLabel';
+    final timeText = formatDurationMs(legMs);
+    final percentText = _formatPercent(percent);
+    final mainValue = valueMode == _DispositionValueMode.absolute
+        ? metricMode == _DispositionMetricMode.time
+              ? timeText
+              : percentText
+        : _formatSignedDispositionValue(difference, metricMode);
+    final mainLabel = valueMode == _DispositionValueMode.absolute
+        ? 'Absolutt'
+        : 'Differanse fra R${baselineLap.lapNumber}';
+    return '$from -> $to\nRunde $lapNumber: $mainValue'
+        '\n$mainLabel $mainValue\nTid $timeText\n% av R${baselineLap.lapNumber} $percentText'
+        '\nReferanse R${baselineLap.lapNumber} ${formatDurationMs(baselineLap.legMs)}'
+        '\nPlass $rankText\n$splitLabel';
   }
 }
 
@@ -1860,34 +2294,41 @@ String _normalizeStation(String value) {
   return value.trim().toLowerCase();
 }
 
-double _dispositionRowHeight(_DispositionGroup group) {
-  return math.max(24.0, math.min(54.0, 8.0 + group.laps.length * 9.0));
+double _dispositionChartHeight(double width, int groupCount) {
+  final compactHeight = width < 520 ? 230.0 : 250.0;
+  return math.max(compactHeight, math.min(310.0, 220.0 + groupCount * 4.0));
 }
 
-double _barHeight(int lapCount) {
-  if (lapCount <= 3) return 6;
-  if (lapCount <= 5) return 5;
-  return 4;
-}
-
-double _barTop(int index, int lapCount, double rowHeight) {
-  final barHeight = _barHeight(lapCount);
-  final totalHeight = lapCount * barHeight + math.max(0, lapCount - 1) * 3;
-  final top = (rowHeight - totalHeight) / 2 + index * (barHeight + 3);
-  return math.max(1, top);
-}
-
-double _maxDispositionValue(
+_DispositionAxisRange _dispositionAxisRange(
   List<_DispositionGroup> groups,
-  _DispositionDisplayMode displayMode,
+  _DispositionValueMode valueMode,
+  _DispositionMetricMode metricMode,
+  int baselineLapNumber,
 ) {
-  var maxValue = displayMode == _DispositionDisplayMode.time ? 1.0 : 100.0;
+  var minValue = 0.0;
+  var maxValue =
+      valueMode == _DispositionValueMode.absolute &&
+          metricMode == _DispositionMetricMode.percent
+      ? 100.0
+      : 1.0;
   for (final group in groups) {
-    for (final lap in group.laps) {
-      maxValue = math.max(maxValue, group.valueFor(lap, displayMode));
+    for (final lap in group.histogramLaps) {
+      final value = group.chartValueFor(
+        lap,
+        valueMode,
+        metricMode,
+        baselineLapNumber,
+      );
+      minValue = math.min(minValue, value);
+      maxValue = math.max(maxValue, value);
     }
   }
-  return maxValue;
+  return _DispositionAxisRange.fromBounds(
+    minValue: minValue,
+    maxValue: maxValue,
+    valueMode: valueMode,
+    metricMode: metricMode,
+  );
 }
 
 int _maxRank(List<SplitValue> splits) {
@@ -1901,21 +2342,12 @@ int _maxRank(List<SplitValue> splits) {
   return maxRank;
 }
 
-int _maxLegMs(List<SplitValue> splits) {
-  var maxLegMs = 1;
-  for (final split in splits) {
-    final legMs = split.legMs;
-    if (legMs != null && legMs > maxLegMs) maxLegMs = legMs;
-  }
-  return maxLegMs;
-}
-
 double _averageComparisonChartHeight(int rowCount) {
   return math.max(340.0, 210.0 + rowCount * 18.0);
 }
 
 double _splitRankChartHeight({required double width, required int splitCount}) {
-  return math.max(360.0, width * 0.74 + splitCount * 7.0);
+  return math.max(180.0, width * 0.37 + splitCount * 3.5);
 }
 
 String _rankText(int? rank) {
@@ -1932,8 +2364,9 @@ List<_AverageComparisonRow> _averageComparisonRows(
   RaceResult result,
   List<RaceResult> classResults,
   List<SplitValue> splits,
+  _AverageComparisonGroupMode groupMode,
 ) {
-  final results = classResults.where((entry) => entry.isFinished).toList();
+  final results = _averageComparisonResults(result, classResults, groupMode);
   return [
     _AverageComparisonRow(
       label: 'Totalt',
@@ -1963,6 +2396,50 @@ List<_AverageComparisonRow> _averageComparisonRows(
         ),
       ),
   ];
+}
+
+List<RaceResult> _averageComparisonResults(
+  RaceResult result,
+  List<RaceResult> classResults,
+  _AverageComparisonGroupMode groupMode,
+) {
+  final ownTotalMs = result.totalMs;
+  return classResults.where((entry) {
+    if (!entry.isFinished) return false;
+    if (groupMode == _AverageComparisonGroupMode.all) return true;
+    if (entry.id == result.id) return false;
+    final totalMs = entry.totalMs;
+    if (ownTotalMs == null || ownTotalMs <= 0 || totalMs == null) {
+      return false;
+    }
+    if (groupMode == _AverageComparisonGroupMode.better) {
+      return totalMs < ownTotalMs;
+    }
+    return totalMs > ownTotalMs;
+  }).toList();
+}
+
+Set<_AverageComparisonGroupMode> _availableAverageGroupModes(
+  RaceResult result,
+  List<RaceResult> classResults,
+) {
+  final available = <_AverageComparisonGroupMode>{
+    _AverageComparisonGroupMode.all,
+  };
+  final ownTotalMs = result.totalMs;
+  if (ownTotalMs == null || ownTotalMs <= 0) return available;
+
+  for (final entry in classResults) {
+    if (!entry.isFinished || entry.id == result.id) continue;
+    final totalMs = entry.totalMs;
+    if (totalMs == null || totalMs <= 0) continue;
+    if (totalMs < ownTotalMs) {
+      available.add(_AverageComparisonGroupMode.better);
+    } else if (totalMs > ownTotalMs) {
+      available.add(_AverageComparisonGroupMode.worse);
+    }
+  }
+  return available;
 }
 
 int? _averageMs(Iterable<int> values) {
@@ -2114,14 +2591,61 @@ double _averageTargetLeft(int index, Rect chart, int count) {
   return chart.left + _averageTargetWidth(chart, count) * index;
 }
 
-double _yForSignedValue(double value, double maxAbs, Rect chart) {
-  if (maxAbs <= 0) return chart.center.dy;
-  final ratio = ((value / maxAbs).clamp(-1.0, 1.0) + 1) / 2;
+double _yForAverageValue(
+  double value,
+  _AverageAxisRange axisRange,
+  Rect chart,
+) {
+  if (axisRange.max <= axisRange.min) return chart.center.dy;
+  final ratio = ((value - axisRange.min) / (axisRange.max - axisRange.min))
+      .clamp(0.0, 1.0);
   return chart.bottom - chart.height * ratio;
 }
 
-double _niceSignedAxisMax(double value) {
-  if (value <= 1) return 1;
+class _AverageAxisRange {
+  const _AverageAxisRange({
+    required this.min,
+    required this.max,
+    required this.ticks,
+  });
+
+  final double min;
+  final double max;
+  final List<double> ticks;
+
+  factory _AverageAxisRange.fromValues(List<double> values) {
+    var rawMin = 0.0;
+    var rawMax = 0.0;
+    for (final value in values) {
+      rawMin = math.min(rawMin, value);
+      rawMax = math.max(rawMax, value);
+    }
+
+    if (rawMin == rawMax) {
+      rawMin -= 1;
+      rawMax += 1;
+    }
+
+    final step = _niceAxisStep((rawMax - rawMin) / 4);
+    final min = math.min(0.0, (rawMin / step).floorToDouble() * step);
+    final max = math.max(0.0, (rawMax / step).ceilToDouble() * step);
+    final ticks = <double>[];
+    final tickCount = ((max - min) / step).round();
+    for (var i = 0; i <= tickCount; i++) {
+      final value = min + step * i;
+      ticks.add(value.abs() < step / 1000 ? 0 : value);
+    }
+    if (!ticks.any((value) => value == 0)) {
+      ticks.add(0);
+      ticks.sort();
+    }
+
+    return _AverageAxisRange(min: min, max: max, ticks: ticks);
+  }
+}
+
+double _niceAxisStep(double value) {
+  if (value <= 0) return 1;
   final magnitude = math
       .pow(10, (math.log(value) / math.ln10).floor())
       .toDouble();
@@ -2148,20 +2672,34 @@ class _SplitRankLayout {
   }
 }
 
-double _xForSplitIndex(int index, Rect chart, int count) {
-  if (count <= 1) return chart.left + chart.width / 2;
-  final slotWidth = chart.width / count;
-  return chart.left + slotWidth * index + slotWidth / 2;
+List<Rect> _splitRankBarRects(Rect chart, List<SplitValue> splits) {
+  if (splits.isEmpty) return const [];
+  final preferredGap = chart.width < 520 ? 4.0 : 6.0;
+  final gap = splits.length <= 1
+      ? 0.0
+      : math.min(preferredGap, chart.width / (splits.length * 3));
+  final totalGap = gap * math.max(0, splits.length - 1);
+  final availableWidth = math.max(0, chart.width - totalGap);
+  final totalMs = splits.fold<int>(
+    0,
+    (sum, split) => sum + math.max(1, split.legMs ?? 0),
+  );
+
+  final rects = <Rect>[];
+  var left = chart.left;
+  for (final split in splits) {
+    final legMs = math.max(1, split.legMs ?? 0);
+    final width = availableWidth * legMs / math.max(1, totalMs);
+    rects.add(Rect.fromLTWH(left, chart.top, width, chart.height));
+    left += width + gap;
+  }
+  return rects;
 }
 
-double _splitTargetWidth(Rect chart, int count) {
-  if (count <= 1) return chart.width;
-  return chart.width / count;
-}
-
-double _splitTargetLeft(int index, Rect chart, int count) {
-  final width = _splitTargetWidth(chart, count);
-  return chart.left + width * index;
+double _splitRankBarCenterX(int index, Rect chart, List<SplitValue> splits) {
+  final rects = _splitRankBarRects(chart, splits);
+  if (index < 0 || index >= rects.length) return chart.left;
+  return rects[index].center.dx;
 }
 
 double _yForRank(int rank, int maxRank, Rect chart) {
@@ -2170,22 +2708,191 @@ double _yForRank(int rank, int maxRank, Rect chart) {
   return chart.top + chart.height * ratio;
 }
 
-String _axisLabel(_DispositionDisplayMode displayMode) {
-  return displayMode == _DispositionDisplayMode.time
-      ? 'X-akse: legMs'
-      : 'X-akse: % av forste runde';
+ButtonStyle _compactSegmentedButtonStyle() {
+  return ButtonStyle(
+    visualDensity: VisualDensity.compact,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    textStyle: WidgetStateProperty.all(
+      const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+    ),
+  );
 }
 
-String _formatAxisValue(double value, _DispositionDisplayMode displayMode) {
-  if (displayMode == _DispositionDisplayMode.time) {
+class _DispositionAxisRange {
+  const _DispositionAxisRange({
+    required this.min,
+    required this.max,
+    required this.ticks,
+  });
+
+  final double min;
+  final double max;
+  final List<double> ticks;
+
+  factory _DispositionAxisRange.fromBounds({
+    required double minValue,
+    required double maxValue,
+    required _DispositionValueMode valueMode,
+    required _DispositionMetricMode metricMode,
+  }) {
+    if (valueMode == _DispositionValueMode.absolute) {
+      final max = math.max(1.0, maxValue);
+      final ticks = <double>{max / 2, max};
+      if (metricMode == _DispositionMetricMode.percent && max >= 100) {
+        ticks.add(100);
+      }
+      return _DispositionAxisRange(
+        min: 0,
+        max: max,
+        ticks: ticks.toList()..sort(),
+      );
+    }
+
+    var min = math.min(0.0, minValue);
+    var max = math.max(0.0, maxValue);
+    if (min == max) {
+      min = -1;
+      max = 1;
+    }
+    final ticks = <double>{min, 0, max};
+    return _DispositionAxisRange(
+      min: min,
+      max: max,
+      ticks: ticks.toList()..sort(),
+    );
+  }
+}
+
+double _yForDispositionValue(
+  double value,
+  _DispositionAxisRange axisRange,
+  Rect chart,
+) {
+  if (axisRange.max <= axisRange.min) return chart.bottom;
+  final ratio = ((value - axisRange.min) / (axisRange.max - axisRange.min))
+      .clamp(0.0, 1.0);
+  return chart.bottom - chart.height * ratio;
+}
+
+List<int> _availableDispositionBaselineLaps(List<_DispositionGroup> groups) {
+  final lapNumbers = <int>{};
+  for (final group in groups) {
+    for (final lap in group.histogramLaps) {
+      if (lap.lapNumber > 0) lapNumbers.add(lap.lapNumber);
+    }
+  }
+  if (lapNumbers.isEmpty) return const [1];
+  final sorted = lapNumbers.toList()..sort();
+  return sorted;
+}
+
+String _dispositionModeSummary(
+  _DispositionValueMode valueMode,
+  _DispositionMetricMode metricMode,
+  int baselineLapNumber,
+) {
+  final metricText = metricMode == _DispositionMetricMode.time ? 'tid' : '%';
+  if (valueMode == _DispositionValueMode.absolute) {
+    return metricMode == _DispositionMetricMode.time
+        ? 'Absolutt tid'
+        : 'Absolutt % av R$baselineLapNumber';
+  }
+  return 'Differanse fra R$baselineLapNumber i $metricText';
+}
+
+String _axisLabel(
+  _DispositionValueMode valueMode,
+  _DispositionMetricMode metricMode,
+  int baselineLapNumber,
+) {
+  final unit = metricMode == _DispositionMetricMode.time ? 'tid' : '%';
+  if (valueMode == _DispositionValueMode.absolute) {
+    return metricMode == _DispositionMetricMode.time
+        ? 'Y-akse: absolutt tid'
+        : 'Y-akse: % av R$baselineLapNumber';
+  }
+  return 'Y-akse: differanse i $unit fra R$baselineLapNumber';
+}
+
+String _formatAxisValue(
+  double value,
+  _DispositionValueMode valueMode,
+  _DispositionMetricMode metricMode,
+) {
+  if (valueMode == _DispositionValueMode.difference) {
+    if (metricMode == _DispositionMetricMode.time) {
+      if (value == 0) return '0';
+      final sign = value > 0 ? '+' : '-';
+      return '$sign${formatDurationMs(value.abs().round())}';
+    }
+    if (value == 0) return '0%';
+    final sign = value > 0 ? '+' : '-';
+    return '$sign${_formatPercent(value.abs())}';
+  }
+  if (metricMode == _DispositionMetricMode.time) {
     return formatDurationMs(value.round());
   }
   return _formatPercent(value);
 }
 
+String _formatSignedDispositionValue(
+  double value,
+  _DispositionMetricMode metricMode,
+) {
+  if (value == 0) {
+    return metricMode == _DispositionMetricMode.time ? '0:00.0' : '0%';
+  }
+  final sign = value > 0 ? '+' : '-';
+  if (metricMode == _DispositionMetricMode.time) {
+    return '$sign${formatDurationMs(value.abs().round())}';
+  }
+  return '$sign${_formatPercent(value.abs())}';
+}
+
 String _formatPercent(double value) {
-  if (value >= 100) return '${value.round()}%';
+  if (value.abs() >= 100) return '${value.round()}%';
+  if (value.abs() >= 10) return '${value.toStringAsFixed(0)}%';
   return '${value.toStringAsFixed(1)}%';
+}
+
+Color _dispositionBarColor({
+  required _DispositionLap lap,
+  required _DispositionGroup group,
+  required _DispositionValueMode valueMode,
+  required _DispositionMetricMode metricMode,
+  required int baselineLapNumber,
+  required List<Color> colors,
+  required AppPalette palette,
+  required int slotIndex,
+}) {
+  if (valueMode == _DispositionValueMode.absolute) {
+    return colors[slotIndex % colors.length];
+  }
+  if (group.isBaselineLap(lap, baselineLapNumber)) {
+    return _lapColorForLap(colors, lap.lapNumber);
+  }
+  final diff = group.differenceFor(lap, metricMode, baselineLapNumber);
+  if (diff < 0) return _fasterDispositionColor(palette);
+  if (diff > 0) return _slowerDispositionColor(palette);
+  return palette.mutedText;
+}
+
+Color _lapColorForLap(List<Color> colors, int lapNumber) {
+  if (colors.isEmpty) return Colors.transparent;
+  final index = math.max(0, lapNumber - 1);
+  return colors[index % colors.length];
+}
+
+Color _fasterDispositionColor(AppPalette palette) {
+  return palette.brightness == Brightness.light
+      ? const Color(0xFF16864A)
+      : const Color(0xFF53D27B);
+}
+
+Color _slowerDispositionColor(AppPalette palette) {
+  return palette.brightness == Brightness.light
+      ? const Color(0xFFD12B2B)
+      : const Color(0xFFFF4D4D);
 }
 
 List<Color> _lapColors(AppPalette palette) {

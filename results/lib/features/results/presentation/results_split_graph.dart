@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_theme.dart';
 import '../../../core/formatting/time_formatters.dart';
+import '../domain/race_result.dart';
 import '../domain/split_def.dart';
 import 'results_table.dart';
 
 const _maxVisibleSeries = 28;
+const _splitGraphRadius = 12.0;
+const _splitBarGap = 3.0;
+const _splitBarRadius = 4.0;
 
 class ResultsSplitGraph extends StatelessWidget {
   const ResultsSplitGraph({
@@ -42,7 +46,7 @@ class ResultsSplitGraph extends StatelessWidget {
     final visibleSeries = graph.series.take(_maxVisibleSeries).toList();
     final visibleGraph = graph.copyWith(
       series: visibleSeries,
-      maxGapMs: _maxGapMs(visibleSeries),
+      maxRank: _maxRank(visibleSeries),
     );
     final hiddenCount = graph.series.length - visibleSeries.length;
 
@@ -84,10 +88,7 @@ class ResultsSplitGraph extends StatelessWidget {
 }
 
 class _SplitGraphChart extends StatelessWidget {
-  const _SplitGraphChart({
-    required this.data,
-    required this.disabledResultId,
-  });
+  const _SplitGraphChart({required this.data, required this.disabledResultId});
 
   final _SplitGraphData data;
   final String? disabledResultId;
@@ -98,11 +99,11 @@ class _SplitGraphChart extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: palette.panelAlt,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(_splitGraphRadius),
         border: Border.all(color: palette.border),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(_splitGraphRadius),
         child: CustomPaint(
           painter: _SplitGraphPainter(
             data: data,
@@ -136,7 +137,7 @@ class _SplitGraphLegend extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: palette.panelAlt,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(_splitGraphRadius),
         border: Border.all(color: palette.border),
       ),
       child: Column(
@@ -154,7 +155,7 @@ class _SplitGraphLegend extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'Gap',
+                  'Tid',
                   style: TextStyle(
                     color: palette.mutedText,
                     fontSize: 11,
@@ -239,7 +240,7 @@ class _SplitGraphLegendTile extends StatelessWidget {
               SizedBox(
                 width: 28,
                 child: Text(
-                  '${index + 1}',
+                  '${series.focusLegRank}',
                   style: TextStyle(
                     color: palette.mutedText,
                     fontSize: 11,
@@ -287,7 +288,7 @@ class _SplitGraphLegendTile extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                _formatGap(series.focusGapMs),
+                _formatTime(series.focusLegMs),
                 textAlign: TextAlign.right,
                 style: TextStyle(
                   color: disabled ? palette.mutedText : null,
@@ -313,7 +314,7 @@ class _SplitGraphEmpty extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: palette.panelAlt,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(_splitGraphRadius),
         border: Border.all(color: palette.border),
       ),
       child: Center(
@@ -345,40 +346,23 @@ class _SplitGraphPainter extends CustomPainter {
     final chart = _SplitGraphLayout.chartRect(size);
     if (chart.width <= 0 || chart.height <= 0 || data.series.isEmpty) return;
 
-    final yMax = _niceAxisMax(data.maxGapMs);
+    final yMax = _niceRankMax(data.maxRank);
     final axisPaint = Paint()
       ..color = palette.border
       ..strokeWidth = 1.2;
     final gridPaint = Paint()
       ..color = palette.border.withValues(alpha: 0.45)
       ..strokeWidth = 1;
-    final selectedPaint = Paint()
-      ..color = palette.secondary
-      ..strokeWidth = 1.8;
-    final rangePaint = Paint()
-      ..color = palette.primary.withValues(alpha: 0.09);
     final textPainter = TextPainter(
       textDirection: TextDirection.ltr,
       maxLines: 1,
       ellipsis: '...',
     );
 
-    _paintRangeBand(canvas, chart, rangePaint);
     _paintGrid(canvas, chart, yMax, gridPaint, axisPaint, textPainter);
-    _paintSplitLines(canvas, chart, gridPaint, selectedPaint, textPainter);
-    _paintSeries(canvas, chart, yMax);
-  }
-
-  void _paintRangeBand(Canvas canvas, Rect chart, Paint paint) {
-    final start = data.rangeStartIndex;
-    final end = data.rangeEndIndex;
-    if (start == null || end == null || end < start) return;
-    final left = _xForSplit(start, chart, data.splits.length);
-    final right = _xForSplit(end, chart, data.splits.length);
-    canvas.drawRect(
-      Rect.fromLTRB(left, chart.top, right, chart.bottom),
-      paint,
-    );
+    _paintFocusBand(canvas, chart);
+    _paintHistogram(canvas, chart, yMax);
+    _paintLabels(canvas, chart, textPainter);
   }
 
   void _paintGrid(
@@ -390,13 +374,13 @@ class _SplitGraphPainter extends CustomPainter {
     TextPainter textPainter,
   ) {
     for (var i = 0; i <= 4; i++) {
-      final value = (yMax * i / 4).round();
-      final y = _yForGap(value, yMax, chart);
+      final value = 1 + ((yMax - 1) * i / 4).round();
+      final y = _yForRank(value, yMax, chart);
       canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), gridPaint);
       _paintText(
         textPainter,
         canvas,
-        _formatGap(value),
+        '$value',
         Offset(chart.left - 8, y - 7),
         alignRight: true,
         color: palette.mutedText,
@@ -408,49 +392,28 @@ class _SplitGraphPainter extends CustomPainter {
     canvas.drawLine(chart.bottomLeft, chart.topLeft, axisPaint);
   }
 
-  void _paintSplitLines(
-    Canvas canvas,
-    Rect chart,
-    Paint gridPaint,
-    Paint selectedPaint,
-    TextPainter textPainter,
-  ) {
-    final splits = data.splits;
-    final wantedLabels = chart.width < 480 ? 5 : 8;
-    final labelEvery = math.max(1, (splits.length / wantedLabels).ceil());
-
-    for (var index = 0; index < splits.length; index++) {
-      final x = _xForSplit(index, chart, splits.length);
-      final selected = index == data.selectedSplitIndex;
-      canvas.drawLine(
-        Offset(x, chart.top),
-        Offset(x, chart.bottom),
-        selected ? selectedPaint : gridPaint,
-      );
-
-      final showLabel =
-          selected ||
-          index == 0 ||
-          index == splits.length - 1 ||
-          index % labelEvery == 0;
-      if (!showLabel) continue;
-      _paintText(
-        textPainter,
-        canvas,
-        splits[index].label,
-        Offset(x, chart.bottom + 10),
-        center: true,
-        color: selected ? palette.secondary : palette.mutedText,
-        fontSize: selected ? 11 : 10,
-        bold: selected,
-        maxWidth: 72,
-      );
-    }
+  void _paintFocusBand(Canvas canvas, Rect chart) {
+    final split = data.splits[data.selectedSplitIndex];
+    _paintText(
+      TextPainter(textDirection: TextDirection.ltr, maxLines: 1),
+      canvas,
+      split.label,
+      Offset(chart.left, chart.top - 18),
+      color: palette.secondary,
+      fontSize: 11,
+      bold: true,
+      maxWidth: chart.width,
+    );
   }
 
-  void _paintSeries(Canvas canvas, Rect chart, int yMax) {
+  void _paintHistogram(Canvas canvas, Rect chart, int yMax) {
     final useRowColors = data.series.any((item) => item.row.color != null);
-    for (var index = data.series.length - 1; index >= 0; index--) {
+    final bars = _barRects(chart);
+    final cumulativePath = Path();
+    final cumulativePoints = <Offset>[];
+    var pathStarted = false;
+
+    for (var index = 0; index < data.series.length; index++) {
       final series = data.series[index];
       final disabled = _isDisabled(series.row, disabledResultId);
       final color = _seriesColor(
@@ -460,43 +423,90 @@ class _SplitGraphPainter extends CustomPainter {
         useRowColors: useRowColors,
         disabled: disabled,
       );
-      final linePaint = Paint()
-        ..color = color.withValues(alpha: disabled ? 0.38 : 0.84)
-        ..strokeWidth = index < 8 ? 2.5 : 1.55
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-      final pointPaint = Paint()..color = color;
-      final path = Path();
-      var started = false;
+      final rect = bars[index];
+      final top = _yForRank(series.focusLegRank, yMax, chart);
+      final barRect = Rect.fromLTRB(rect.left, top, rect.right, chart.bottom);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          barRect,
+          const Radius.circular(_splitBarRadius),
+        ),
+        Paint()..color = color.withValues(alpha: disabled ? 0.28 : 0.72),
+      );
 
-      for (final point in series.points) {
-        final x = _xForSplit(point.splitIndex, chart, data.splits.length);
-        final y = _yForGap(point.gapMs, yMax, chart);
-        if (!started) {
-          path.moveTo(x, y);
-          started = true;
-        } else {
-          path.lineTo(x, y);
-        }
+      final point = Offset(
+        rect.center.dx,
+        _yForRank(series.focusCumRank, yMax, chart),
+      );
+      if (!pathStarted) {
+        cumulativePath.moveTo(point.dx, point.dy);
+        pathStarted = true;
+      } else {
+        cumulativePath.lineTo(point.dx, point.dy);
       }
+      cumulativePoints.add(point);
+    }
 
-      if (started) canvas.drawPath(path, linePaint);
+    final linePaint = Paint()
+      ..color = palette.secondary
+      ..strokeWidth = 2.2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    if (pathStarted) canvas.drawPath(cumulativePath, linePaint);
 
-      final activePoint = series.pointAt(data.selectedSplitIndex);
-      if (activePoint == null) continue;
-      final x = _xForSplit(activePoint.splitIndex, chart, data.splits.length);
-      final y = _yForGap(activePoint.gapMs, yMax, chart);
-      canvas.drawCircle(Offset(x, y), index < 8 ? 4.0 : 3.0, pointPaint);
-      canvas.drawCircle(
-        Offset(x, y),
-        index < 8 ? 4.0 : 3.0,
-        Paint()
-          ..color = palette.panelAlt
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
+    final pointFill = Paint()..color = palette.secondary;
+    final pointStroke = Paint()
+      ..color = palette.panelAlt
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    for (final point in cumulativePoints) {
+      canvas.drawCircle(point, 3.8, pointFill);
+      canvas.drawCircle(point, 3.8, pointStroke);
+    }
+  }
+
+  void _paintLabels(Canvas canvas, Rect chart, TextPainter textPainter) {
+    final wantedLabels = chart.width < 480 ? 4 : 7;
+    final labelEvery = math.max(1, (data.series.length / wantedLabels).ceil());
+    final bars = _barRects(chart);
+    for (var index = 0; index < data.series.length; index++) {
+      if (index != 0 &&
+          index != data.series.length - 1 &&
+          index % labelEvery != 0) {
+        continue;
+      }
+      _paintText(
+        textPainter,
+        canvas,
+        '${index + 1}',
+        Offset(bars[index].center.dx, chart.bottom + 10),
+        center: true,
+        color: palette.mutedText,
+        fontSize: 10,
+        maxWidth: 42,
       );
     }
+  }
+
+  List<Rect> _barRects(Rect chart) {
+    final count = data.series.length;
+    if (count == 0) return const [];
+    final totalGap = _splitBarGap * math.max(0, count - 1);
+    final availableWidth = math.max(0, chart.width - totalGap);
+    final totalMs = data.series.fold<int>(
+      0,
+      (sum, series) => sum + math.max(1, series.focusLegMs),
+    );
+    final rects = <Rect>[];
+    var left = chart.left;
+    for (var index = 0; index < count; index++) {
+      final series = data.series[index];
+      final width = availableWidth * math.max(1, series.focusLegMs) / totalMs;
+      rects.add(Rect.fromLTWH(left, chart.top, width, chart.height));
+      left += width + _splitBarGap;
+    }
+    return rects;
   }
 
   void _paintText(
@@ -555,29 +565,20 @@ class _SplitGraphData {
     required this.splits,
     required this.series,
     required this.selectedSplitIndex,
-    required this.maxGapMs,
-    required this.rangeStartIndex,
-    required this.rangeEndIndex,
+    required this.maxRank,
   });
 
   final List<SplitOption> splits;
   final List<_SplitSeries> series;
   final int selectedSplitIndex;
-  final int maxGapMs;
-  final int? rangeStartIndex;
-  final int? rangeEndIndex;
+  final int maxRank;
 
-  _SplitGraphData copyWith({
-    List<_SplitSeries>? series,
-    int? maxGapMs,
-  }) {
+  _SplitGraphData copyWith({List<_SplitSeries>? series, int? maxRank}) {
     return _SplitGraphData(
       splits: splits,
       series: series ?? this.series,
       selectedSplitIndex: selectedSplitIndex,
-      maxGapMs: maxGapMs ?? this.maxGapMs,
-      rangeStartIndex: rangeStartIndex,
-      rangeEndIndex: rangeEndIndex,
+      maxRank: maxRank ?? this.maxRank,
     );
   }
 }
@@ -585,34 +586,17 @@ class _SplitGraphData {
 class _SplitSeries {
   const _SplitSeries({
     required this.row,
-    required this.points,
-    required this.focusGapMs,
+    required this.focusLegRank,
+    required this.focusCumRank,
+    required this.focusLegMs,
     required this.focusCumMs,
   });
 
   final ResultTableRow row;
-  final List<_SplitGraphPoint> points;
-  final int focusGapMs;
+  final int focusLegRank;
+  final int focusCumRank;
+  final int focusLegMs;
   final int focusCumMs;
-
-  _SplitGraphPoint? pointAt(int splitIndex) {
-    for (final point in points) {
-      if (point.splitIndex == splitIndex) return point;
-    }
-    return null;
-  }
-}
-
-class _SplitGraphPoint {
-  const _SplitGraphPoint({
-    required this.splitIndex,
-    required this.gapMs,
-    required this.cumMs,
-  });
-
-  final int splitIndex;
-  final int gapMs;
-  final int cumMs;
 }
 
 _SplitGraphData? _buildSplitGraph({
@@ -621,24 +605,18 @@ _SplitGraphData? _buildSplitGraph({
   required String? selectedSplitId,
   required SplitRangeSelection? splitRange,
 }) {
-  if (rows.isEmpty || splitOptions.length < 2) return null;
-
-  final bestBySplitId = <String, int>{};
-  for (final split in splitOptions) {
-    int? best;
-    for (final row in rows) {
-      final value = row.result.splitValues[split.id]?.cumMs;
-      if (value == null || value <= 0) continue;
-      if (best == null || value < best) best = value;
-    }
-    if (best != null) bestBySplitId[split.id] = best;
-  }
+  if (rows.isEmpty || splitOptions.isEmpty) return null;
 
   final splits = [
     for (final split in splitOptions)
-      if (bestBySplitId.containsKey(split.id)) split,
+      if (rows.any(
+        (row) =>
+            effectiveSplitLegMs(row.result, split.id) != null &&
+            row.result.splitValues[split.id]?.cumMs != null,
+      ))
+        split,
   ];
-  if (splits.length < 2) return null;
+  if (splits.isEmpty) return null;
 
   final focusedSplitId = splitRange?.toSplitId ?? selectedSplitId;
   var selectedSplitIndex = splits.indexWhere(
@@ -646,38 +624,48 @@ _SplitGraphData? _buildSplitGraph({
   );
   if (selectedSplitIndex < 0) selectedSplitIndex = splits.length - 1;
 
-  final rangeIndexes = _rangeIndexes(splitRange, splits);
+  final selectedGraphSplitId = splits[selectedSplitIndex].id;
+  final legRanks = _ranksByTime(
+    rows,
+    (row) => effectiveSplitLegMs(row.result, selectedGraphSplitId),
+  );
+  final cumulativeRanks = _ranksByTime(
+    rows,
+    (row) => row.result.splitValues[selectedGraphSplitId]?.cumMs,
+  );
   final series = <_SplitSeries>[];
   for (final row in rows) {
-    final points = <_SplitGraphPoint>[];
-    for (var index = 0; index < splits.length; index++) {
-      final split = splits[index];
-      final cumMs = row.result.splitValues[split.id]?.cumMs;
-      final bestMs = bestBySplitId[split.id];
-      if (cumMs == null || cumMs <= 0 || bestMs == null) continue;
-      points.add(
-        _SplitGraphPoint(
-          splitIndex: index,
-          gapMs: math.max(0, cumMs - bestMs),
-          cumMs: cumMs,
-        ),
-      );
+    final split = row.result.splitValues[selectedGraphSplitId];
+    final legMs = effectiveSplitLegMs(row.result, selectedGraphSplitId);
+    final cumMs = split?.cumMs;
+    // Calculate ranks from the loaded rows. Stored ranks are absent on older
+    // imports and are class-local when multiple classes are compared.
+    final legRank = legRanks[row] ?? split?.legRank ?? split?.cumRank;
+    final cumRank = cumulativeRanks[row] ?? split?.cumRank;
+    if (split == null ||
+        legMs == null ||
+        legMs <= 0 ||
+        cumMs == null ||
+        cumMs <= 0 ||
+        legRank == null ||
+        legRank <= 0 ||
+        cumRank == null ||
+        cumRank <= 0) {
+      continue;
     }
-    if (points.length < 2) continue;
-
-    final focusPoint = _nearestPoint(points, selectedSplitIndex);
     series.add(
       _SplitSeries(
         row: row,
-        points: points,
-        focusGapMs: focusPoint.gapMs,
-        focusCumMs: focusPoint.cumMs,
+        focusLegRank: legRank,
+        focusCumRank: cumRank,
+        focusLegMs: legMs,
+        focusCumMs: cumMs,
       ),
     );
   }
 
   series.sort((a, b) {
-    if (a.focusGapMs != b.focusGapMs) return a.focusGapMs - b.focusGapMs;
+    if (a.focusLegMs != b.focusLegMs) return a.focusLegMs - b.focusLegMs;
     if (a.focusCumMs != b.focusCumMs) return a.focusCumMs - b.focusCumMs;
     return a.row.result.name.compareTo(b.row.result.name);
   });
@@ -686,65 +674,58 @@ _SplitGraphData? _buildSplitGraph({
     splits: splits,
     series: series,
     selectedSplitIndex: selectedSplitIndex,
-    maxGapMs: _maxGapMs(series),
-    rangeStartIndex: rangeIndexes?.start,
-    rangeEndIndex: rangeIndexes?.end,
+    maxRank: _maxRank(series),
   );
 }
 
-({int start, int end})? _rangeIndexes(
-  SplitRangeSelection? splitRange,
-  List<SplitOption> splits,
+Map<ResultTableRow, int> _ranksByTime(
+  List<ResultTableRow> rows,
+  int? Function(ResultTableRow row) timeFor,
 ) {
-  if (splitRange == null) return null;
-  final end = splits.indexWhere((split) => split.id == splitRange.toSplitId);
-  if (end < 0) return null;
-  final fromSplitId = splitRange.fromSplitId;
-  if (fromSplitId == null) return (start: 0, end: end);
-  final from = splits.indexWhere((split) => split.id == fromSplitId);
-  if (from < 0 || from >= end) return (start: 0, end: end);
-  return (start: from, end: end);
-}
-
-_SplitGraphPoint _nearestPoint(List<_SplitGraphPoint> points, int splitIndex) {
-  for (final point in points) {
-    if (point.splitIndex == splitIndex) return point;
+  final timedRows = <({ResultTableRow row, int time})>[];
+  for (final row in rows) {
+    final time = timeFor(row);
+    if (time != null && time > 0) timedRows.add((row: row, time: time));
   }
-  return points.reduce((best, point) {
-    final bestDistance = (best.splitIndex - splitIndex).abs();
-    final pointDistance = (point.splitIndex - splitIndex).abs();
-    return pointDistance < bestDistance ? point : best;
+  timedRows.sort((a, b) {
+    final timeCompare = a.time.compareTo(b.time);
+    if (timeCompare != 0) return timeCompare;
+    return a.row.result.name.compareTo(b.row.result.name);
   });
+
+  final ranks = <ResultTableRow, int>{};
+  int? previousTime;
+  var previousRank = 0;
+  for (var index = 0; index < timedRows.length; index++) {
+    final entry = timedRows[index];
+    final rank = previousTime == entry.time ? previousRank : index + 1;
+    ranks[entry.row] = rank;
+    previousTime = entry.time;
+    previousRank = rank;
+  }
+  return ranks;
 }
 
-int _maxGapMs(List<_SplitSeries> series) {
-  var maxGap = 1;
+int _maxRank(List<_SplitSeries> series) {
+  var maxRank = 1;
   for (final item in series) {
-    for (final point in item.points) {
-      maxGap = math.max(maxGap, point.gapMs);
-    }
+    maxRank = math.max(maxRank, item.focusLegRank);
+    maxRank = math.max(maxRank, item.focusCumRank);
   }
-  return maxGap;
+  return maxRank;
 }
 
-int _niceAxisMax(int value) {
-  if (value <= 1000) return 1000;
-  final magnitude = math.pow(10, value.toString().length - 1).toInt();
-  for (final step in [1, 2, 5, 10]) {
-    final candidate = step * magnitude;
-    if (candidate >= value) return candidate;
-  }
-  return value;
+int _niceRankMax(int value) {
+  if (value <= 5) return 5;
+  if (value <= 10) return 10;
+  if (value <= 20) return 20;
+  final step = value <= 50 ? 10 : 25;
+  return ((value + step - 1) ~/ step) * step;
 }
 
-double _xForSplit(int index, Rect chart, int splitCount) {
-  if (splitCount <= 1) return chart.left + chart.width / 2;
-  return chart.left + chart.width * index / (splitCount - 1);
-}
-
-double _yForGap(int gapMs, int maxGapMs, Rect chart) {
-  if (maxGapMs <= 0) return chart.bottom;
-  final ratio = (gapMs / maxGapMs).clamp(0.0, 1.0);
+double _yForRank(int rank, int maxRank, Rect chart) {
+  if (maxRank <= 1) return chart.top;
+  final ratio = ((rank - 1) / (maxRank - 1)).clamp(0.0, 1.0);
   return chart.top + chart.height * ratio;
 }
 
@@ -774,7 +755,7 @@ bool _isDisabled(ResultTableRow row, String? disabledResultId) {
   return disabledResultId != null && row.result.id == disabledResultId;
 }
 
-String _formatGap(int gapMs) {
-  if (gapMs <= 0) return '+0.0';
-  return '+${formatDurationMs(gapMs)}';
+String _formatTime(int timeMs) {
+  final formatted = formatDurationMs(timeMs);
+  return formatted.isEmpty ? '-' : formatted;
 }

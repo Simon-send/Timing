@@ -75,10 +75,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get split => 'Split';
 
   @override
+  String get searchResults => 'Search athlete, club or team';
+
+  @override
   String get athlete => 'Athlete';
 
   @override
-  String get club => 'Team';
+  String get club => 'Club';
 
   @override
   String get shooting => 'Shooting';

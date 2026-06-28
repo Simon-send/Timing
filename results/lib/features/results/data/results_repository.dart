@@ -67,11 +67,10 @@ class FirestoreResultsRepository implements ResultsRepository {
     String classId, {
     int limit = initialResultsLimit,
   }) {
-    return _resultsQuery(
-      eventId,
-      classId,
-      limit: limit,
-    ).snapshots().map(_resultsFromSnapshot);
+    return _resultsQuery(eventId, classId).snapshots().map((snapshot) {
+      final results = _resultsFromSnapshot(snapshot);
+      return results.length <= limit ? results : results.take(limit).toList();
+    });
   }
 
   @override
@@ -107,17 +106,8 @@ class FirestoreResultsRepository implements ResultsRepository {
     return _eventDoc(eventId).collection('classes').doc(classId);
   }
 
-  Query<Map<String, dynamic>> _resultsQuery(
-    String eventId,
-    String classId, {
-    int? limit,
-  }) {
-    Query<Map<String, dynamic>> query = _classDoc(
-      eventId,
-      classId,
-    ).collection('results');
-    if (limit == null) return query;
-    return query.where('rank', isGreaterThan: 0).orderBy('rank').limit(limit);
+  Query<Map<String, dynamic>> _resultsQuery(String eventId, String classId) {
+    return _classDoc(eventId, classId).collection('results');
   }
 }
 
@@ -137,9 +127,8 @@ int _compareSplitDefs(SplitDef a, SplitDef b) {
 }
 
 int _compareResults(RaceResult a, RaceResult b) {
-  if (a.isFinished != b.isFinished) {
-    return a.isFinished ? -1 : 1;
-  }
+  final statusCompare = a.statusSortOrder.compareTo(b.statusSortOrder);
+  if (statusCompare != 0) return statusCompare;
   if (a.rank != null && b.rank != null && a.rank != b.rank) {
     return a.rank! - b.rank!;
   }

@@ -18,12 +18,17 @@ class ClassSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final sortedClasses = sortResultClassesByDistance(classes);
+    final disciplineLabel = combinedDisciplineLabel(sortedClasses);
     return DropdownButtonFormField<String>(
       initialValue: selectedClassId,
       isExpanded: true,
-      decoration: InputDecoration(labelText: l10n.classes),
+      decoration: InputDecoration(
+        labelText: disciplineLabel ?? l10n.classes,
+        helperText: disciplineLabel == null ? null : l10n.classes,
+      ),
       items: [
-        for (final raceClass in classes)
+        for (final raceClass in sortedClasses)
           DropdownMenuItem(
             value: raceClass.id,
             child: Text(

@@ -18,6 +18,8 @@ abstract class AuthRepository {
     required String password,
   });
 
+  Future<void> sendPasswordResetEmail({required String email});
+
   Future<void> signOut();
 }
 
@@ -46,7 +48,15 @@ class FirebaseAuthRepository implements AuthRepository {
     required String email,
     required String password,
   }) async {
-    await _auth.signInWithEmailAndPassword(email: email, password: password);
+    final credential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    final user = credential.user;
+    if (user != null && _requiresEmailVerification(user)) {
+      await _auth.signOut();
+      throw const EmailNotVerifiedException();
+    }
   }
 
   @override
@@ -54,12 +64,36 @@ class FirebaseAuthRepository implements AuthRepository {
     required String email,
     required String password,
   }) async {
-    await _auth.createUserWithEmailAndPassword(
+    final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
     );
+    try {
+      await credential.user?.sendEmailVerification();
+    } finally {
+      await _auth.signOut();
+    }
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail({required String email}) {
+    return _auth.sendPasswordResetEmail(email: email);
   }
 
   @override
   Future<void> signOut() => _auth.signOut();
+}
+
+bool _requiresEmailVerification(User user) {
+  final usesPassword = user.providerData.any(
+    (provider) => provider.providerId == EmailAuthProvider.PROVIDER_ID,
+  );
+  return usesPassword && !user.emailVerified;
+}
+
+class EmailNotVerifiedException implements Exception {
+  const EmailNotVerifiedException();
+
+  @override
+  String toString() => 'EmailNotVerifiedException';
 }
