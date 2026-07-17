@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:results/l10n/app_localizations.dart';
 
+import '../../../app/app_theme.dart';
 import '../../../core/formatting/time_formatters.dart';
 import '../../settings/domain/user_settings.dart';
 import '../domain/race_result.dart';
@@ -482,22 +483,38 @@ class ResultsTable extends StatelessWidget {
   }
 }
 
-class SortableTableHeader extends StatelessWidget {
+class SortableTableHeader extends StatefulWidget {
   const SortableTableHeader({super.key, required this.label});
 
   final String label;
 
   @override
+  State<SortableTableHeader> createState() => _SortableTableHeaderState();
+}
+
+class _SortableTableHeaderState extends State<SortableTableHeader> {
+  bool _hovering = false;
+
+  @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: primary.withValues(alpha: 0.16),
-        border: Border.all(color: primary.withValues(alpha: 0.42)),
-        borderRadius: BorderRadius.circular(6),
+    final palette = context.palette;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: AnimatedScale(
+        scale: _hovering ? 1.04 : 1,
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          style: TextStyle(
+            color: _hovering ? palette.primary : null,
+            fontWeight: FontWeight.w800,
+          ),
+          child: Text(widget.label),
+        ),
       ),
-      child: Text(label),
     );
   }
 }

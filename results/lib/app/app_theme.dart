@@ -62,7 +62,11 @@ ThemeData buildAppTheme(AppThemeVariant variant) {
       ),
     ),
     dataTableTheme: DataTableThemeData(
-      headingRowColor: WidgetStatePropertyAll(palette.panelAlt),
+      // Keep sortable column headers visually light; the header widget adds
+      // its own hover feedback without introducing a filled background.
+      headingRowColor: WidgetStateProperty.resolveWith<Color?>(
+        (states) => Colors.transparent,
+      ),
       dataRowColor: WidgetStatePropertyAll(palette.panel),
       dividerThickness: 0.7,
     ),
