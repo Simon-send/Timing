@@ -16,6 +16,8 @@ class SplitSelector extends StatelessWidget {
     required this.onRangeToggle,
     required this.onRangeFromChanged,
     required this.onRangeToChanged,
+    required this.onIndependentChanged,
+    required this.onIncludedSplitsChanged,
   });
 
   final List<SplitOption> splitOptions;
@@ -26,6 +28,8 @@ class SplitSelector extends StatelessWidget {
   final VoidCallback onRangeToggle;
   final ValueChanged<String?> onRangeFromChanged;
   final ValueChanged<String?> onRangeToChanged;
+  final ValueChanged<bool> onIndependentChanged;
+  final ValueChanged<List<String>> onIncludedSplitsChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +45,8 @@ class SplitSelector extends StatelessWidget {
         onToggle: onRangeToggle,
         onFromChanged: onRangeFromChanged,
         onToChanged: onRangeToChanged,
+        onIndependentChanged: onIndependentChanged,
+        onIncludedSplitsChanged: onIncludedSplitsChanged,
       );
     }
 
@@ -108,6 +114,8 @@ class _RangeSelector extends StatelessWidget {
     required this.onToggle,
     required this.onFromChanged,
     required this.onToChanged,
+    required this.onIndependentChanged,
+    required this.onIncludedSplitsChanged,
   });
 
   final List<SplitOption> splitOptions;
@@ -115,6 +123,8 @@ class _RangeSelector extends StatelessWidget {
   final VoidCallback onToggle;
   final ValueChanged<String?> onFromChanged;
   final ValueChanged<String?> onToChanged;
+  final ValueChanged<bool> onIndependentChanged;
+  final ValueChanged<List<String>> onIncludedSplitsChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +147,69 @@ class _RangeSelector extends StatelessWidget {
         ],
       );
     }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: 42,
+              height: 42,
+              child: IconButton.outlined(
+                tooltip: 'Vanlige splitter',
+                onPressed: onToggle,
+                icon: const Icon(Icons.close),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: CheckboxListTile(
+                key: const Key('independent-splits-checkbox'),
+                value: rangeSelection.isIndependent,
+                onChanged: (value) => onIndependentChanged(value ?? false),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                title: const Text('Uavhengige splitter'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (rangeSelection.isIndependent)
+          _IndependentSplitPicker(
+            splitOptions: splitOptions,
+            selectedSplitIds: rangeSelection.includedSplitIds,
+            onChanged: onIncludedSplitsChanged,
+          )
+        else
+          _ChronologicalRangeFields(
+            splitOptions: splitOptions,
+            rangeSelection: rangeSelection,
+            onFromChanged: onFromChanged,
+            onToChanged: onToChanged,
+          ),
+      ],
+    );
+  }
+}
+
+class _ChronologicalRangeFields extends StatelessWidget {
+  const _ChronologicalRangeFields({
+    required this.splitOptions,
+    required this.rangeSelection,
+    required this.onFromChanged,
+    required this.onToChanged,
+  });
+
+  final List<SplitOption> splitOptions;
+  final SplitRangeSelection rangeSelection;
+  final ValueChanged<String?> onFromChanged;
+  final ValueChanged<String?> onToChanged;
+
+  @override
+  Widget build(BuildContext context) {
     final toIndex = splitOptions.indexWhere(
       (split) => split.id == rangeSelection.toSplitId,
     );
@@ -154,16 +227,6 @@ class _RangeSelector extends StatelessWidget {
 
     return Row(
       children: [
-        SizedBox(
-          width: 42,
-          height: 42,
-          child: IconButton.outlined(
-            tooltip: 'Vanlige splitter',
-            onPressed: onToggle,
-            icon: const Icon(Icons.close),
-          ),
-        ),
-        const SizedBox(width: 12),
         Expanded(
           child: DropdownButtonFormField<String>(
             initialValue: normalizedFromIndex < 0
@@ -207,5 +270,110 @@ class _RangeSelector extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _IndependentSplitPicker extends StatelessWidget {
+  const _IndependentSplitPicker({
+    required this.splitOptions,
+    required this.selectedSplitIds,
+    required this.onChanged,
+  });
+
+  final List<SplitOption> splitOptions;
+  final List<String> selectedSplitIds;
+  final ValueChanged<List<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = selectedSplitIds.toSet();
+    final selectedLabels = splitOptions
+        .where((split) => selected.contains(split.id))
+        .map((split) => split.label)
+        .toList();
+    final valueText = selectedLabels.isEmpty
+        ? 'Ingen splitter valgt'
+        : selectedLabels.join(', ');
+
+    return SizedBox(
+      height: 48,
+      child: OutlinedButton(
+        key: const Key('independent-splits-picker'),
+        onPressed: () => _showPicker(context),
+        style: OutlinedButton.styleFrom(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.checklist, size: 20),
+            const SizedBox(width: 10),
+            Expanded(child: Text(valueText, overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 8),
+            Text('${selectedLabels.length}/${splitOptions.length}'),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPicker(BuildContext context) async {
+    final selected = selectedSplitIds.toSet();
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Velg uavhengige splitter'),
+              content: SizedBox(
+                width: 420,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final split in splitOptions)
+                      CheckboxListTile(
+                        key: Key('independent-split-${split.id}'),
+                        value: selected.contains(split.id),
+                        onChanged: (checked) {
+                          setDialogState(() {
+                            if (checked ?? false) {
+                              selected.add(split.id);
+                            } else {
+                              selected.remove(split.id);
+                            }
+                          });
+                        },
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(split.label),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Avbryt'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final sortedIds = splitOptions
+                        .where((split) => selected.contains(split.id))
+                        .map((split) => split.id)
+                        .toList();
+                    Navigator.of(context).pop(sortedIds);
+                  },
+                  child: const Text('Bruk'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (result != null) onChanged(result);
   }
 }

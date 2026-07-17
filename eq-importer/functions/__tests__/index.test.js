@@ -309,6 +309,30 @@ const buildImportFixtures = function() {
   };
 };
 
+test("detects advancement from a later stage registration", () => {
+  const mod = loadModule();
+  const event = {
+    Etapper: {
+      "100": {UID: 100, Navn: "Prolog"},
+      "200": {UID: 200, Navn: "Semifinale"},
+      "300": {UID: 300, Navn: "Finale"},
+    },
+  };
+  const qualified = {
+    EtappeDeltaker: {
+      "1": {Etappe: {UID: 100}},
+      "2": {Etappe: {UID: 200}},
+    },
+  };
+  const eliminated = {
+    EtappeDeltaker: {"1": {Etappe: {UID: 100}}},
+  };
+
+  expect(mod._test.hasAdvancedToLaterStage(event, qualified, 100)).toBe(true);
+  expect(mod._test.hasAdvancedToLaterStage(event, eliminated, 100)).toBe(false);
+  expect(mod._test.hasAdvancedToLaterStage(event, qualified, 200)).toBe(false);
+});
+
 const buildMultiDistanceFixtures = function() {
   return {
     event: {
@@ -777,6 +801,39 @@ const buildResultsOnlySubclassFixtures = function() {
 };
 
 describe("eq importer helpers", () => {
+  test("sanitizeForFirestore removes empty values but preserves zero and false", () => {
+    const mod = loadModule();
+    expect(mod._test.sanitizeForFirestore({
+      missing: null,
+      text: "",
+      list: [],
+      map: {},
+      zero: 0,
+      disabled: false,
+      nested: {missing: null, value: 1},
+    })).toEqual({
+      zero: 0,
+      disabled: false,
+      nested: {value: 1},
+    });
+  });
+
+  test("classifyResultProfile uses EQ discipline facts", () => {
+    const mod = loadModule();
+    expect(mod._test.classifyResultProfile(
+      {Gren: {Kode: "CC"}, Disiplin: {Navn: "Sprint Klassisk"}},
+      {Type: "interval"},
+    ).profile).toBe("sprint");
+    expect(mod._test.classifyResultProfile(
+      {Gren: {Kode: "CC"}, Disiplin: {Kode: "RL"}},
+      {Type: "interval-relay"},
+    ).profile).toBe("relay");
+    expect(mod._test.classifyResultProfile(
+      {Gren: {Kode: "BT"}},
+      {Type: "mass"},
+    ).profile).toBe("biathlon");
+  });
+
   test("buildStationSetupMap treats MT passings as regular splits", () => {
     const mod = loadModule();
     const setupMap = mod._test.buildStationSetupMap({
@@ -1285,6 +1342,54 @@ describe("eq importer helpers", () => {
     expect(withoutPenalty.analysis.penaltyRank).toBe(1);
     expect(withPenalty.analysis.penaltyRank).toBe(2);
   });
+
+  test("buildRelayLegBiathlon separates repeated shooting codes by leg", () => {
+    const mod = loadModule();
+    const legs = mod._test.buildRelayLegBiathlon({
+      "l1-in": {
+        code: "INS1", kind: "rangeIn", sort: 1, legNumber: 1,
+        cumMs: 10000, additionParts: [1],
+      },
+      "l1-out": {
+        code: "UTS1", kind: "rangeOut", sort: 2, legNumber: 1,
+        cumMs: 15000, additionParts: [1],
+      },
+      "l1-finish": {
+        code: "Veksling", kind: "finish", sort: 3, legNumber: 1,
+        cumMs: 30000, additionParts: [1],
+      },
+      "l2-in": {
+        code: "INS1", kind: "rangeIn", sort: 4, legNumber: 2,
+        cumMs: 40000, additionParts: [1],
+      },
+      "l2-out": {
+        code: "UTS1", kind: "rangeOut", sort: 5, legNumber: 2,
+        cumMs: 46000, additionParts: [1, 2],
+      },
+      "l2-finish": {
+        code: "Maal", kind: "finish", sort: 6, legNumber: 2,
+        cumMs: 60000, additionParts: [1, 2],
+      },
+    });
+
+    expect(legs).toHaveLength(2);
+    expect(legs[0]).toMatchObject({
+      legNumber: 1,
+      totalMs: 30000,
+      biathlon: {
+        metrics: {shootingTimeMs: 5000, missesTotal: 1},
+        passes: {shoot1: {index: 1, rangeMs: 5000, misses: 1}},
+      },
+    });
+    expect(legs[1]).toMatchObject({
+      legNumber: 2,
+      totalMs: 30000,
+      biathlon: {
+        metrics: {shootingTimeMs: 6000, missesTotal: 2},
+        passes: {shoot1: {index: 1, rangeMs: 6000, misses: 2}},
+      },
+    });
+  });
 });
 
 describe("eq importer core import", () => {
@@ -1353,8 +1458,6 @@ describe("eq importer core import", () => {
       clubIds: ["club:90001"],
       primarySchoolId: "school:3001",
       schoolIds: ["school:3001"],
-      primaryOrganizationId: null,
-      organizationIds: [],
       primaryTeamId: "team:4001",
       teamIds: ["team:4001"],
       birthYear: 1815,
@@ -1365,13 +1468,8 @@ describe("eq importer core import", () => {
           classId: 1224375,
           className: "K17",
           rank: 1,
-          proneHits: null,
-          proneMisses: null,
-          standingHits: null,
-          standingMisses: null,
           skiRank: 1,
           netSkiRank: 1,
-          shootRank: null,
         },
       ],
     });
@@ -1384,7 +1482,7 @@ describe("eq importer core import", () => {
     });
     const classDoc = mockState.docs.get("events/80088/classes/1224375");
     expect(classDoc).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       eventId: 80088,
       classId: 1224375,
       etappeUid: 330315,
@@ -1406,7 +1504,7 @@ describe("eq importer core import", () => {
       write.path === "events/80088/classes/1224375");
     expect(classWrites[classWrites.length - 1].options).toEqual({merge: true});
 
-    const resultDoc = mockState.docs.get("events/80088/classes/1224375/results/101");
+    const resultDoc = mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101");
     expect(resultDoc).toMatchObject({
       participantUid: 101,
       athleteId: "athlete:1001",
@@ -1414,12 +1512,8 @@ describe("eq importer core import", () => {
       clubName: "Oslo Skiklubb",
       schoolId: "school:3001",
       schoolName: "Oslo Katedralskole",
-      organizationId: null,
-      organizationName: null,
       teamId: "team:4001",
       teamName: "Team Oslo",
-      lagId: null,
-      lagName: null,
       name: "Ada Lovelace",
       className: "K17",
       arrangementUid: 80088,
@@ -1428,15 +1522,11 @@ describe("eq importer core import", () => {
       rank: 1,
       totalMs: 120000,
       totalText: "2:00.0",
-      registration: expect.objectContaining({
-        status: null,
-        registeredAt: null,
-        confirmedTime: null,
-        eqmeNotInUse: null,
-        ignoreForTracking: null,
-      }),
     });
     expect(resultDoc.analysis).toEqual(expect.any(Object));
+    expect(resultDoc.analysis.biathlon.metrics.hitsTotal).toBeUndefined();
+    expect(resultDoc.analysis.biathlon.passes.shoot1.hits).toBeUndefined();
+    expect(resultDoc.shooting).toBeUndefined();
     expect(resultDoc.athlete).toBeUndefined();
     expect(resultDoc.participant).toBeUndefined();
     expect(resultDoc.club).toBeUndefined();
@@ -1444,7 +1534,7 @@ describe("eq importer core import", () => {
     expect(resultDoc.splits).toBeUndefined();
     expect(resultDoc.splitValues).toBeUndefined();
     expect(resultDoc.splitOrder).toBeUndefined();
-    expect(resultDoc.rawPasses).toEqual(expect.arrayContaining([
+    expect(resultDoc.timingPoints).toEqual(expect.arrayContaining([
       expect.objectContaining({
         code: "IS1",
         cumMs: 60000,
@@ -1529,39 +1619,47 @@ describe("eq importer core import", () => {
     expect(result.ok).toBe(true);
     expect(result.importedResults).toBe(2);
 
-    const adaResult = mockState.docs.get("events/80088/classes/1224375/results/101");
-    const graceResult = mockState.docs.get("events/80088/classes/1224375/results/202");
+    const adaResult = mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101");
+    const graceResult = mockState.docs.get("events/80088/stages/330315/classes/1224375/results/202");
 
-    expect(adaResult.rawPasses).toEqual(expect.arrayContaining([
+    expect(adaResult.timingPoints).toEqual(expect.arrayContaining([
       expect.objectContaining({
         code: "IS1",
         cumMs: 60000,
         legMs: 60000,
         cumRank: 2,
+        cumRankCount: 2,
         legRank: 2,
+        legRankCount: 2,
       }),
       expect.objectContaining({
         code: "Maal",
         cumMs: 120000,
         legMs: 60000,
         cumRank: 1,
+        cumRankCount: 2,
         legRank: 1,
+        legRankCount: 2,
       }),
     ]));
-    expect(graceResult.rawPasses).toEqual(expect.arrayContaining([
+    expect(graceResult.timingPoints).toEqual(expect.arrayContaining([
       expect.objectContaining({
         code: "IS1",
         cumMs: 50000,
         legMs: 50000,
         cumRank: 1,
+        cumRankCount: 2,
         legRank: 1,
+        legRankCount: 2,
       }),
       expect.objectContaining({
         code: "Maal",
         cumMs: 130000,
         legMs: 80000,
         cumRank: 2,
+        cumRankCount: 2,
         legRank: 2,
+        legRankCount: 2,
       }),
     ]));
   });
@@ -1586,7 +1684,7 @@ describe("eq importer core import", () => {
 
     expect(result.ok).toBe(true);
     expect(result.normalizedCount).toBe(1);
-    expect(mockState.docs.get("events/80088/classes/1224375/results/101")).toMatchObject({
+    expect(mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101")).toMatchObject({
       participantUid: 101,
       totalMs: 120000,
       totalText: "2:00.0",
@@ -1622,9 +1720,9 @@ describe("eq importer core import", () => {
     expect(mockState.docs.has("clubs/organization:4001")).toBe(false);
     expect(mockState.docs.has("clubs/team:4001")).toBe(true);
     expect(mockState.docs.has("athletes/athlete:1001")).toBe(true);
-    expect(mockState.docs.has("events/80088/classes/1224375/results/101")).toBe(false);
+    expect(mockState.docs.has("events/80088/stages/330315/classes/1224375/results/101")).toBe(false);
     expect(mockState.docs.get("events/80088/classes/1224375")).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       resultCount: 0,
       participantCount: 1,
       hasResults: false,
@@ -1707,11 +1805,11 @@ describe("eq importer core import", () => {
         }),
       }),
     });
-    expect(mockState.docs.get("events/80088/classes/1224375/results/101")).toMatchObject({
+    expect(mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101")).toMatchObject({
       participantUid: 101,
       totalMs: 120000,
       totalText: "2:00.0",
-      rawPasses: expect.arrayContaining([
+      timingPoints: expect.arrayContaining([
         expect.objectContaining({
           code: "Maal",
           cumMs: 120000,
@@ -1740,13 +1838,13 @@ describe("eq importer core import", () => {
       timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375",
     });
 
-    mockState.docs.set("events/80088/classes/1224375/results/101", {
+    mockState.docs.set("events/80088/stages/330315/classes/1224375/results/101", {
       participantUid: 101,
       totalMs: null,
       splits: {},
       rawPasses: [],
     });
-    mockState.docs.set("events/80088/classes/1224375/results/legacy-valid", {
+    mockState.docs.set("events/80088/stages/330315/classes/1224375/results/legacy-valid", {
       participantUid: 999,
       totalMs: 90000,
       splits: {
@@ -1779,8 +1877,8 @@ describe("eq importer core import", () => {
       deleted: 1,
       scanned: 2,
     });
-    expect(mockState.docs.has("events/80088/classes/1224375/results/101")).toBe(false);
-    expect(mockState.docs.has("events/80088/classes/1224375/results/legacy-valid")).toBe(true);
+    expect(mockState.docs.has("events/80088/stages/330315/classes/1224375/results/101")).toBe(false);
+    expect(mockState.docs.has("events/80088/stages/330315/classes/1224375/results/legacy-valid")).toBe(true);
   });
 
   test("importEqTimingFromUrls keeps real result docs when a later import has no time rows", async () => {
@@ -1801,10 +1899,10 @@ describe("eq importer core import", () => {
       timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375",
     });
 
-    expect(mockState.docs.get("events/80088/classes/1224375/results/101")).toMatchObject({
+    expect(mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101")).toMatchObject({
       participantUid: 101,
       totalMs: 120000,
-      rawPasses: expect.arrayContaining([expect.objectContaining({cumMs: 120000})]),
+      timingPoints: expect.arrayContaining([expect.objectContaining({cumMs: 120000})]),
     });
 
     mockAxiosGet
@@ -1831,10 +1929,10 @@ describe("eq importer core import", () => {
       hasResults: true,
     });
     expect(mockState.docs.get("events/80088/classes/1224375").results).toBeUndefined();
-    expect(mockState.docs.get("events/80088/classes/1224375/results/101")).toMatchObject({
+    expect(mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101")).toMatchObject({
       participantUid: 101,
       totalMs: 120000,
-      rawPasses: expect.arrayContaining([expect.objectContaining({cumMs: 120000})]),
+      timingPoints: expect.arrayContaining([expect.objectContaining({cumMs: 120000})]),
     });
   });
 
@@ -1876,13 +1974,12 @@ describe("eq importer core import", () => {
     });
     expect(mockState.docs.get("events/80088/classes/1224375").results).toBeUndefined();
     expect(mockState.docs.has("events/80088/classes/1224375/participants/101")).toBe(false);
-    const unmappedResultDoc = mockState.docs.get("events/80088/classes/1224375/results/9901");
+    const unmappedResultDoc = mockState.docs.get("events/80088/stages/330315/classes/1224375/results/9901");
     expect(unmappedResultDoc).toMatchObject({
-      participantUid: null,
       etappeDeltakerUid: unmappedEdUid,
       hasTimingData: true,
       totalMs: 120000,
-      rawPasses: expect.arrayContaining([
+      timingPoints: expect.arrayContaining([
         expect.objectContaining({code: "IS1", cumMs: 60000}),
         expect.objectContaining({code: "Maal", cumMs: 120000}),
       ]),
@@ -1930,21 +2027,19 @@ describe("eq importer core import", () => {
         importedResults: 1,
       }),
     ]);
-    expect(mockState.docs.get("events/80088/classes/1224375/results/101")).toMatchObject({
+    expect(mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101")).toMatchObject({
       totalMs: 120000,
       athleteId: "athlete:1001",
       clubId: "club:90001",
-      rawPasses: expect.arrayContaining([expect.objectContaining({code: "Kort-Maal"})]),
+      timingPoints: expect.arrayContaining([expect.objectContaining({code: "Kort-Maal"})]),
     });
-    expect(mockState.docs.get("events/80088/classes/1224376/results/202")).toMatchObject({
+    expect(mockState.docs.get("events/80088/stages/330419/classes/1224376/results/202")).toMatchObject({
       totalMs: 210000,
       athleteId: "athlete:2002",
       clubId: "clubname:bergen ski",
       schoolId: "schoolname:bergen handelsgym",
-      organizationId: null,
-      teamId: null,
       lagId: "lagname:vestland lag",
-      rawPasses: expect.arrayContaining([expect.objectContaining({code: "Lang-Maal"})]),
+      timingPoints: expect.arrayContaining([expect.objectContaining({code: "Lang-Maal"})]),
     });
     expect(mockState.docs.get("clubs/club:90001")).toMatchObject({
       clubId: "club:90001",
@@ -1967,8 +2062,6 @@ describe("eq importer core import", () => {
       athleteId: "athlete:2002",
       primaryClubId: "clubname:bergen ski",
       primarySchoolId: "schoolname:bergen handelsgym",
-      primaryOrganizationId: null,
-      primaryTeamId: null,
       primaryLagId: "lagname:vestland lag",
     });
   });
@@ -1983,17 +2076,26 @@ describe("eq importer core import", () => {
       .mockResolvedValueOnce({data: fixtures.event})
       .mockResolvedValueOnce({data: fixtures.participants})
       .mockResolvedValueOnce({data: fixtures.womenStationOneTimes})
+      .mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants})
+      .mockResolvedValueOnce({data: fixtures.womenStationOneTimes})
       .mockResolvedValueOnce({data: fixtures.womenStationTwoTimes});
 
     const result = await mod._importWholeEvent({
       eventId: 80088,
       classIndex: 0,
-      classCount: 1,
+      classCount: 2,
     });
 
     expect(result.ok).toBe(true);
-    expect(result.classesImported).toBe(1);
+    expect(result.classesImported).toBe(2);
     expect(result.perClass).toEqual([
+      expect.objectContaining({
+        classId: 5001,
+        etappeUid: 7001,
+        importedSplitDefs: 1,
+        importedResults: 1,
+      }),
       expect.objectContaining({
         classId: 5001,
         etappeUid: 7002,
@@ -2003,16 +2105,16 @@ describe("eq importer core import", () => {
     ]);
     expect(mockState.docs.get("events/80088/classes/5001")).toMatchObject({
       classId: 5001,
-      etappeUID: 7002,
+      primaryStageId: "7001",
     });
-    expect(mockState.docs.get("events/80088/classes/5001/results/501")).toMatchObject({
+    expect(mockState.docs.get("events/80088/stages/7002/classes/5001/results/501")).toMatchObject({
       participantUid: 501,
       totalMs: 140000,
-      rawPasses: expect.arrayContaining([
+      timingPoints: expect.arrayContaining([
         expect.objectContaining({code: "Kvinner-Maal", cumMs: 140000}),
       ]),
     });
-    expect(mockState.docs.has("events/80088/classes/5001/splitDefs/8001")).toBe(false);
+    expect(mockState.docs.has("events/80088/stages/7002/classes/5001/splitDefs/8001")).toBe(false);
   });
 
   test("importWholeEvent imports result subclasses even when participants report zero contestants", async () => {
@@ -2055,23 +2157,10 @@ describe("eq importer core import", () => {
       name: "Menn U23",
       etappeUID: 314477,
     });
-    expect(mockState.docs.get("events/74689/classes/1146503/results/9801")).toMatchObject({
-      participantUid: null,
-      athleteId: null,
-      clubId: null,
-      clubName: null,
-      schoolId: null,
-      schoolName: null,
-      organizationId: null,
-      organizationName: null,
-      teamId: null,
-      teamName: null,
-      lagId: null,
-      lagName: null,
-      name: null,
+    expect(mockState.docs.get("events/74689/stages/314477/classes/1146503/results/9801")).toMatchObject({
       etappeDeltakerUid: 9801,
       totalMs: 660000,
-      rawPasses: expect.arrayContaining([
+      timingPoints: expect.arrayContaining([
         expect.objectContaining({code: "Maal", cumMs: 660000}),
       ]),
     });
@@ -2099,30 +2188,115 @@ describe("eq importer core import", () => {
     expect(mockState.docs.has("clubs/club:90001")).toBe(false);
     expect(mockState.docs.get("athletes/athlete:1001")).toMatchObject({
       athleteId: "athlete:1001",
-      primaryClubId: null,
-      clubIds: [],
       primarySchoolId: "school:3001",
       schoolIds: ["school:3001"],
-      primaryOrganizationId: null,
-      organizationIds: [],
       primaryTeamId: "team:4001",
       teamIds: ["team:4001"],
-      primaryLagId: null,
-      lagIds: [],
     });
-    expect(mockState.docs.get("events/80088/classes/1224375/results/101")).toMatchObject({
+    expect(mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101")).toMatchObject({
       athleteId: "athlete:1001",
-      clubId: null,
-      clubName: null,
       schoolId: "school:3001",
       schoolName: "Oslo Katedralskole",
-      organizationId: null,
-      organizationName: null,
       teamId: "team:4001",
       teamName: "Team Oslo",
-      lagId: null,
-      lagName: null,
     });
+  });
+
+  test("cross-country relay stores team members and no biathlon analysis", async () => {
+    const mod = loadModule();
+    const fixtures = buildImportFixtures();
+    fixtures.event.Gren = {Navn: "Langrenn", Kode: "CC"};
+    fixtures.event.Disiplin = {Navn: "Relay", Kode: "RL"};
+    fixtures.event.Etapper["330315"].Type = "interval-relay";
+    fixtures.event.Stasjoner["201150"].StasjonsOppsett["1434583"].Legnummer = 1;
+    fixtures.event.Stasjoner["201150"].StasjonsOppsett["1434582"].Legnummer = 2;
+    fixtures.participants["101"].KlubbTeamFormatert = "Oslo Skiklubb lag 1";
+    fixtures.participants["101"].StafettDeltakere = {
+      "1": {Sortering: 1, NavnFormatert: "Ada Lovelace", UtoverUID: 1001},
+      "2": {Sortering: 2, NavnFormatert: "Grace Hopper", UtoverUID: 1002},
+    };
+
+    mockAxiosGet
+      .mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants})
+      .mockResolvedValueOnce({data: fixtures.stationOneTimes})
+      .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+
+    await mod._import({
+      eventId: 80088,
+      classId: 1224375,
+      eventUrl: "https://example.test/event",
+      participantsUrl: "https://example.test/participants",
+      timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375",
+    });
+
+    const resultDoc = mockState.docs.get(
+      "events/80088/stages/330315/classes/1224375/results/101",
+    );
+    expect(resultDoc.entrant).toMatchObject({
+      kind: "team",
+      name: "Oslo Skiklubb lag 1",
+    });
+    expect(resultDoc.team.members).toEqual([
+      expect.objectContaining({legNumber: 1, name: "Ada Lovelace"}),
+      expect.objectContaining({legNumber: 2, name: "Grace Hopper"}),
+    ]);
+    expect(resultDoc.timingPoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({legNumber: 1}),
+      expect.objectContaining({legNumber: 2}),
+    ]));
+    expect(resultDoc.analysis).toBeUndefined();
+    expect(resultDoc.shooting).toBeUndefined();
+    expect(JSON.stringify(resultDoc)).not.toContain("hits");
+  });
+
+  test("biathlon relay stores both team members and biathlon analysis", async () => {
+    const mod = loadModule();
+    const fixtures = buildImportFixtures();
+    fixtures.event.Disiplin = {Navn: "Stafett", Kode: "RL"};
+    fixtures.event.Etapper["330315"].Type = "interval-relay";
+    fixtures.event.Stasjoner["201150"].StasjonsOppsett["1434583"].Legnummer = 1;
+    fixtures.event.Stasjoner["201150"].StasjonsOppsett["1434582"].Legnummer = 2;
+    fixtures.participants["101"].KlubbTeamFormatert = "Oslo SSL lag 1";
+    fixtures.participants["101"].StafettDeltakere = {
+      "1": {Sortering: 1, NavnFormatert: "Ada Lovelace", UtoverUID: 1001},
+      "2": {Sortering: 2, NavnFormatert: "Grace Hopper", UtoverUID: 1002},
+    };
+
+    mockAxiosGet
+      .mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants})
+      .mockResolvedValueOnce({data: fixtures.stationOneTimes})
+      .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+
+    await mod._import({
+      eventId: 80088,
+      classId: 1224375,
+      eventUrl: "https://example.test/event",
+      participantsUrl: "https://example.test/participants",
+      timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375",
+    });
+
+    const stageDoc = mockState.docs.get("events/80088/stages/330315");
+    const resultDoc = mockState.docs.get(
+      "events/80088/stages/330315/classes/1224375/results/101",
+    );
+    expect(stageDoc).toMatchObject({
+      resultProfile: "biathlon",
+      isRelay: true,
+      isBiathlon: true,
+    });
+    expect(resultDoc.entrant).toMatchObject({
+      kind: "team",
+      name: "Oslo SSL lag 1",
+    });
+    expect(resultDoc.team.members).toHaveLength(2);
+    expect(resultDoc.team.legs).toHaveLength(2);
+    expect(resultDoc.analysis.biathlon).toEqual(expect.any(Object));
+    expect(resultDoc.timingPoints).toEqual(expect.arrayContaining([
+      expect.objectContaining({code: "IS1", kind: "rangeApproach", legNumber: 1}),
+      expect.objectContaining({code: "Maal", kind: "finish", legNumber: 2}),
+    ]));
   });
 });
 
@@ -2263,6 +2437,22 @@ describe("eq importer http handlers", () => {
           contestantCount: 1,
         }),
       ],
+    });
+  });
+
+  test("summarizes participant count and valid age range for event filters", () => {
+    const mod = loadModule();
+    const summary = mod._test.buildEventParticipantSummary({
+      "1": {UID: 1, Alder: 42},
+      "2": {UID: 2, Alder: "12"},
+      "3": {UID: 3, Alder: 121},
+      "4": {UID: 4, Alder: null},
+    });
+
+    expect(summary).toEqual({
+      participantCount: 4,
+      ageFrom: 12,
+      ageTo: 42,
     });
   });
 });

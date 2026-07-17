@@ -51,6 +51,20 @@ void main() {
     );
   });
 
+  test('finds every discipline in one combined race name', () {
+    const raceClass = ResultClass(
+      id: 'combined',
+      name: 'M senior, 10 km',
+      resultCount: 20,
+      participantCount: 20,
+      etappeUid: 1,
+      etappeName: 'Sprint/Fellestart',
+    );
+
+    expect(raceClass.disciplineNames, ['Sprint', 'Fellesstart']);
+    expect(combinedDisciplineLabel([raceClass]), 'Sprint / Fellesstart');
+  });
+
   test('initial class has the most participants unless one is preferred', () {
     const classes = [
       ResultClass(
@@ -74,5 +88,26 @@ void main() {
       initialResultClass(classes, preferredClassId: 'most-results').id,
       'most-results',
     );
+  });
+
+  test('uses result count when an older import lacks participant count', () {
+    const classes = [
+      ResultClass(
+        id: 'small',
+        name: 'K17',
+        resultCount: 1,
+        participantCount: 1,
+        etappeUid: 1,
+      ),
+      ResultClass(
+        id: 'legacy-large',
+        name: 'M17',
+        resultCount: 40,
+        participantCount: 0,
+        etappeUid: 2,
+      ),
+    ];
+
+    expect(initialResultClass(classes).id, 'legacy-large');
   });
 }

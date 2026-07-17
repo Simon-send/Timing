@@ -14,6 +14,7 @@ import '../../auth/presentation/account_menu.dart';
 import '../../events/domain/result_event.dart';
 import '../../settings/presentation/settings_menu.dart';
 import '../domain/race_result.dart';
+import '../domain/competition_stage.dart';
 import '../domain/result_class.dart';
 import '../domain/result_sort_mode.dart';
 import '../domain/split_def.dart';
@@ -21,6 +22,7 @@ import 'biathlon_table.dart';
 import 'class_selector.dart';
 import 'result_distribution_button.dart';
 import 'result_locations.dart';
+import 'relay_leg_selector.dart';
 import 'results_table.dart';
 import 'split_selector.dart';
 
@@ -30,23 +32,30 @@ class ResultsPage extends ConsumerWidget {
   const ResultsPage({
     super.key,
     required this.eventId,
+    this.selectedStageId,
     this.selectedClassId,
     this.selectedSplitId,
+    this.selectedRelayLegNumber,
     this.compareBaseClassId,
     this.compareBaseResultId,
+    this.compareBaseRelayLegNumber,
   });
 
   final String eventId;
+  final String? selectedStageId;
   final String? selectedClassId;
   final String? selectedSplitId;
+  final int? selectedRelayLegNumber;
   final String? compareBaseClassId;
   final String? compareBaseResultId;
+  final int? compareBaseRelayLegNumber;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final events = ref.watch(eventsProvider);
     final classes = ref.watch(classesProvider(eventId));
+    final stages = ref.watch(competitionStagesProvider(eventId));
 
     return AppShell(
       title: l10n.results,
@@ -77,14 +86,25 @@ class ResultsPage extends ConsumerWidget {
                     message: l10n.noClassesMessage,
                   );
                 }
-                return _ResultsContent(
-                  eventId: eventId,
-                  event: event,
-                  classes: classes,
-                  selectedClassId: selectedClassId,
-                  selectedSplitId: selectedSplitId,
-                  compareBaseClassId: compareBaseClassId,
-                  compareBaseResultId: compareBaseResultId,
+                return stages.when(
+                  loading: () => LoadingState(label: l10n.loadingResults),
+                  error: (error, _) =>
+                      ErrorState(title: l10n.couldNotReadResults, error: error),
+                  data: (stages) {
+                    return _ResultsContent(
+                      eventId: eventId,
+                      event: event,
+                      classes: classes,
+                      stages: stages,
+                      selectedStageId: selectedStageId,
+                      selectedClassId: selectedClassId,
+                      selectedSplitId: selectedSplitId,
+                      selectedRelayLegNumber: selectedRelayLegNumber,
+                      compareBaseClassId: compareBaseClassId,
+                      compareBaseResultId: compareBaseResultId,
+                      compareBaseRelayLegNumber: compareBaseRelayLegNumber,
+                    );
+                  },
                 );
               },
             );
@@ -100,19 +120,27 @@ class _ResultsContent extends ConsumerWidget {
     required this.eventId,
     required this.event,
     required this.classes,
+    required this.stages,
+    required this.selectedStageId,
     required this.selectedClassId,
     required this.selectedSplitId,
+    required this.selectedRelayLegNumber,
     required this.compareBaseClassId,
     required this.compareBaseResultId,
+    required this.compareBaseRelayLegNumber,
   });
 
   final String eventId;
   final ResultEvent? event;
   final List<ResultClass> classes;
+  final List<CompetitionStage> stages;
+  final String? selectedStageId;
   final String? selectedClassId;
   final String? selectedSplitId;
+  final int? selectedRelayLegNumber;
   final String? compareBaseClassId;
   final String? compareBaseResultId;
+  final int? compareBaseRelayLegNumber;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -120,16 +148,35 @@ class _ResultsContent extends ConsumerWidget {
     final compareSelection = _CompareSelection.tryParse(
       classId: compareBaseClassId,
       resultId: compareBaseResultId,
+      relayLegNumber: compareBaseRelayLegNumber,
     );
     final activeClass = _activeClass(
       compareSelection?.classId ?? selectedClassId ?? athleteEvent?.classId,
     );
     final classId = activeClass.id;
+    final classStages = stages
+        .where((stage) => stage.supportsClass(classId))
+        .toList();
+    final activeStage = _activeStage(activeClass, classStages);
+    if (activeStage == null) {
+      return const EmptyState(
+        title: 'Ingen konkurranseledd',
+        message: 'Klassen har ingen importerte konkurranseledd ennå.',
+      );
+    }
     final splitDefs = ref.watch(
-      splitDefsProvider((eventId: eventId, classId: classId)),
+      stageSplitDefsProvider((
+        eventId: eventId,
+        stageId: activeStage.id,
+        classId: classId,
+      )),
     );
     final results = ref.watch(
-      raceResultsProvider((eventId: eventId, classId: classId)),
+      stageResultsProvider((
+        eventId: eventId,
+        stageId: activeStage.id,
+        classId: classId,
+      )),
     );
 
     return LayoutBuilder(
@@ -140,10 +187,13 @@ class _ResultsContent extends ConsumerWidget {
           event: event,
           activeClass: activeClass,
           classes: classes,
+          activeStage: activeStage,
+          stages: classStages,
           showClassDropdown: !showClassSidebar,
           splitDefs: splitDefs,
           results: results,
           selectedSplitId: selectedSplitId,
+          selectedRelayLegNumber: selectedRelayLegNumber,
           compareSelection: compareSelection,
         );
 
@@ -169,6 +219,7 @@ class _ResultsContent extends ConsumerWidget {
                     resultsLocation(
                       eventId: eventId,
                       classId: value,
+                      stageId: null,
                       splitId: selectedSplitId,
                     ),
                   );
@@ -186,6 +237,16 @@ class _ResultsContent extends ConsumerWidget {
   ResultClass _activeClass(String? preferredClassId) {
     return initialResultClass(classes, preferredClassId: preferredClassId);
   }
+
+  CompetitionStage? _activeStage(
+    ResultClass raceClass,
+    List<CompetitionStage> classStages,
+  ) {
+    if (classStages.isEmpty) return null;
+    final preferredId = selectedStageId ?? raceClass.primaryStageId;
+    return classStages.where((stage) => stage.id == preferredId).firstOrNull ??
+        classStages.first;
+  }
 }
 
 class _ResultsArea extends ConsumerWidget {
@@ -194,10 +255,13 @@ class _ResultsArea extends ConsumerWidget {
     required this.event,
     required this.activeClass,
     required this.classes,
+    required this.activeStage,
+    required this.stages,
     required this.showClassDropdown,
     required this.splitDefs,
     required this.results,
     required this.selectedSplitId,
+    required this.selectedRelayLegNumber,
     required this.compareSelection,
   });
 
@@ -205,10 +269,13 @@ class _ResultsArea extends ConsumerWidget {
   final ResultEvent? event;
   final ResultClass activeClass;
   final List<ResultClass> classes;
+  final CompetitionStage activeStage;
+  final List<CompetitionStage> stages;
   final bool showClassDropdown;
   final AsyncValue<List<SplitDef>> splitDefs;
   final AsyncValue<List<RaceResult>> results;
   final String? selectedSplitId;
+  final int? selectedRelayLegNumber;
   final _CompareSelection? compareSelection;
 
   @override
@@ -219,6 +286,8 @@ class _ResultsArea extends ConsumerWidget {
     final biathlonSortKey = ref.watch(biathlonSortKeyProvider);
     final affiliationView = ref.watch(resultAffiliationViewProvider);
     final linkedAthleteId = ref.watch(linkedAthleteIdProvider).asData?.value;
+    final favoriteAthleteIds =
+        ref.watch(favoriteAthleteIdsProvider).asData?.value ?? const <String>{};
     final linkedAthleteProfile = linkedAthleteId == null
         ? null
         : ref.watch(athleteProfileProvider(linkedAthleteId)).asData?.value;
@@ -238,31 +307,75 @@ class _ResultsArea extends ConsumerWidget {
         : <String>[];
     final requestedSplitRange = ref.watch(splitRangeSelectionProvider);
     final classId = activeClass.id;
-    final searchArgs = (eventId: eventId, classId: classId);
+    final searchArgs = (
+      eventId: eventId,
+      stageId: activeStage.id,
+      classId: classId,
+    );
     final searchQuery = ref.watch(resultSearchQueryProvider(searchArgs));
+    final relaySelectionArgs = (
+      eventId: eventId,
+      stageId: activeStage.id,
+      classId: classId,
+    );
+    final requestedRelayComparisonLegs = ref.watch(
+      relayComparisonLegNumbersProvider(relaySelectionArgs),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ResultTitle(event: event, raceClass: activeClass),
-        if (showClassDropdown) ...[
+        _ResultTitle(event: event, raceClass: activeClass, stage: activeStage),
+        if (showClassDropdown || stages.length > 1) ...[
           const SizedBox(height: 14),
-          ClassSelector(
-            classes: classes,
-            selectedClassId: classId,
-            onChanged: (value) {
-              ref
-                  .read(settingsControllerProvider.notifier)
-                  .setDefaultClass(value);
-              ref.read(splitRangeSelectionProvider.notifier).state = null;
-              context.go(
-                resultsLocation(
-                  eventId: eventId,
-                  classId: value,
-                  splitId: selectedSplitId,
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              if (showClassDropdown)
+                SizedBox(
+                  width: 300,
+                  child: ClassSelector(
+                    classes: classes,
+                    selectedClassId: classId,
+                    onChanged: (value) {
+                      ref
+                          .read(settingsControllerProvider.notifier)
+                          .setDefaultClass(value);
+                      ref.read(splitRangeSelectionProvider.notifier).state =
+                          null;
+                      context.go(
+                        resultsLocation(
+                          eventId: eventId,
+                          classId: value,
+                          splitId: selectedSplitId,
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              );
-            },
+              if (stages.length > 1)
+                SizedBox(
+                  width: 300,
+                  child: _CompetitionStageSelector(
+                    stages: stages,
+                    selectedStageId: activeStage.id,
+                    onChanged: (value) {
+                      ref.read(splitRangeSelectionProvider.notifier).state =
+                          null;
+                      ref.read(comparisonClassIdsProvider.notifier).state = [];
+                      context.go(
+                        resultsLocation(
+                          eventId: eventId,
+                          classId: classId,
+                          stageId: value,
+                          splitId: selectedSplitId,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
           ),
         ],
         const SizedBox(height: 14),
@@ -285,11 +398,74 @@ class _ResultsArea extends ConsumerWidget {
                       message: l10n.noResultsMessage,
                     );
                   }
-                  final comparisonRead = _readComparisonData(
-                    ref,
-                    splitDefs,
-                    comparisonClassIds,
-                  );
+                  final availableRelayLegs =
+                      activeStage.isRelay ||
+                          loadedResults.any(
+                            (result) =>
+                                result.entrant?.kind == ResultEntrantKind.team,
+                          )
+                      ? relayLegNumbers(loadedResults)
+                      : const <int>[];
+                  final preferredRelayLeg =
+                      selectedRelayLegNumber ??
+                      compareSelection?.relayLegNumber;
+                  final activeRelayLeg =
+                      availableRelayLegs.contains(preferredRelayLeg)
+                      ? preferredRelayLeg
+                      : null;
+                  final relayComparisonLegs = activeRelayLeg == null
+                      ? const <int>[]
+                      : requestedRelayComparisonLegs
+                            .where(
+                              (leg) =>
+                                  leg != activeRelayLeg &&
+                                  availableRelayLegs.contains(leg),
+                            )
+                            .toList();
+                  final displayedPrimaryResults = activeRelayLeg == null
+                      ? loadedResults
+                      : relayLegRaceResults(loadedResults, activeRelayLeg);
+                  final displayedSplitDefs = activeRelayLeg == null
+                      ? splitDefs
+                      : relayLegSplitDefs(
+                          splitDefs,
+                          activeRelayLeg,
+                          displayedPrimaryResults,
+                        );
+                  final primaryViewClass = activeRelayLeg == null
+                      ? activeClass
+                      : _relayLegClass(
+                          activeClass,
+                          activeRelayLeg,
+                          displayedPrimaryResults.length,
+                        );
+                  final selectableSplitDefs =
+                      activeRelayLeg != null && relayComparisonLegs.isNotEmpty
+                      ? displayedSplitDefs
+                            .where((split) => split.id == relayLegFinishSplitId)
+                            .toList()
+                      : displayedSplitDefs;
+                  final comparisonRead = activeRelayLeg == null
+                      ? _readComparisonData(
+                          ref,
+                          displayedSplitDefs,
+                          comparisonClassIds,
+                        )
+                      : _ComparisonRead.data([
+                          for (final legNumber in relayComparisonLegs)
+                            _ComparisonRows(
+                              raceClass: _relayLegClass(
+                                activeClass,
+                                legNumber,
+                                loadedResults.length,
+                              ),
+                              sourceClassId: activeClass.id,
+                              results: relayLegRaceResults(
+                                loadedResults,
+                                legNumber,
+                              ),
+                            ),
+                        ]);
                   if (comparisonRead.isLoading && comparisonRead.rows.isEmpty) {
                     return LoadingState(label: l10n.loadingResults);
                   }
@@ -302,27 +478,50 @@ class _ResultsArea extends ConsumerWidget {
                   final isLoadingMore =
                       (results.isLoading && results.hasValue) ||
                       comparisonRead.isLoading;
-                  final tableRows = _buildTableRows(
+                  final canLoadMore = _canLoadMoreResults(
+                    ref,
                     primaryResults: loadedResults,
+                    comparisons: activeRelayLeg == null
+                        ? comparisonRead.rows
+                        : const [],
+                  );
+                  final tableRows = _buildTableRows(
+                    primaryClass: primaryViewClass,
+                    primaryResults: displayedPrimaryResults,
                     comparisons: comparisonRead.rows,
                     linkedAthleteId: linkedAthleteId,
                     linkedClubName: linkedAffiliations?.clubName,
                     linkedTeamName: linkedAffiliations?.teamName,
+                    favoriteAthleteIds: favoriteAthleteIds,
                   );
                   final baseRow = compareSelection == null
                       ? null
                       : tableRows.where((row) {
-                          return row.classId == compareSelection!.classId &&
-                              row.result.id == compareSelection!.resultId;
+                          return row.sourceClassId ==
+                                  compareSelection!.classId &&
+                              row.result.detailResultId ==
+                                  compareSelection!.resultId &&
+                              row.result.relayLegNumber ==
+                                  compareSelection!.relayLegNumber;
                         }).firstOrNull;
                   final hasBiathlonData = BiathlonTable.hasBiathlonData(
                     tableRows,
                   );
-                  final splitOptions = _splitOptions(
-                    splitDefs,
-                    loadedResults,
+                  final allSplitOptions = _splitOptions(
+                    selectableSplitDefs,
+                    displayedPrimaryResults,
                     hasBiathlonData,
                   );
+                  final splitOptions =
+                      activeRelayLeg != null && relayComparisonLegs.isNotEmpty
+                      ? allSplitOptions
+                            .where(
+                              (split) =>
+                                  split.id == relayLegFinishSplitId ||
+                                  split.id == _biathlonSplitId,
+                            )
+                            .toList()
+                      : allSplitOptions;
                   final activeSplitId = _activeSplitId(
                     selectedSplitId,
                     splitOptions,
@@ -340,27 +539,34 @@ class _ResultsArea extends ConsumerWidget {
                         );
                   final selectedResultSplitId =
                       activeSplitRange?.toSplitId ?? activeSplitId;
+                  final effectiveSortMode =
+                      activeSplitRange?.isIndependent == true
+                      ? ResultSortMode.split
+                      : sortMode;
                   final distributionData = _distributionData(
                     tableRows: tableRows,
                     isBiathlonSplit: isBiathlonSplit,
                     activeSplitId: selectedResultSplitId,
                     splitRange: activeSplitRange,
-                    sortMode: sortMode,
+                    sortMode: effectiveSortMode,
                     biathlonSortKey: biathlonSortKey,
                   );
                   Future<ResultDistributionData?> loadFullDistributionData() {
                     return _loadFullDistributionData(
                       ref: ref,
-                      primarySplitDefs: splitDefs,
+                      primarySplitDefs: selectableSplitDefs,
                       comparisonClassIds: comparisonClassIds,
+                      relayLegNumber: activeRelayLeg,
+                      relayComparisonLegNumbers: relayComparisonLegs,
                       isBiathlonSplit: isBiathlonSplit,
                       activeSplitId: selectedResultSplitId,
                       splitRange: activeSplitRange,
-                      sortMode: sortMode,
+                      sortMode: effectiveSortMode,
                       biathlonSortKey: biathlonSortKey,
                       linkedAthleteId: linkedAthleteId,
                       linkedClubName: linkedAffiliations?.clubName,
                       linkedTeamName: linkedAffiliations?.teamName,
+                      favoriteAthleteIds: favoriteAthleteIds,
                     );
                   }
 
@@ -368,13 +574,67 @@ class _ResultsArea extends ConsumerWidget {
                     _loadMoreResults(
                       ref,
                       primaryResults: loadedResults,
-                      comparisons: comparisonRead.rows,
+                      comparisons: activeRelayLeg == null
+                          ? comparisonRead.rows
+                          : const [],
                     );
                   }
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (availableRelayLegs.isNotEmpty) ...[
+                        RelayLegSelector(
+                          legNumbers: availableRelayLegs,
+                          activeLegNumber: activeRelayLeg,
+                          comparisonLegNumbers: relayComparisonLegs,
+                          onPrimaryChanged: (legNumber) {
+                            ref
+                                    .read(splitRangeSelectionProvider.notifier)
+                                    .state =
+                                null;
+                            ref
+                                    .read(
+                                      relayComparisonLegNumbersProvider(
+                                        relaySelectionArgs,
+                                      ).notifier,
+                                    )
+                                    .state =
+                                [];
+                            context.go(
+                              resultsLocation(
+                                eventId: eventId,
+                                classId: classId,
+                                stageId: activeStage.id,
+                                relayLegNumber: legNumber,
+                                splitId: legNumber == null
+                                    ? null
+                                    : relayLegFinishSplitId,
+                              ),
+                            );
+                          },
+                          onComparisonChanged: (legNumber, selected) {
+                            final next = [...relayComparisonLegs];
+                            if (selected) {
+                              if (!next.contains(legNumber)) {
+                                next.add(legNumber);
+                              }
+                            } else {
+                              next.remove(legNumber);
+                            }
+                            next.sort();
+                            ref
+                                    .read(
+                                      relayComparisonLegNumbersProvider(
+                                        relaySelectionArgs,
+                                      ).notifier,
+                                    )
+                                    .state =
+                                next;
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                      ],
                       if (compareSelection != null) ...[
                         _CompareSelectionBanner(
                           baseName: baseRow?.result.name ?? 'Valgt utover',
@@ -382,6 +642,8 @@ class _ResultsArea extends ConsumerWidget {
                             resultsLocation(
                               eventId: eventId,
                               classId: classId,
+                              stageId: activeStage.id,
+                              relayLegNumber: activeRelayLeg,
                               splitId: selectedResultSplitId,
                             ),
                           ),
@@ -390,8 +652,10 @@ class _ResultsArea extends ConsumerWidget {
                       ],
                       _SplitAndInfoRow(
                         event: event,
-                        raceClass: activeClass,
-                        resultCount: activeClass.resultCount > 0
+                        raceClass: primaryViewClass,
+                        resultCount:
+                            activeRelayLeg == null &&
+                                activeClass.resultCount > 0
                             ? activeClass.resultCount
                             : tableRows.length,
                         splitOptions: splitOptions,
@@ -429,9 +693,13 @@ class _ResultsArea extends ConsumerWidget {
                             resultsLocation(
                               eventId: eventId,
                               classId: classId,
+                              stageId: activeStage.id,
+                              relayLegNumber: activeRelayLeg,
                               splitId: value,
                               compareBaseClassId: compareSelection?.classId,
                               compareBaseResultId: compareSelection?.resultId,
+                              compareBaseRelayLegNumber:
+                                  compareSelection?.relayLegNumber,
                             ),
                           );
                         },
@@ -479,9 +747,55 @@ class _ResultsArea extends ConsumerWidget {
                             resultsLocation(
                               eventId: eventId,
                               classId: classId,
+                              stageId: activeStage.id,
+                              relayLegNumber: activeRelayLeg,
                               splitId: next?.toSplitId,
                               compareBaseClassId: compareSelection?.classId,
                               compareBaseResultId: compareSelection?.resultId,
+                              compareBaseRelayLegNumber:
+                                  compareSelection?.relayLegNumber,
+                            ),
+                          );
+                        },
+                        onIndependentChanged: (enabled) {
+                          final current = activeSplitRange;
+                          if (current == null) return;
+                          final next = _normalizeSplitRange(
+                            current.copyWith(isIndependent: enabled),
+                            rangeSplitOptions,
+                          );
+                          ref.read(splitRangeSelectionProvider.notifier).state =
+                              next;
+                        },
+                        onIncludedSplitsChanged: (splitIds) {
+                          final current = activeSplitRange;
+                          if (current == null || !current.isIndependent) {
+                            return;
+                          }
+                          final next = _normalizeSplitRange(
+                            current.copyWith(includedSplitIds: splitIds),
+                            rangeSplitOptions,
+                          );
+                          ref.read(splitRangeSelectionProvider.notifier).state =
+                              next;
+                          if (next == null ||
+                              next.toSplitId == current.toSplitId) {
+                            return;
+                          }
+                          ref
+                              .read(settingsControllerProvider.notifier)
+                              .setPreferredSplit(next.toSplitId);
+                          context.go(
+                            resultsLocation(
+                              eventId: eventId,
+                              classId: classId,
+                              stageId: activeStage.id,
+                              relayLegNumber: activeRelayLeg,
+                              splitId: next.toSplitId,
+                              compareBaseClassId: compareSelection?.classId,
+                              compareBaseResultId: compareSelection?.resultId,
+                              compareBaseRelayLegNumber:
+                                  compareSelection?.relayLegNumber,
                             ),
                           );
                         },
@@ -515,8 +829,10 @@ class _ResultsArea extends ConsumerWidget {
                                       ? ResultAffiliationView.team
                                       : ResultAffiliationView.club;
                                 },
-                                disabledResultId: compareSelection?.resultId,
-                                onLoadMore: loadMoreResults,
+                                disabledResultId: baseRow?.result.id,
+                                onLoadMore: canLoadMore
+                                    ? loadMoreResults
+                                    : null,
                                 isLoadingMore: isLoadingMore,
                                 onAthleteTap: (row) {
                                   _openAthlete(
@@ -532,7 +848,7 @@ class _ResultsArea extends ConsumerWidget {
                                 searchQuery: searchQuery,
                                 selectedSplitId: selectedResultSplitId,
                                 splitRange: activeSplitRange,
-                                sortMode: sortMode,
+                                sortMode: effectiveSortMode,
                                 onSortModeChanged: (value) {
                                   ref
                                           .read(
@@ -557,8 +873,10 @@ class _ResultsArea extends ConsumerWidget {
                                       ? ResultAffiliationView.team
                                       : ResultAffiliationView.club;
                                 },
-                                disabledResultId: compareSelection?.resultId,
-                                onLoadMore: loadMoreResults,
+                                disabledResultId: baseRow?.result.id,
+                                onLoadMore: canLoadMore
+                                    ? loadMoreResults
+                                    : null,
                                 isLoadingMore: isLoadingMore,
                                 onAthleteTap: (row) {
                                   _openAthlete(
@@ -591,8 +909,10 @@ class _ResultsArea extends ConsumerWidget {
       context.go(
         athleteLocation(
           eventId: eventId,
-          classId: row.classId,
-          resultId: row.result.id,
+          classId: row.sourceClassId ?? row.classId,
+          resultId: row.result.detailResultId,
+          stageId: activeStage.id,
+          relayLegNumber: row.result.relayLegNumber,
           splitId: splitId,
         ),
       );
@@ -603,8 +923,11 @@ class _ResultsArea extends ConsumerWidget {
         eventId: eventId,
         classId: compareSelection.classId,
         resultId: compareSelection.resultId,
+        stageId: activeStage.id,
+        relayLegNumber: compareSelection.relayLegNumber,
         splitId: splitId,
-        compareWithResultId: row.result.id,
+        compareWithResultId: row.result.detailResultId,
+        compareWithRelayLegNumber: row.result.relayLegNumber,
       ),
     );
   }
@@ -686,6 +1009,23 @@ class _ResultsArea extends ConsumerWidget {
     );
     if (toIndex < 0) return null;
 
+    if (range.isIndependent) {
+      final requestedIds = range.includedSplitIds.toSet();
+      final includedSplitIds = splitOptions
+          .where((split) => requestedIds.contains(split.id))
+          .map((split) => split.id)
+          .toList();
+      final focusedId = includedSplitIds.isEmpty
+          ? splitOptions[toIndex].id
+          : includedSplitIds.last;
+      return SplitRangeSelection(
+        fromSplitId: range.fromSplitId,
+        toSplitId: focusedId,
+        includedSplitIds: includedSplitIds,
+        isIndependent: true,
+      );
+    }
+
     final requestedFromId = range.fromSplitId;
     var fromIndex = requestedFromId == null
         ? -1
@@ -706,6 +1046,7 @@ class _ResultsArea extends ConsumerWidget {
       fromSplitId: fromIndex >= 0 ? splitOptions[fromIndex].id : null,
       toSplitId: splitOptions[toIndex].id,
       includedSplitIds: includedSplitIds,
+      isIndependent: false,
     );
   }
 
@@ -740,10 +1081,7 @@ class _ResultsArea extends ConsumerWidget {
         .where((value) => value > 0)
         .toList();
     final currentAthleteValue = tableRows
-        .where(
-          (row) =>
-              row.result.isFinished && row.highlight == ResultRowHighlight.self,
-        )
+        .where((row) => row.result.isFinished && row.isCurrentAthlete)
         .map((row) {
           return _resultSortValue(
             row.result,
@@ -785,11 +1123,7 @@ class _ResultsArea extends ConsumerWidget {
       formatValue: selected.isTime ? formatDurationMs : (value) => '$value',
       currentAthleteLabel: selected.isTime ? 'Din tid' : 'Din verdi',
       currentAthleteValue: tableRows
-          .where(
-            (row) =>
-                row.result.isFinished &&
-                row.highlight == ResultRowHighlight.self,
-          )
+          .where((row) => row.result.isFinished && row.isCurrentAthlete)
           .map((row) => _biathlonMetricValue(row.result.biathlon, selected.key))
           .whereType<int>()
           .where((value) => selected.isTime ? value > 0 : value >= 0)
@@ -818,7 +1152,7 @@ class _ResultsArea extends ConsumerWidget {
           y: value,
           label: row.result.name,
           color: row.color,
-          isCurrentAthlete: row.highlight == ResultRowHighlight.self,
+          isCurrentAthlete: row.isCurrentAthlete,
         ),
       );
     }
@@ -846,7 +1180,9 @@ class _ResultsArea extends ConsumerWidget {
     }) {
       final values = tableRows
           .where((row) => row.result.isFinished)
-          .map((row) => read(row.result.biathlon))
+          .map((row) => row.result.biathlon)
+          .whereType<BiathlonAnalysis>()
+          .map(read)
           .whereType<int>()
           .where((value) => isTime ? value > 0 : value >= 0)
           .toList();
@@ -889,7 +1225,7 @@ class _ResultsArea extends ConsumerWidget {
     final rangeIndexes = <int>{};
     for (final row in tableRows) {
       rangeIndexes.addAll(
-        row.result.biathlon.passes
+        (row.result.biathlon?.passes ?? const <ShootingPass>[])
             .where((pass) => pass.rangeMs != null)
             .map((pass) => pass.index),
       );
@@ -916,7 +1252,8 @@ class _ResultsArea extends ConsumerWidget {
         : metrics;
   }
 
-  int? _biathlonMetricValue(BiathlonAnalysis analysis, String key) {
+  int? _biathlonMetricValue(BiathlonAnalysis? analysis, String key) {
+    if (analysis == null) return null;
     if (key == 'ski') return analysis.skiTimeMs;
     if (key == 'shooting') return analysis.shootingTimeMs;
     if (key == 'penalty') return analysis.penaltyTimeMs;
@@ -935,6 +1272,7 @@ class _ResultsArea extends ConsumerWidget {
     required ResultSortMode sortMode,
   }) {
     if (sortMode == ResultSortMode.split) {
+      if (splitRange?.isIndependent == true) return 'Valgte splittider';
       return splitRange == null ? 'Splittid' : 'Intervalltid';
     }
     return activeSplitId == null ? 'Sluttid' : 'Rangert tid';
@@ -969,7 +1307,7 @@ class _ResultsArea extends ConsumerWidget {
           y: rankedTimeOnYAxis ? rankedMs : totalMs,
           label: row.result.name,
           color: row.color,
-          isCurrentAthlete: row.highlight == ResultRowHighlight.self,
+          isCurrentAthlete: row.isCurrentAthlete,
         ),
       );
     }
@@ -993,6 +1331,9 @@ class _ResultsArea extends ConsumerWidget {
     ResultSortMode sortMode,
   ) {
     if (sortMode == ResultSortMode.split && splitRange != null) {
+      if (splitRange.isIndependent) {
+        return combinedSplitLegMs(result, splitRange.includedSplitIds);
+      }
       final toMs = result.splitValues[splitRange.toSplitId]?.cumMs;
       if (toMs == null) return null;
       final fromSplitId = splitRange.fromSplitId;
@@ -1015,14 +1356,68 @@ class _ResultsArea extends ConsumerWidget {
     required List<RaceResult> primaryResults,
     required List<_ComparisonRows> comparisons,
   }) {
-    _loadMoreClassResults(ref, activeClass, primaryResults.length);
+    _loadMoreClassResults(
+      ref,
+      activeClass,
+      primaryResults.length,
+      stageId: activeStage.id,
+    );
     for (final comparison in comparisons) {
       _loadMoreClassResults(
         ref,
         comparison.raceClass,
         comparison.results.length,
+        stageId: activeStage.supportsClass(comparison.raceClass.id)
+            ? activeStage.id
+            : null,
       );
     }
+  }
+
+  bool _canLoadMoreResults(
+    WidgetRef ref, {
+    required List<RaceResult> primaryResults,
+    required List<_ComparisonRows> comparisons,
+  }) {
+    if (_canLoadMoreClassResults(
+      ref,
+      activeClass,
+      primaryResults.length,
+      stageId: activeStage.id,
+    )) {
+      return true;
+    }
+    return comparisons.any(
+      (comparison) => _canLoadMoreClassResults(
+        ref,
+        comparison.raceClass,
+        comparison.results.length,
+        stageId: activeStage.supportsClass(comparison.raceClass.id)
+            ? activeStage.id
+            : null,
+      ),
+    );
+  }
+
+  bool _canLoadMoreClassResults(
+    WidgetRef ref,
+    ResultClass raceClass,
+    int loadedCount, {
+    String? stageId,
+  }) {
+    final currentLimit = stageId == null
+        ? ref.read(
+            raceResultsLimitProvider((eventId: eventId, classId: raceClass.id)),
+          )
+        : ref.read(
+            stageResultsLimitProvider((
+              eventId: eventId,
+              stageId: stageId,
+              classId: raceClass.id,
+            )),
+          );
+    if (loadedCount < currentLimit) return false;
+    return raceClass.resultCount <= 0 || loadedCount < raceClass.resultCount;
   }
 
   void _loadAllResultsForSearch(
@@ -1034,33 +1429,98 @@ class _ResultsArea extends ConsumerWidget {
       (raceClass) => classIds.contains(raceClass.id),
     )) {
       if (raceClass.resultCount <= 0) continue;
-      final args = (eventId: eventId, classId: raceClass.id);
-      final currentLimit = ref.read(raceResultsLimitProvider(args));
+      final useActiveStage = activeStage.supportsClass(raceClass.id);
+      final currentLimit = useActiveStage
+          ? ref.read(
+              stageResultsLimitProvider((
+                eventId: eventId,
+                stageId: activeStage.id,
+                classId: raceClass.id,
+              )),
+            )
+          : ref.read(
+              raceResultsLimitProvider((
+                eventId: eventId,
+                classId: raceClass.id,
+              )),
+            );
       if (currentLimit >= raceClass.resultCount) continue;
-      ref.read(raceResultsLimitProvider(args).notifier).state =
-          raceClass.resultCount;
+      if (useActiveStage) {
+        ref
+                .read(
+                  stageResultsLimitProvider((
+                    eventId: eventId,
+                    stageId: activeStage.id,
+                    classId: raceClass.id,
+                  )).notifier,
+                )
+                .state =
+            raceClass.resultCount;
+      } else {
+        ref
+                .read(
+                  raceResultsLimitProvider((
+                    eventId: eventId,
+                    classId: raceClass.id,
+                  )).notifier,
+                )
+                .state =
+            raceClass.resultCount;
+      }
     }
   }
 
   void _loadMoreClassResults(
     WidgetRef ref,
     ResultClass raceClass,
-    int loadedCount,
-  ) {
-    final args = (eventId: eventId, classId: raceClass.id);
-    final currentLimit = ref.read(raceResultsLimitProvider(args));
+    int loadedCount, {
+    String? stageId,
+  }) {
+    final currentLimit = stageId == null
+        ? ref.read(
+            raceResultsLimitProvider((eventId: eventId, classId: raceClass.id)),
+          )
+        : ref.read(
+            stageResultsLimitProvider((
+              eventId: eventId,
+              stageId: stageId,
+              classId: raceClass.id,
+            )),
+          );
     if (loadedCount < currentLimit) return;
     if (raceClass.resultCount > 0 && loadedCount >= raceClass.resultCount) {
       return;
     }
-    ref.read(raceResultsLimitProvider(args).notifier).state =
-        currentLimit + raceResultsPageSize;
+    if (stageId == null) {
+      ref
+              .read(
+                raceResultsLimitProvider((
+                  eventId: eventId,
+                  classId: raceClass.id,
+                )).notifier,
+              )
+              .state =
+          currentLimit + raceResultsPageSize;
+    } else {
+      ref
+              .read(
+                stageResultsLimitProvider((
+                  eventId: eventId,
+                  stageId: stageId,
+                  classId: raceClass.id,
+                )).notifier,
+              )
+              .state =
+          currentLimit + raceResultsPageSize;
+    }
   }
 
   Future<ResultDistributionData?> _loadFullDistributionData({
     required WidgetRef ref,
     required List<SplitDef> primarySplitDefs,
     required List<String> comparisonClassIds,
+    required int? relayLegNumber,
+    required List<int> relayComparisonLegNumbers,
     required bool isBiathlonSplit,
     required String? activeSplitId,
     required SplitRangeSelection? splitRange,
@@ -1069,23 +1529,46 @@ class _ResultsArea extends ConsumerWidget {
     required String? linkedAthleteId,
     required String? linkedClubName,
     required String? linkedTeamName,
+    required Set<String> favoriteAthleteIds,
   }) async {
     final repository = ref.read(resultsRepositoryProvider);
-    final primaryResults = await repository.fetchResults(
+    final rawPrimaryResults = await repository.fetchStageResults(
       eventId,
+      activeStage.id,
       activeClass.id,
     );
-    final comparisons = await _fetchFullComparisonData(
-      ref,
-      primarySplitDefs,
-      comparisonClassIds,
-    );
+    final primaryResults = relayLegNumber == null
+        ? rawPrimaryResults
+        : relayLegRaceResults(rawPrimaryResults, relayLegNumber);
+    final primaryClass = relayLegNumber == null
+        ? activeClass
+        : _relayLegClass(activeClass, relayLegNumber, primaryResults.length);
+    final comparisons = relayLegNumber == null
+        ? await _fetchFullComparisonData(
+            ref,
+            primarySplitDefs,
+            comparisonClassIds,
+          )
+        : [
+            for (final legNumber in relayComparisonLegNumbers)
+              _ComparisonRows(
+                raceClass: _relayLegClass(
+                  activeClass,
+                  legNumber,
+                  rawPrimaryResults.length,
+                ),
+                sourceClassId: activeClass.id,
+                results: relayLegRaceResults(rawPrimaryResults, legNumber),
+              ),
+          ];
     final tableRows = _buildTableRows(
+      primaryClass: primaryClass,
       primaryResults: primaryResults,
       comparisons: comparisons,
       linkedAthleteId: linkedAthleteId,
       linkedClubName: linkedClubName,
       linkedTeamName: linkedTeamName,
+      favoriteAthleteIds: favoriteAthleteIds,
     );
     if (tableRows.isEmpty) return null;
     if (isBiathlonSplit && !BiathlonTable.hasBiathlonData(tableRows)) {
@@ -1116,17 +1599,29 @@ class _ResultsArea extends ConsumerWidget {
         if (classesById[classId] != null && classId != activeClass.id)
           () async {
             final raceClass = classesById[classId]!;
-            final splitDefs = await ref.read(
-              splitDefsProvider((
-                eventId: eventId,
-                classId: raceClass.id,
-              )).future,
-            );
+            final useActiveStage = activeStage.supportsClass(raceClass.id);
+            final splitDefs = useActiveStage
+                ? await ref.read(
+                    stageSplitDefsProvider((
+                      eventId: eventId,
+                      stageId: activeStage.id,
+                      classId: raceClass.id,
+                    )).future,
+                  )
+                : await ref.read(
+                    splitDefsProvider((
+                      eventId: eventId,
+                      classId: raceClass.id,
+                    )).future,
+                  );
             if (_splitSignature(splitDefs) != primarySignature) return null;
-            final results = await repository.fetchResults(
-              eventId,
-              raceClass.id,
-            );
+            final results = useActiveStage
+                ? await repository.fetchStageResults(
+                    eventId,
+                    activeStage.id,
+                    raceClass.id,
+                  )
+                : await repository.fetchResults(eventId, raceClass.id);
             return _ComparisonRows(raceClass: raceClass, results: results);
           }(),
     ];
@@ -1150,9 +1645,18 @@ class _ResultsArea extends ConsumerWidget {
       if (raceClass == null) continue;
       if (raceClass.id == activeClass.id) continue;
 
-      final splitDefs = ref.watch(
-        splitDefsProvider((eventId: eventId, classId: raceClass.id)),
-      );
+      final useActiveStage = activeStage.supportsClass(raceClass.id);
+      final splitDefs = useActiveStage
+          ? ref.watch(
+              stageSplitDefsProvider((
+                eventId: eventId,
+                stageId: activeStage.id,
+                classId: raceClass.id,
+              )),
+            )
+          : ref.watch(
+              splitDefsProvider((eventId: eventId, classId: raceClass.id)),
+            );
       final splitDefData = splitDefs.value;
       if (splitDefs.isLoading && splitDefData == null) {
         return const _ComparisonRead.loading();
@@ -1166,9 +1670,17 @@ class _ResultsArea extends ConsumerWidget {
         continue;
       }
 
-      final results = ref.watch(
-        raceResultsProvider((eventId: eventId, classId: raceClass.id)),
-      );
+      final results = useActiveStage
+          ? ref.watch(
+              stageResultsProvider((
+                eventId: eventId,
+                stageId: activeStage.id,
+                classId: raceClass.id,
+              )),
+            )
+          : ref.watch(
+              raceResultsProvider((eventId: eventId, classId: raceClass.id)),
+            );
       final resultData = results.value;
       if (results.isLoading && resultData == null) {
         return const _ComparisonRead.loading();
@@ -1186,19 +1698,22 @@ class _ResultsArea extends ConsumerWidget {
   }
 
   List<ResultTableRow> _buildTableRows({
+    required ResultClass primaryClass,
     required List<RaceResult> primaryResults,
     required List<_ComparisonRows> comparisons,
     String? linkedAthleteId,
     String? linkedClubName,
     String? linkedTeamName,
+    Set<String> favoriteAthleteIds = const <String>{},
   }) {
     final hasComparison = comparisons.isNotEmpty;
     final rows = [
       for (final result in primaryResults)
         ResultTableRow(
           result: result,
-          classId: activeClass.id,
-          className: activeClass.name,
+          classId: primaryClass.id,
+          sourceClassId: activeClass.id,
+          className: primaryClass.name,
           color: hasComparison ? _classColor(0) : null,
           originalPlacementLabel: '',
           highlight: resultHighlightFor(
@@ -1206,7 +1721,9 @@ class _ResultsArea extends ConsumerWidget {
             linkedAthleteId: linkedAthleteId,
             linkedClubName: linkedClubName,
             linkedTeamName: linkedTeamName,
+            favoriteAthleteIds: favoriteAthleteIds,
           ),
+          isCurrentAthlete: _isCurrentAthlete(result, linkedAthleteId),
         ),
     ];
 
@@ -1217,6 +1734,7 @@ class _ResultsArea extends ConsumerWidget {
           ResultTableRow(
             result: result,
             classId: comparison.raceClass.id,
+            sourceClassId: comparison.sourceClassId,
             className: comparison.raceClass.name,
             color: _classColor(i + 1),
             originalPlacementLabel: '',
@@ -1225,7 +1743,9 @@ class _ResultsArea extends ConsumerWidget {
               linkedAthleteId: linkedAthleteId,
               linkedClubName: linkedClubName,
               linkedTeamName: linkedTeamName,
+              favoriteAthleteIds: favoriteAthleteIds,
             ),
+            isCurrentAthlete: _isCurrentAthlete(result, linkedAthleteId),
           ),
         );
       }
@@ -1266,7 +1786,7 @@ class _ResultsArea extends ConsumerWidget {
         final calculatedRank = previousTime != null && time == previousTime
             ? previousRank!
             : i + 1;
-        final storedRank = row.result.finishRank;
+        final storedRank = row.result.relayOverallRank ?? row.result.finishRank;
         labels[_rowKey(row)] = storedRank != null && storedRank > 0
             ? '$storedRank'
             : '$calculatedRank';
@@ -1293,6 +1813,15 @@ class _ResultsArea extends ConsumerWidget {
 
 String _rowKey(ResultTableRow row) => '${row.classId}/${row.result.id}';
 
+bool _isCurrentAthlete(RaceResult result, String? linkedAthleteId) {
+  final athleteId = result.athleteId?.trim();
+  final currentAthleteId = linkedAthleteId?.trim();
+  return athleteId != null &&
+      athleteId.isNotEmpty &&
+      currentAthleteId != null &&
+      athleteId == currentAthleteId;
+}
+
 class _DistributionMetric {
   const _DistributionMetric({
     required this.key,
@@ -1308,20 +1837,33 @@ class _DistributionMetric {
 }
 
 class _CompareSelection {
-  const _CompareSelection({required this.classId, required this.resultId});
+  const _CompareSelection({
+    required this.classId,
+    required this.resultId,
+    this.relayLegNumber,
+  });
 
-  static _CompareSelection? tryParse({String? classId, String? resultId}) {
+  static _CompareSelection? tryParse({
+    String? classId,
+    String? resultId,
+    int? relayLegNumber,
+  }) {
     if (classId == null ||
         classId.trim().isEmpty ||
         resultId == null ||
         resultId.trim().isEmpty) {
       return null;
     }
-    return _CompareSelection(classId: classId, resultId: resultId);
+    return _CompareSelection(
+      classId: classId,
+      resultId: resultId,
+      relayLegNumber: relayLegNumber,
+    );
   }
 
   final String classId;
   final String resultId;
+  final int? relayLegNumber;
 }
 
 class _CompareSelectionBanner extends StatelessWidget {
@@ -1368,10 +1910,15 @@ class _CompareSelectionBanner extends StatelessWidget {
 }
 
 class _ComparisonRows {
-  const _ComparisonRows({required this.raceClass, required this.results});
+  const _ComparisonRows({
+    required this.raceClass,
+    required this.results,
+    this.sourceClassId,
+  });
 
   final ResultClass raceClass;
   final List<RaceResult> results;
+  final String? sourceClassId;
 }
 
 class _ComparisonRead {
@@ -1411,6 +1958,19 @@ Color _classColor(int index) {
     Color(0xFF7EE081),
   ];
   return colors[index % colors.length];
+}
+
+ResultClass _relayLegClass(ResultClass source, int legNumber, int resultCount) {
+  return ResultClass(
+    id: '${source.id}::relay-leg-$legNumber',
+    name: 'Etappe $legNumber',
+    resultCount: resultCount,
+    participantCount: resultCount,
+    etappeUid: source.etappeUid,
+    etappeName: source.etappeName,
+    etappeKm: source.etappeKm,
+    primaryStageId: source.primaryStageId,
+  );
 }
 
 class _ClassSidebar extends ConsumerWidget {
@@ -1616,11 +2176,44 @@ class _ClassTile extends ConsumerWidget {
   }
 }
 
+class _CompetitionStageSelector extends StatelessWidget {
+  const _CompetitionStageSelector({
+    required this.stages,
+    required this.selectedStageId,
+    required this.onChanged,
+  });
+
+  final List<CompetitionStage> stages;
+  final String selectedStageId;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      initialValue: selectedStageId,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Konkurranseledd'),
+      items: [
+        for (final stage in stages)
+          DropdownMenuItem(value: stage.id, child: Text(stage.name)),
+      ],
+      onChanged: (value) {
+        if (value != null) onChanged(value);
+      },
+    );
+  }
+}
+
 class _ResultTitle extends StatelessWidget {
-  const _ResultTitle({required this.event, required this.raceClass});
+  const _ResultTitle({
+    required this.event,
+    required this.raceClass,
+    required this.stage,
+  });
 
   final ResultEvent? event;
   final ResultClass raceClass;
+  final CompetitionStage stage;
 
   @override
   Widget build(BuildContext context) {
@@ -1640,7 +2233,10 @@ class _ResultTitle extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          event?.name ?? '',
+          [
+            event?.name,
+            stage.name,
+          ].whereType<String>().where((value) => value.isNotEmpty).join(' · '),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -1693,6 +2289,8 @@ class _SplitAndInfoRow extends StatelessWidget {
     required this.onRangeToggle,
     required this.onRangeFromChanged,
     required this.onRangeToChanged,
+    required this.onIndependentChanged,
+    required this.onIncludedSplitsChanged,
   });
 
   final ResultEvent? event;
@@ -1709,6 +2307,8 @@ class _SplitAndInfoRow extends StatelessWidget {
   final VoidCallback onRangeToggle;
   final ValueChanged<String?> onRangeFromChanged;
   final ValueChanged<String?> onRangeToChanged;
+  final ValueChanged<bool> onIndependentChanged;
+  final ValueChanged<List<String>> onIncludedSplitsChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1730,6 +2330,8 @@ class _SplitAndInfoRow extends StatelessWidget {
           onRangeToggle: onRangeToggle,
           onRangeFromChanged: onRangeFromChanged,
           onRangeToChanged: onRangeToChanged,
+          onIndependentChanged: onIndependentChanged,
+          onIncludedSplitsChanged: onIncludedSplitsChanged,
         );
         final distributionButton = ResultDistributionButton(
           data: distributionData,

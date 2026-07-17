@@ -1,11 +1,40 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../domain/race_result.dart';
+import '../domain/competition_stage.dart';
 import '../domain/result_class.dart';
 import '../domain/split_def.dart';
 
 abstract class ResultsRepository {
   Stream<List<ResultClass>> watchClasses(String eventId);
+
+  Stream<List<CompetitionStage>> watchStages(String eventId);
+
+  Stream<List<SplitDef>> watchStageSplitDefs(
+    String eventId,
+    String stageId,
+    String classId,
+  );
+
+  Stream<List<RaceResult>> watchStageResults(
+    String eventId,
+    String stageId,
+    String classId, {
+    int limit = initialResultsLimit,
+  });
+
+  Future<List<RaceResult>> fetchStageResults(
+    String eventId,
+    String stageId,
+    String classId,
+  );
+
+  Stream<RaceResult?> watchStageResult(
+    String eventId,
+    String stageId,
+    String classId,
+    String resultId,
+  );
 
   Stream<List<SplitDef>> watchSplitDefs(String eventId, String classId);
 
@@ -49,10 +78,40 @@ class FirestoreResultsRepository implements ResultsRepository {
   }
 
   @override
+  Stream<List<CompetitionStage>> watchStages(String eventId) {
+    return _eventDoc(eventId).collection('stages').snapshots().map((snapshot) {
+      final stages = snapshot.docs
+          .map((doc) => CompetitionStage.fromMap(doc.id, doc.data()))
+          .toList();
+      stages.sort((a, b) {
+        if (a.order != b.order) return a.order - b.order;
+        final level = (a.level ?? 10000) - (b.level ?? 10000);
+        if (level != 0) return level;
+        return a.name.compareTo(b.name);
+      });
+      return stages;
+    });
+  }
+
+  @override
   Stream<List<SplitDef>> watchSplitDefs(String eventId, String classId) {
-    return _classDoc(eventId, classId).collection('splitDefs').snapshots().map((
-      snapshot,
-    ) {
+    return _watchPrimaryStageId(eventId, classId).asyncExpand((stageId) {
+      if (stageId == null) return Stream.value(const <SplitDef>[]);
+      return watchStageSplitDefs(eventId, stageId, classId);
+    });
+  }
+
+  @override
+  Stream<List<SplitDef>> watchStageSplitDefs(
+    String eventId,
+    String stageId,
+    String classId,
+  ) {
+    return _stageClassDoc(
+      eventId,
+      stageId,
+      classId,
+    ).collection('splitDefs').snapshots().map((snapshot) {
       final splits = snapshot.docs
           .map((doc) => SplitDef.fromMap(doc.id, doc.data()))
           .toList();
@@ -67,7 +126,22 @@ class FirestoreResultsRepository implements ResultsRepository {
     String classId, {
     int limit = initialResultsLimit,
   }) {
-    return _resultsQuery(eventId, classId).snapshots().map((snapshot) {
+    return _watchPrimaryStageId(eventId, classId).asyncExpand((stageId) {
+      if (stageId == null) return Stream.value(const <RaceResult>[]);
+      return watchStageResults(eventId, stageId, classId, limit: limit);
+    });
+  }
+
+  @override
+  Stream<List<RaceResult>> watchStageResults(
+    String eventId,
+    String stageId,
+    String classId, {
+    int limit = initialResultsLimit,
+  }) {
+    return _stageResultsQuery(eventId, stageId, classId).snapshots().map((
+      snapshot,
+    ) {
       final results = _resultsFromSnapshot(snapshot);
       return results.length <= limit ? results : results.take(limit).toList();
     });
@@ -75,8 +149,38 @@ class FirestoreResultsRepository implements ResultsRepository {
 
   @override
   Future<List<RaceResult>> fetchResults(String eventId, String classId) async {
-    final snapshot = await _resultsQuery(eventId, classId).get();
+    final classSnapshot = await _classDoc(eventId, classId).get();
+    final stageId = _primaryStageId(classSnapshot.data());
+    if (stageId == null) return const [];
+    return fetchStageResults(eventId, stageId, classId);
+  }
+
+  @override
+  Future<List<RaceResult>> fetchStageResults(
+    String eventId,
+    String stageId,
+    String classId,
+  ) async {
+    final snapshot = await _stageResultsQuery(eventId, stageId, classId).get();
     return _resultsFromSnapshot(snapshot);
+  }
+
+  @override
+  Stream<RaceResult?> watchStageResult(
+    String eventId,
+    String stageId,
+    String classId,
+    String resultId,
+  ) {
+    return _stageClassDoc(
+      eventId,
+      stageId,
+      classId,
+    ).collection('results').doc(resultId).snapshots().map((snapshot) {
+      final data = snapshot.data();
+      if (data == null) return null;
+      return RaceResult.fromMap(snapshot.id, data);
+    });
   }
 
   @override
@@ -85,13 +189,9 @@ class FirestoreResultsRepository implements ResultsRepository {
     String classId,
     String resultId,
   ) {
-    return _classDoc(
-      eventId,
-      classId,
-    ).collection('results').doc(resultId).snapshots().map((snapshot) {
-      final data = snapshot.data();
-      if (data == null) return null;
-      return RaceResult.fromMap(snapshot.id, data);
+    return _watchPrimaryStageId(eventId, classId).asyncExpand((stageId) {
+      if (stageId == null) return Stream.value(null);
+      return watchStageResult(eventId, stageId, classId, resultId);
     });
   }
 
@@ -106,9 +206,37 @@ class FirestoreResultsRepository implements ResultsRepository {
     return _eventDoc(eventId).collection('classes').doc(classId);
   }
 
-  Query<Map<String, dynamic>> _resultsQuery(String eventId, String classId) {
-    return _classDoc(eventId, classId).collection('results');
+  DocumentReference<Map<String, dynamic>> _stageClassDoc(
+    String eventId,
+    String stageId,
+    String classId,
+  ) {
+    return _eventDoc(
+      eventId,
+    ).collection('stages').doc(stageId).collection('classes').doc(classId);
   }
+
+  Stream<String?> _watchPrimaryStageId(String eventId, String classId) {
+    return _classDoc(
+      eventId,
+      classId,
+    ).snapshots().map((snapshot) => _primaryStageId(snapshot.data()));
+  }
+
+  Query<Map<String, dynamic>> _stageResultsQuery(
+    String eventId,
+    String stageId,
+    String classId,
+  ) {
+    return _stageClassDoc(eventId, stageId, classId).collection('results');
+  }
+}
+
+String? _primaryStageId(Map<String, dynamic>? data) {
+  final value = data?['primaryStageId'];
+  if (value == null) return null;
+  final text = value.toString().trim();
+  return text.isEmpty ? null : text;
 }
 
 List<RaceResult> _resultsFromSnapshot(

@@ -76,6 +76,7 @@ class AthleteRace {
     required this.eventId,
     required this.classId,
     required this.resultId,
+    this.stageId,
     required this.athleteId,
     required this.name,
     required this.className,
@@ -87,11 +88,16 @@ class AthleteRace {
     required this.totalText,
     required this.shooting,
     required this.status,
+    this.participantCount = 0,
+    this.totalMs,
+    this.isRelay = false,
+    this.splits = const [],
   });
 
   final String eventId;
   final String classId;
   final String resultId;
+  final String? stageId;
   final String athleteId;
   final String name;
   final String className;
@@ -103,8 +109,12 @@ class AthleteRace {
   final String totalText;
   final String shooting;
   final String status;
+  final int participantCount;
+  final int? totalMs;
+  final bool isRelay;
+  final List<AthleteRaceSplit> splits;
 
-  String get key => '$eventId/$classId';
+  String get key => '$eventId/$classId/${stageId ?? ''}';
 
   String get placementLabel {
     if (finishRank != null && finishRank! > 0) return finishRank.toString();
@@ -112,6 +122,24 @@ class AthleteRace {
     final statusText = status.trim();
     return statusText.isEmpty ? '-' : statusText;
   }
+}
+
+class AthleteRaceSplit {
+  const AthleteRaceSplit({
+    required this.id,
+    required this.label,
+    required this.sort,
+    required this.cumRank,
+    required this.cumMs,
+    this.participantCount,
+  });
+
+  final String id;
+  final String label;
+  final int sort;
+  final int? cumRank;
+  final int? cumMs;
+  final int? participantCount;
 }
 
 class AthleteAffiliations {

@@ -15,7 +15,29 @@ import '../../results/presentation/result_locations.dart';
 import '../../settings/presentation/settings_menu.dart';
 import 'athlete_head_to_head_panel.dart';
 import 'athlete_splits_panel.dart';
+import 'athlete_stage_results_panel.dart';
 import 'athlete_summary_panel.dart';
+import 'result_detail_extensions.dart';
+
+typedef _RelayRankResultsRequest = ({
+  String eventId,
+  String classId,
+  String? stageId,
+});
+
+final _relayRankResultsProvider = FutureProvider.autoDispose
+    .family<List<RaceResult>, _RelayRankResultsRequest>((ref, request) {
+      final repository = ref.watch(resultsRepositoryProvider);
+      final stageId = request.stageId;
+      if (stageId == null) {
+        return repository.fetchResults(request.eventId, request.classId);
+      }
+      return repository.fetchStageResults(
+        request.eventId,
+        stageId,
+        request.classId,
+      );
+    });
 
 class AthleteDetailPage extends ConsumerStatefulWidget {
   const AthleteDetailPage({
@@ -23,15 +45,21 @@ class AthleteDetailPage extends ConsumerStatefulWidget {
     required this.eventId,
     required this.classId,
     required this.resultId,
+    this.stageId,
     this.selectedSplitId,
+    this.relayLegNumber,
     this.compareWithResultId,
+    this.compareWithRelayLegNumber,
   });
 
   final String eventId;
   final String classId;
   final String resultId;
+  final String? stageId;
   final String? selectedSplitId;
+  final int? relayLegNumber;
   final String? compareWithResultId;
+  final int? compareWithRelayLegNumber;
 
   @override
   ConsumerState<AthleteDetailPage> createState() => _AthleteDetailPageState();
@@ -39,23 +67,55 @@ class AthleteDetailPage extends ConsumerStatefulWidget {
 
 class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
   HeadToHeadDisplayMode _comparisonMode = HeadToHeadDisplayMode.time;
+  bool _isUpdatingFavorite = false;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final result = ref.watch(
-      raceResultProvider((
-        eventId: widget.eventId,
-        classId: widget.classId,
-        resultId: widget.resultId,
-      )),
-    );
-    final classResults = ref.watch(
-      raceResultsProvider((eventId: widget.eventId, classId: widget.classId)),
-    );
-    final splitDefs = ref.watch(
-      splitDefsProvider((eventId: widget.eventId, classId: widget.classId)),
-    );
+    final result = widget.stageId == null
+        ? ref.watch(
+            raceResultProvider((
+              eventId: widget.eventId,
+              classId: widget.classId,
+              resultId: widget.resultId,
+            )),
+          )
+        : ref.watch(
+            stageResultProvider((
+              eventId: widget.eventId,
+              stageId: widget.stageId!,
+              classId: widget.classId,
+              resultId: widget.resultId,
+            )),
+          );
+    final classResults = widget.stageId == null
+        ? ref.watch(
+            raceResultsProvider((
+              eventId: widget.eventId,
+              classId: widget.classId,
+            )),
+          )
+        : ref.watch(
+            stageResultsProvider((
+              eventId: widget.eventId,
+              stageId: widget.stageId!,
+              classId: widget.classId,
+            )),
+          );
+    final splitDefs = widget.stageId == null
+        ? ref.watch(
+            splitDefsProvider((
+              eventId: widget.eventId,
+              classId: widget.classId,
+            )),
+          )
+        : ref.watch(
+            stageSplitDefsProvider((
+              eventId: widget.eventId,
+              stageId: widget.stageId!,
+              classId: widget.classId,
+            )),
+          );
 
     return AppShell(
       title: l10n.athleteDetails,
@@ -66,6 +126,8 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
           resultsLocation(
             eventId: widget.eventId,
             classId: widget.classId,
+            stageId: widget.stageId,
+            relayLegNumber: widget.relayLegNumber,
             splitId: widget.selectedSplitId,
           ),
         ),
@@ -78,8 +140,8 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         error: (error, _) => ShellPanel(
           child: ErrorState(title: l10n.couldNotReadResults, error: error),
         ),
-        data: (result) {
-          if (result == null) {
+        data: (rawResult) {
+          if (rawResult == null) {
             return ShellPanel(
               child: EmptyState(
                 title: l10n.noResultsTitle,
@@ -98,14 +160,72 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
               ),
             );
           }
-          final placementLabel = _placementLabel(
-            result,
-            classResults.asData?.value,
+          final rawClassResults = classResults.asData?.value;
+          final result = widget.relayLegNumber == null
+              ? rawResult
+              : relayLegRaceResult(rawResult, widget.relayLegNumber!);
+          if (result == null) {
+            return const ShellPanel(
+              child: EmptyState(
+                title: 'Etappen mangler',
+                message:
+                    'Fant ingen passeringer eller utøver for denne etappen.',
+              ),
+            );
+          }
+          final displayedClassResults =
+              widget.relayLegNumber == null || rawClassResults == null
+              ? rawClassResults
+              : relayLegRaceResults(rawClassResults, widget.relayLegNumber!);
+          final isRelayTeamDetail =
+              widget.relayLegNumber == null &&
+              (rawResult.entrant?.kind == ResultEntrantKind.team ||
+                  rawResult.relayMembers.isNotEmpty);
+          final relayRankResults = isRelayTeamDetail
+              ? ref
+                    .watch(
+                      _relayRankResultsProvider((
+                        eventId: widget.eventId,
+                        classId: widget.classId,
+                        stageId: widget.stageId,
+                      )),
+                    )
+                    .asData
+                    ?.value
+              : null;
+          final extensionClassResults = isRelayTeamDetail
+              ? relayRankResults ?? const <RaceResult>[]
+              : displayedClassResults ?? const <RaceResult>[];
+          final detailSplitDefs = widget.relayLegNumber == null
+              ? splitDefs.asData?.value ?? const <SplitDef>[]
+              : relayLegSplitDefs(
+                  splitDefs.asData?.value ?? const <SplitDef>[],
+                  widget.relayLegNumber!,
+                  displayedClassResults ?? [result],
+                );
+          final placementLabel = _placementLabel(result, displayedClassResults);
+          final publicSplitIds = _publicSplitIds(detailSplitDefs, result);
+          final stageResultsRequest = (
+            eventId: widget.eventId,
+            classId: widget.classId,
+            athleteId: result.athleteId,
+            athleteName: result.name,
           );
-          final publicSplitIds = _publicSplitIds(
-            splitDefs.asData?.value,
-            result,
-          );
+          final canShowStageResults =
+              result.relayLegNumber != null ||
+              result.entrant?.kind != ResultEntrantKind.team;
+          final athleteStageResults = canShowStageResults
+              ? ref.watch(athleteStageResultsProvider(stageResultsRequest))
+              : null;
+          final user = ref.watch(authStateProvider).asData?.value;
+          final favoriteAthleteIds =
+              ref.watch(favoriteAthleteIdsProvider).asData?.value ??
+              const <String>{};
+          final athleteId = result.athleteId?.trim();
+          final isFavorite =
+              athleteId != null &&
+              athleteId.isNotEmpty &&
+              favoriteAthleteIds.contains(athleteId);
           return LayoutBuilder(
             builder: (context, constraints) {
               final summary = AthleteSummaryPanel(
@@ -113,13 +233,37 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
                 placementLabel: placementLabel,
                 isComparing: widget.compareWithResultId != null,
                 onComparePressed: _chooseComparisonOpponent,
+                isFavorite: isFavorite,
+                isFavoriteUpdating: _isUpdatingFavorite,
+                onFavoritePressed:
+                    user != null && athleteId != null && athleteId.isNotEmpty
+                    ? () => _setFavorite(
+                        uid: user.uid,
+                        athleteId: athleteId,
+                        athleteName: result.name,
+                        isFavorite: !isFavorite,
+                      )
+                    : null,
               );
               if (widget.compareWithResultId != null) {
-                final details = _headToHeadPanel(
+                final headToHead = _headToHeadPanel(
                   result: result,
                   classResults: classResults,
+                  displayedClassResults: displayedClassResults,
                   publicSplitIds: publicSplitIds,
                 );
+                final details = result.relayLegNumber == null
+                    ? headToHead
+                    : Column(
+                        children: [
+                          ResultDetailExtensions(
+                            result: result,
+                            classResults: extensionClassResults,
+                            onSplitSelected: _openResultsSplit,
+                          ),
+                          Expanded(child: headToHead),
+                        ],
+                      );
                 if (constraints.maxWidth < 760) {
                   return Column(
                     children: [
@@ -139,13 +283,44 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
                 );
               }
 
-              final details = AthleteSplitsPanel(
+              final splits = AthleteSplitsPanel(
                 result: result,
-                classResults:
-                    classResults.asData?.value ?? const <RaceResult>[],
+                classResults: displayedClassResults ?? const <RaceResult>[],
                 publicSplitIds: publicSplitIds,
-                splitDefs: splitDefs.asData?.value ?? const <SplitDef>[],
+                splitDefs: detailSplitDefs,
                 onSplitSelected: _openResultsSplit,
+              );
+              final details = Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ResultDetailExtensions(
+                    result: result,
+                    classResults: extensionClassResults,
+                    onSplitSelected: _openResultsSplit,
+                  ),
+                  if (athleteStageResults != null) ...[
+                    AthleteStageResultsSection(
+                      athleteName: result.name,
+                      stageResults: athleteStageResults,
+                      onStageSelected: (stageResult) {
+                        context.go(
+                          athleteLocation(
+                            eventId: widget.eventId,
+                            classId: widget.classId,
+                            resultId: stageResult.athleteResult.detailResultId,
+                            stageId: stageResult.stage.id,
+                            relayLegNumber: stageResult.relayLegNumber,
+                          ),
+                        );
+                      },
+                      onRetry: () => ref.invalidate(
+                        athleteStageResultsProvider(stageResultsRequest),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  splits,
+                ],
               );
               final content = constraints.maxWidth < 760
                   ? Column(
@@ -168,9 +343,40 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
     );
   }
 
+  Future<void> _setFavorite({
+    required String uid,
+    required String athleteId,
+    required String athleteName,
+    required bool isFavorite,
+  }) async {
+    if (_isUpdatingFavorite) return;
+    setState(() => _isUpdatingFavorite = true);
+    try {
+      await ref
+          .read(favoriteAthletesRepositoryProvider)
+          .setFavorite(
+            uid: uid,
+            athleteId: athleteId,
+            athleteName: athleteName,
+            isFavorite: isFavorite,
+          );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Kunne ikke oppdatere stjernemerkingen: $error'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdatingFavorite = false);
+    }
+  }
+
   Widget _headToHeadPanel({
     required RaceResult result,
     required AsyncValue<List<RaceResult>> classResults,
+    required List<RaceResult>? displayedClassResults,
     required Set<String> publicSplitIds,
   }) {
     if (classResults.isLoading && classResults.asData?.value == null) {
@@ -184,13 +390,30 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         ),
       );
     }
-    final results = classResults.asData?.value ?? const <RaceResult>[];
-    final selectedResultId = widget.compareWithResultId;
+    final baseResults = displayedClassResults ?? const <RaceResult>[];
+    final rawResults = classResults.asData?.value ?? const <RaceResult>[];
+    final opponentLegNumber = widget.compareWithRelayLegNumber;
+    final results =
+        opponentLegNumber == null || opponentLegNumber == widget.relayLegNumber
+        ? baseResults
+        : _mergeResults(
+            baseResults,
+            relayLegRaceResults(rawResults, opponentLegNumber),
+          );
+    final selectedResultId = widget.compareWithResultId == null
+        ? null
+        : opponentLegNumber == null
+        ? widget.compareWithResultId
+        : relayLegViewResultId(widget.compareWithResultId!, opponentLegNumber);
+    final comparisonSplitIds =
+        opponentLegNumber != null && opponentLegNumber != widget.relayLegNumber
+        ? <String>{relayLegFinishSplitId}
+        : publicSplitIds;
 
     return AthleteHeadToHeadPanel(
       baseResult: result,
       results: results,
-      publicSplitIds: publicSplitIds,
+      publicSplitIds: comparisonSplitIds,
       selectedResultId: selectedResultId,
       opponentPlacementLabel: _opponentPlacementLabel(
         selectedResultId,
@@ -218,9 +441,12 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
       resultsLocation(
         eventId: widget.eventId,
         classId: widget.classId,
+        stageId: widget.stageId,
+        relayLegNumber: widget.relayLegNumber,
         splitId: widget.selectedSplitId,
         compareBaseClassId: widget.classId,
         compareBaseResultId: widget.resultId,
+        compareBaseRelayLegNumber: widget.relayLegNumber,
       ),
     );
   }
@@ -231,6 +457,8 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         eventId: widget.eventId,
         classId: widget.classId,
         resultId: widget.resultId,
+        stageId: widget.stageId,
+        relayLegNumber: widget.relayLegNumber,
         splitId: widget.selectedSplitId,
       ),
     );
@@ -246,10 +474,23 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
       resultsLocation(
         eventId: widget.eventId,
         classId: widget.classId,
+        stageId: widget.stageId,
+        relayLegNumber: widget.relayLegNumber,
         splitId: splitId,
       ),
     );
   }
+}
+
+List<RaceResult> _mergeResults(
+  Iterable<RaceResult> first,
+  Iterable<RaceResult> second,
+) {
+  final byId = <String, RaceResult>{};
+  for (final result in [...first, ...second]) {
+    byId[result.id] = result;
+  }
+  return byId.values.toList(growable: false);
 }
 
 String? _opponentPlacementLabel(String? opponentId, List<RaceResult>? results) {
@@ -272,7 +513,8 @@ Set<String> _publicSplitIds(List<SplitDef>? splitDefs, RaceResult result) {
 String _placementLabel(RaceResult result, List<RaceResult>? classResults) {
   if (!result.isFinished) {
     final status = result.status.trim();
-    return status.isEmpty ? 'DNF' : status;
+    final placement = status.isEmpty ? 'DNF' : status;
+    return _withRelayOverallRank(result, placement);
   }
   if (result.finishRank != null && result.finishRank! > 0) {
     return result.finishRank.toString();
@@ -280,7 +522,7 @@ String _placementLabel(RaceResult result, List<RaceResult>? classResults) {
 
   final results = classResults;
   if (results == null || result.totalMs == null) {
-    return result.placementLabel;
+    return _withRelayOverallRank(result, result.placementLabel);
   }
 
   final finished =
@@ -301,10 +543,18 @@ String _placementLabel(RaceResult result, List<RaceResult>? classResults) {
     final rank = previousTime != null && time == previousTime
         ? previousRank!
         : i + 1;
-    if (current.id == result.id) return '$rank';
+    if (current.id == result.id) {
+      return _withRelayOverallRank(result, '$rank');
+    }
     previousTime = time;
     previousRank = rank;
   }
 
-  return result.placementLabel;
+  return _withRelayOverallRank(result, result.placementLabel);
+}
+
+String _withRelayOverallRank(RaceResult result, String placement) {
+  final overallRank = result.relayOverallRank;
+  if (overallRank == null || overallRank <= 0) return placement;
+  return '$placement($overallRank)';
 }

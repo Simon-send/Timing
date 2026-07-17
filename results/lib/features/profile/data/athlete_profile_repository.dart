@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/firebase/firestore_mappers.dart';
+import '../../results/domain/race_result.dart';
 import '../domain/athlete_profile.dart';
 
 abstract class AthleteProfileRepository {
@@ -103,11 +104,55 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
         .collectionGroup('results')
         .where('athleteId', isEqualTo: athleteId)
         .snapshots()
-        .map((snapshot) {
-          final races = snapshot.docs.map(_athleteRaceFromDoc).toList()
-            ..sort(_compareRacesDesc);
+        .asyncMap((snapshot) async {
+          final participantCounts = await _participantCountsFor(snapshot.docs);
+          final races =
+              snapshot.docs
+                  .map(
+                    (doc) => _athleteRaceFromDoc(
+                      doc,
+                      participantCount:
+                          participantCounts[doc
+                              .reference
+                              .parent
+                              .parent
+                              ?.path] ??
+                          0,
+                    ),
+                  )
+                  .toList()
+                ..sort(_compareRacesDesc);
           return races;
         });
+  }
+
+  Future<Map<String, int>> _participantCountsFor(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> resultDocs,
+  ) async {
+    final classDocs = <String, DocumentReference<Map<String, dynamic>>>{};
+    for (final resultDoc in resultDocs) {
+      final classDoc = resultDoc.reference.parent.parent;
+      if (classDoc != null) classDocs[classDoc.path] = classDoc;
+    }
+
+    final entries = await Future.wait(
+      classDocs.entries.map((entry) async {
+        try {
+          final data = (await entry.value.get()).data();
+          final participants = asInt(data?['participantCount']) ?? 0;
+          final results = asInt(data?['resultCount']) ?? 0;
+          return MapEntry(
+            entry.key,
+            participants > results ? participants : results,
+          );
+        } on FirebaseException {
+          // Class metadata is supplementary. Keep the race list available if
+          // an older database rule does not expose the parent class document.
+          return MapEntry(entry.key, 0);
+        }
+      }),
+    );
+    return Map.fromEntries(entries);
   }
 
   @override
@@ -171,9 +216,11 @@ bool _isRecoverableProfileReadError(FirebaseException error) {
 }
 
 AthleteRace _athleteRaceFromDoc(
-  QueryDocumentSnapshot<Map<String, dynamic>> doc,
-) {
+  QueryDocumentSnapshot<Map<String, dynamic>> doc, {
+  required int participantCount,
+}) {
   final data = doc.data();
+  final parsedResult = RaceResult.fromMap(doc.id, data);
   final classDoc = doc.reference.parent.parent;
   final eventDoc = classDoc?.parent.parent;
   final eventId = asNonEmptyString(data['eventId']) ?? eventDoc?.id ?? '';
@@ -183,6 +230,7 @@ AthleteRace _athleteRaceFromDoc(
     eventId: eventId,
     classId: classId,
     resultId: doc.id,
+    stageId: asNonEmptyString(data['stageId']),
     athleteId: asNonEmptyString(data['athleteId']) ?? '',
     name: asNonEmptyString(data['name']) ?? '',
     className: asNonEmptyString(data['className']) ?? '',
@@ -213,6 +261,30 @@ AthleteRace _athleteRaceFromDoc(
         asNonEmptyString(data['status']) ??
         asNonEmptyString(data['StatusTekst']) ??
         '',
+    participantCount: participantCount,
+    totalMs: parsedResult.totalMs,
+    isRelay:
+        asBool(data['isRelay']) ??
+        (asNonEmptyString(asStringMap(data['entrant'])['kind']) == 'team'),
+    splits:
+        parsedResult.splitValues.values
+            .map(
+              (split) => AthleteRaceSplit(
+                id: split.id,
+                label: split.label,
+                sort: split.sort,
+                cumRank: split.cumRank,
+                cumMs: split.cumMs,
+                participantCount: split.cumRankCount,
+              ),
+            )
+            .toList()
+          ..sort((a, b) {
+            if (a.sort != b.sort) return a.sort - b.sort;
+            final aMs = a.cumMs ?? 1 << 62;
+            final bMs = b.cumMs ?? 1 << 62;
+            return aMs.compareTo(bMs);
+          }),
   );
 }
 

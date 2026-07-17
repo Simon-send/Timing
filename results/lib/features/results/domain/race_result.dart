@@ -2,6 +2,8 @@ import '../../../core/firebase/firestore_mappers.dart';
 import '../../../core/formatting/time_formatters.dart';
 import 'split_def.dart';
 
+const relayLegFinishSplitId = '__relay_leg_finish__';
+
 class SplitValue {
   const SplitValue({
     required this.id,
@@ -9,6 +11,7 @@ class SplitValue {
     required this.sort,
     required this.cumRank,
     required this.legRank,
+    this.cumRankCount,
     required this.cumMs,
     required this.legMs,
     required this.cumText,
@@ -16,6 +19,9 @@ class SplitValue {
     required this.status,
     required this.addition,
     required this.additionParts,
+    this.kind = '',
+    this.legNumber,
+    this.roundNumber,
   });
 
   factory SplitValue.fromMap(String fallbackId, Map<String, dynamic> data) {
@@ -39,6 +45,8 @@ class SplitValue {
           asInt(data['placement']) ??
           asInt(data['Plassering']),
       legRank: asInt(data['legRank']),
+      cumRankCount:
+          asInt(data['cumRankCount']) ?? asInt(data['cumParticipantCount']),
       cumMs: asInt(data['cumMs']) ?? asInt(data['cumulativeMs']),
       legMs: asInt(data['legMs']) ?? asInt(data['splitMs']),
       cumText:
@@ -58,6 +66,9 @@ class SplitValue {
           asNonEmptyString(data['Tillegg']) ??
           '',
       additionParts: _asIntList(data['additionParts']),
+      kind: asNonEmptyString(data['kind']) ?? '',
+      legNumber: asInt(data['legNumber']) ?? asInt(data['etappeNumber']),
+      roundNumber: asInt(data['roundNumber']),
     );
   }
 
@@ -66,6 +77,7 @@ class SplitValue {
   final int sort;
   final int? cumRank;
   final int? legRank;
+  final int? cumRankCount;
   final int? cumMs;
   final int? legMs;
   final String cumText;
@@ -73,6 +85,79 @@ class SplitValue {
   final String status;
   final String addition;
   final List<int> additionParts;
+  final String kind;
+  final int? legNumber;
+  final int? roundNumber;
+}
+
+typedef TimingPoint = SplitValue;
+
+enum ResultEntrantKind { athlete, team }
+
+class ResultEntrant {
+  const ResultEntrant({
+    required this.kind,
+    required this.name,
+    required this.bib,
+    this.participantUid,
+    this.athleteId,
+    this.clubName = '',
+    this.teamName = '',
+  });
+
+  final ResultEntrantKind kind;
+  final String name;
+  final String bib;
+  final String? participantUid;
+  final String? athleteId;
+  final String clubName;
+  final String teamName;
+}
+
+class RelayMember {
+  const RelayMember({
+    required this.legNumber,
+    required this.name,
+    this.athleteId,
+    this.countryCode,
+  });
+
+  factory RelayMember.fromMap(Map<String, dynamic> data) {
+    final country = asStringMap(data['country']);
+    return RelayMember(
+      legNumber: asInt(data['legNumber']) ?? 0,
+      name: asNonEmptyString(data['name']) ?? '-',
+      athleteId: asNonEmptyString(data['athleteId']),
+      countryCode:
+          asNonEmptyString(country['iso3']) ??
+          asNonEmptyString(country['iso2']),
+    );
+  }
+
+  final int legNumber;
+  final String name;
+  final String? athleteId;
+  final String? countryCode;
+}
+
+class RelayLegResult {
+  const RelayLegResult({
+    required this.legNumber,
+    required this.member,
+    required this.timeMs,
+    required this.cumulativeMs,
+    required this.checkpointLabel,
+    required this.splitId,
+    required this.totalRank,
+  });
+
+  final int legNumber;
+  final RelayMember? member;
+  final int? timeMs;
+  final int? cumulativeMs;
+  final String checkpointLabel;
+  final String? splitId;
+  final int? totalRank;
 }
 
 class RaceResult {
@@ -90,12 +175,29 @@ class RaceResult {
     required this.shooting,
     required this.status,
     required this.splitValues,
-    this.biathlon = const BiathlonAnalysis.empty(),
+    this.advanced = false,
+    this.stageId,
+    this.sourceResultId,
+    this.relayLegNumber,
+    this.relayOverallRank,
+    this.relayTeamName = '',
+    this.relayLegBiathlon = const {},
+    this.entrant,
+    this.relayMembers = const [],
+    this.biathlon,
   });
 
   factory RaceResult.fromMap(String id, Map<String, dynamic> data) {
-    final analysis = asStringMap(data['analysis']);
-    final shootingData = _readShootingMap(data);
+    final analysisRoot = asStringMap(data['analysis']);
+    final biathlonRoot = asStringMap(analysisRoot['biathlon']);
+    final analysis = biathlonRoot.isNotEmpty
+        ? asStringMap(biathlonRoot['metrics'])
+        : analysisRoot;
+    final shootingData = biathlonRoot.isNotEmpty
+        ? asStringMap(biathlonRoot['passes'])
+        : _readShootingMap(data);
+    final entrantData = asStringMap(data['entrant']);
+    final teamData = asStringMap(data['team']);
     final splitMaps = _readSplitMaps(data);
     final splitValues = <String, SplitValue>{};
 
@@ -104,11 +206,63 @@ class RaceResult {
       splitValues[split.id] = split;
     }
 
+    final fallbackName =
+        asNonEmptyString(data['name']) ??
+        asNestedString(data['participant'], 'name') ??
+        'Ukjent utøver';
+    final fallbackBib =
+        asNonEmptyString(data['bib']) ??
+        asNonEmptyString(data['fullBib']) ??
+        '';
+    final entrantName = asNonEmptyString(entrantData['name']) ?? fallbackName;
+    final entrantBib = asNonEmptyString(entrantData['bib']) ?? fallbackBib;
+    final entrantKind = asNonEmptyString(entrantData['kind']) == 'team'
+        ? ResultEntrantKind.team
+        : ResultEntrantKind.athlete;
+    final clubName =
+        asNonEmptyString(entrantData['clubName']) ??
+        asNonEmptyString(data['clubName']) ??
+        asNonEmptyString(data['club']) ??
+        '';
+    final teamName =
+        asNonEmptyString(entrantData['teamName']) ??
+        asNonEmptyString(data['teamName']) ??
+        asNonEmptyString(data['team']) ??
+        asNonEmptyString(data['lagName']) ??
+        asNonEmptyString(data['lag']) ??
+        '';
+    final athleteId =
+        asNonEmptyString(entrantData['athleteId']) ??
+        asNonEmptyString(data['athleteId']) ??
+        asNestedString(data['participant'], 'athleteId');
+    final relayMembers =
+        asMapList(teamData['members'])
+            .map(RelayMember.fromMap)
+            .where((member) => member.legNumber > 0)
+            .toList()
+          ..sort((a, b) => a.legNumber.compareTo(b.legNumber));
+    final relayLegBiathlon = <int, BiathlonAnalysis>{};
+    for (final legData in asMapList(teamData['legs'])) {
+      final legNumber = asInt(legData['legNumber']);
+      final biathlonData = asStringMap(legData['biathlon']);
+      final metrics = asStringMap(biathlonData['metrics']);
+      final passes = asStringMap(biathlonData['passes']);
+      if (legNumber == null || (metrics.isEmpty && passes.isEmpty)) continue;
+      final legAnalysis = BiathlonAnalysis.fromMaps(metrics, passes);
+      if (legAnalysis.hasData) relayLegBiathlon[legNumber] = legAnalysis;
+    }
+    final hasBiathlon =
+        biathlonRoot.isNotEmpty ||
+        analysis.values.any((value) => value != null) ||
+        shootingData.isNotEmpty;
+
     return RaceResult(
       id: id,
-      athleteId:
-          asNonEmptyString(data['athleteId']) ??
-          asNestedString(data['participant'], 'athleteId'),
+      stageId:
+          asNonEmptyString(data['stageId']) ??
+          asNonEmptyString(data['etappeUid']),
+      relayOverallRank: asInt(data['relayOverallRank']),
+      athleteId: athleteId,
       rank:
           asInt(data['rank']) ??
           asInt(data['Rank']) ??
@@ -122,24 +276,10 @@ class RaceResult {
           asInt(data['finishRank']) ??
           asInt(data['calculatedFinishRank']) ??
           asInt(data['originalFinishRank']),
-      bib:
-          asNonEmptyString(data['bib']) ??
-          asNonEmptyString(data['fullBib']) ??
-          '',
-      name:
-          asNonEmptyString(data['name']) ??
-          asNestedString(data['participant'], 'name') ??
-          'Ukjent utover',
-      club:
-          asNonEmptyString(data['clubName']) ??
-          asNonEmptyString(data['club']) ??
-          '',
-      team:
-          asNonEmptyString(data['teamName']) ??
-          asNonEmptyString(data['team']) ??
-          asNonEmptyString(data['lagName']) ??
-          asNonEmptyString(data['lag']) ??
-          '',
+      bib: entrantBib,
+      name: entrantName,
+      club: clubName,
+      team: teamName,
       totalMs: asInt(data['totalMs']) ?? asInt(data['totalTimeMs']),
       totalText:
           asNonEmptyString(data['totalText']) ??
@@ -158,12 +298,32 @@ class RaceResult {
           asNonEmptyString(data['statusText']) ??
           _resultStatusFromSplitMaps(splitMaps) ??
           '',
+      advanced: asBool(data['advanced']) ?? false,
       splitValues: splitValues,
-      biathlon: BiathlonAnalysis.fromMaps(analysis, shootingData),
+      entrant: ResultEntrant(
+        kind: entrantKind,
+        participantUid: asNonEmptyString(entrantData['participantUid']),
+        athleteId: athleteId,
+        name: entrantName,
+        bib: entrantBib,
+        clubName: clubName,
+        teamName: teamName,
+      ),
+      relayMembers: relayMembers,
+      relayLegBiathlon: relayLegBiathlon,
+      biathlon: hasBiathlon
+          ? BiathlonAnalysis.fromMaps(analysis, shootingData)
+          : null,
     );
   }
 
   final String id;
+  final String? stageId;
+  final String? sourceResultId;
+  final int? relayLegNumber;
+  final int? relayOverallRank;
+  final String relayTeamName;
+  final Map<int, BiathlonAnalysis> relayLegBiathlon;
   final String? athleteId;
   final int? rank;
   final int? finishRank;
@@ -175,8 +335,13 @@ class RaceResult {
   final String totalText;
   final String shooting;
   final String status;
+  final bool advanced;
   final Map<String, SplitValue> splitValues;
-  final BiathlonAnalysis biathlon;
+  final ResultEntrant? entrant;
+  final List<RelayMember> relayMembers;
+  final BiathlonAnalysis? biathlon;
+
+  String get detailResultId => sourceResultId ?? id;
 
   String affiliationName(ResultAffiliationView view) {
     return switch (view) {
@@ -188,7 +353,7 @@ class RaceResult {
   bool matchesSearch(String query) {
     final normalizedQuery = query.trim().toLowerCase();
     if (normalizedQuery.isEmpty) return true;
-    final searchableText = '$name $club $team'.toLowerCase();
+    final searchableText = '$name $club $team $bib'.toLowerCase();
     return searchableText.contains(normalizedQuery);
   }
 
@@ -251,6 +416,345 @@ int? effectiveSplitLegMs(RaceResult result, String splitId) {
   return previousMs == null ? cumulativeMs : cumulativeMs - previousMs;
 }
 
+/// Sums explicitly selected split legs. A missing leg makes the combined time
+/// unavailable instead of silently producing a partial result.
+int? combinedSplitLegMs(RaceResult result, Iterable<String> splitIds) {
+  final ids = splitIds.toSet();
+  if (ids.isEmpty) return null;
+
+  var totalMs = 0;
+  for (final splitId in ids) {
+    final legMs = effectiveSplitLegMs(result, splitId);
+    if (legMs == null || legMs <= 0) return null;
+    totalMs += legMs;
+  }
+  return totalMs;
+}
+
+List<RelayLegResult> effectiveRelayLegs(RaceResult result) {
+  final legNumbers = <int>{
+    ...result.relayMembers.map((member) => member.legNumber),
+    ...result.splitValues.values
+        .map((point) => point.legNumber)
+        .whereType<int>(),
+  }.toList()..sort();
+  final legs = <RelayLegResult>[];
+  int? previousCumulativeMs = 0;
+
+  for (final legNumber in legNumbers) {
+    final points =
+        result.splitValues.values
+            .where(
+              (point) => point.legNumber == legNumber && point.cumMs != null,
+            )
+            .toList()
+          ..sort((a, b) => a.sort.compareTo(b.sort));
+    final preferred = points.where((point) {
+      final label = point.label.toLowerCase();
+      return label.contains('veksling') ||
+          label.contains('mål') ||
+          label.contains('maal') ||
+          label.contains('finish');
+    }).lastOrNull;
+    final endpoint = preferred ?? points.lastOrNull;
+    final cumulativeMs = endpoint?.cumMs;
+    final previousMs = previousCumulativeMs;
+    final timeMs =
+        cumulativeMs != null && previousMs != null && cumulativeMs >= previousMs
+        ? cumulativeMs - previousMs
+        : null;
+    previousCumulativeMs = cumulativeMs;
+    legs.add(
+      RelayLegResult(
+        legNumber: legNumber,
+        member: result.relayMembers
+            .where((member) => member.legNumber == legNumber)
+            .firstOrNull,
+        timeMs: timeMs,
+        cumulativeMs: cumulativeMs,
+        checkpointLabel: endpoint?.label ?? '',
+        splitId: endpoint?.id,
+        totalRank: endpoint?.cumRank,
+      ),
+    );
+  }
+  return legs;
+}
+
+/// All numbered relay legs represented by either the team roster or timing
+/// points. The result is stable and suitable for selector UI.
+List<int> relayLegNumbers(Iterable<RaceResult> results) {
+  final numbers = <int>{};
+  for (final result in results) {
+    numbers.addAll(
+      result.relayMembers
+          .map((member) => member.legNumber)
+          .where((number) => number > 0),
+    );
+    numbers.addAll(
+      result.splitValues.values
+          .map((point) => point.legNumber)
+          .whereType<int>()
+          .where((number) => number > 0),
+    );
+  }
+  return numbers.toList()..sort();
+}
+
+/// Turns a team result into the athlete result for one relay leg. Cumulative
+/// times are rebased at the previous exchange, so rankings and split charts
+/// compare the athlete with the other athletes on that same leg.
+RaceResult? relayLegRaceResult(RaceResult teamResult, int legNumber) {
+  final legs = effectiveRelayLegs(teamResult);
+  final selectedLeg = legs
+      .where((leg) => leg.legNumber == legNumber)
+      .firstOrNull;
+  final member =
+      selectedLeg?.member ??
+      teamResult.relayMembers
+          .where((candidate) => candidate.legNumber == legNumber)
+          .firstOrNull;
+  final legPoints =
+      teamResult.splitValues.values
+          .where((point) => point.legNumber == legNumber)
+          .toList()
+        ..sort((a, b) {
+          if (a.sort != b.sort) return a.sort.compareTo(b.sort);
+          return a.id.compareTo(b.id);
+        });
+  if (member == null && legPoints.isEmpty) return null;
+  final shootingIndexes =
+      legPoints.map(_shootingIndexForPoint).whereType<int>().toSet().toList()
+        ..sort();
+
+  final previousCumulativeMs = legs
+      .where((leg) => leg.legNumber < legNumber && leg.cumulativeMs != null)
+      .lastOrNull
+      ?.cumulativeMs;
+  final hasEarlierLeg = legs.any((leg) => leg.legNumber < legNumber);
+  final startMs = previousCumulativeMs ?? (hasEarlierLeg ? null : 0);
+  final rebasedSplits = <String, SplitValue>{};
+
+  for (final point in legPoints) {
+    final rawCumulativeMs = point.cumMs;
+    final cumulativeMs = rawCumulativeMs == null || startMs == null
+        ? null
+        : rawCumulativeMs - startMs;
+    final localizedAdditionParts = shootingIndexes
+        .where((index) => index <= point.additionParts.length)
+        .map((index) => point.additionParts[index - 1])
+        .toList(growable: false);
+    rebasedSplits[point.id] = SplitValue(
+      id: point.id,
+      label: point.label,
+      sort: point.sort,
+      cumRank: null,
+      legRank: point.legRank,
+      cumMs: cumulativeMs != null && cumulativeMs >= 0 ? cumulativeMs : null,
+      legMs: point.legMs,
+      cumText: formatDurationMs(
+        cumulativeMs != null && cumulativeMs >= 0 ? cumulativeMs : null,
+      ),
+      legText: point.legText,
+      status: point.status,
+      addition: localizedAdditionParts.isEmpty
+          ? ''
+          : localizedAdditionParts.join('+'),
+      additionParts: localizedAdditionParts,
+      kind: point.kind,
+      legNumber: legNumber,
+      roundNumber: point.roundNumber,
+    );
+  }
+
+  final totalMs = selectedLeg?.timeMs;
+  final biathlon =
+      teamResult.relayLegBiathlon[legNumber] ??
+      _relayLegBiathlon(teamResult.biathlon, shootingIndexes, totalMs);
+  final finishSort = legPoints.isEmpty ? 1000000 : legPoints.last.sort + 1;
+  rebasedSplits[relayLegFinishSplitId] = SplitValue(
+    id: relayLegFinishSplitId,
+    label: 'Etappetid',
+    sort: finishSort,
+    cumRank: null,
+    legRank: null,
+    cumMs: totalMs,
+    legMs: totalMs,
+    cumText: formatDurationMs(totalMs),
+    legText: formatDurationMs(totalMs),
+    status: teamResult.status,
+    addition: '',
+    additionParts: const [],
+    kind: 'finish',
+    legNumber: legNumber,
+  );
+
+  final teamName = teamResult.name;
+  final athleteName = member?.name.trim();
+  final name = athleteName == null || athleteName.isEmpty || athleteName == '-'
+      ? '$teamName – etappe $legNumber'
+      : athleteName;
+  final viewId = relayLegViewResultId(teamResult.detailResultId, legNumber);
+  return RaceResult(
+    id: viewId,
+    sourceResultId: teamResult.detailResultId,
+    relayLegNumber: legNumber,
+    relayOverallRank: teamResult.finishRank ?? teamResult.rank,
+    relayTeamName: teamName,
+    stageId: teamResult.stageId,
+    athleteId: member?.athleteId,
+    rank: null,
+    finishRank: null,
+    bib: teamResult.bib,
+    name: name,
+    club: teamResult.club,
+    team: teamName,
+    totalMs: totalMs,
+    totalText: formatDurationMs(totalMs),
+    shooting:
+        biathlon?.passes
+            .map((pass) => pass.misses)
+            .whereType<int>()
+            .join('+') ??
+        '',
+    status: totalMs == null ? teamResult.status : '',
+    splitValues: rebasedSplits,
+    entrant: ResultEntrant(
+      kind: ResultEntrantKind.athlete,
+      athleteId: member?.athleteId,
+      name: name,
+      bib: teamResult.bib,
+      clubName: teamResult.club,
+      teamName: teamName,
+    ),
+    biathlon: biathlon,
+  );
+}
+
+List<RaceResult> relayLegRaceResults(
+  Iterable<RaceResult> teamResults,
+  int legNumber,
+) {
+  return teamResults
+      .map((result) => relayLegRaceResult(result, legNumber))
+      .whereType<RaceResult>()
+      .toList(growable: false);
+}
+
+String relayLegViewResultId(String resultId, int legNumber) {
+  return '$resultId::relay-leg-$legNumber';
+}
+
+int? _shootingIndexForPoint(SplitValue point) {
+  const shootingKinds = {
+    'rangeApproach',
+    'rangeIn',
+    'shooting',
+    'rangeOut',
+    'rangeExit',
+  };
+  final normalized = point.label.trim().toUpperCase();
+  final match = RegExp(r'^(?:INS|UTS|IS|US|S)(\d+)$').firstMatch(normalized);
+  if (match == null && !shootingKinds.contains(point.kind)) return null;
+  return match == null ? point.roundNumber : int.tryParse(match.group(1)!);
+}
+
+BiathlonAnalysis? _relayLegBiathlon(
+  BiathlonAnalysis? teamAnalysis,
+  Iterable<int> shootingIndexes,
+  int? totalMs,
+) {
+  if (teamAnalysis == null) return null;
+  final indexes = shootingIndexes.toSet();
+  final passes = teamAnalysis.passes
+      .where((pass) => indexes.contains(pass.index))
+      .toList(growable: false);
+  if (passes.isEmpty) return null;
+
+  int? sumComplete(Iterable<int?> values) {
+    final completeValues = <int>[...values.whereType<int>()];
+    if (completeValues.length != passes.length) return null;
+    var total = 0;
+    for (final value in completeValues) {
+      total += value;
+    }
+    return total;
+  }
+
+  final shootingTimeMs = sumComplete(passes.map((pass) => pass.rangeMs));
+  final missesTotal = sumComplete(passes.map((pass) => pass.misses));
+  final penaltyTimeMs = sumComplete(passes.map((pass) => pass.penaltyMs));
+  final netSkiTimeMs = totalMs == null || shootingTimeMs == null
+      ? null
+      : (totalMs - shootingTimeMs).clamp(0, totalMs);
+
+  return BiathlonAnalysis(
+    skiTimeMs: _deriveSkiTimeMs(netSkiTimeMs, penaltyTimeMs),
+    netSkiTimeMs: netSkiTimeMs,
+    shootingTimeMs: shootingTimeMs,
+    penaltyTimeMs: penaltyTimeMs,
+    missesTotal: missesTotal,
+    skiRank: null,
+    netSkiRank: null,
+    shootingRank: null,
+    penaltyRank: null,
+    passes: passes,
+  );
+}
+
+/// Split metadata for one relay leg, plus a common finish split. The common
+/// split is deliberately shared by every leg, allowing whole-leg comparisons
+/// even when checkpoints and courses differ.
+List<SplitDef> relayLegSplitDefs(
+  Iterable<SplitDef> splitDefs,
+  int legNumber,
+  Iterable<RaceResult> legResults,
+) {
+  final byId = <String, SplitDef>{
+    for (final split in splitDefs.where(
+      (split) =>
+          split.legNumber == legNumber && split.id != relayLegFinishSplitId,
+    ))
+      split.id: split,
+  };
+  for (final result in legResults) {
+    for (final point in result.splitValues.values) {
+      if (point.id == relayLegFinishSplitId) continue;
+      byId.putIfAbsent(
+        point.id,
+        () => SplitDef(
+          id: point.id,
+          label: point.label,
+          sort: point.sort,
+          kind: 'split',
+          stationName: '',
+          isPublic: true,
+          legNumber: legNumber,
+          roundNumber: point.roundNumber,
+        ),
+      );
+    }
+  }
+  final definitions = byId.values.toList();
+  definitions.sort((a, b) {
+    if (a.sort != b.sort) return a.sort.compareTo(b.sort);
+    return a.id.compareTo(b.id);
+  });
+  final finishSort = definitions.isEmpty ? 1000000 : definitions.last.sort + 1;
+  return [
+    ...definitions,
+    SplitDef(
+      id: relayLegFinishSplitId,
+      label: 'Etappetid',
+      sort: finishSort,
+      kind: 'finish',
+      stationName: '',
+      isPublic: true,
+      legNumber: legNumber,
+    ),
+  ];
+}
+
 enum ResultAffiliationView { club, team }
 
 class ShootingPass {
@@ -259,6 +763,7 @@ class ShootingPass {
     required this.rangeMs,
     required this.misses,
     required this.position,
+    this.penaltyMs,
   });
 
   factory ShootingPass.fromMap(String fallbackKey, Map<String, dynamic> data) {
@@ -277,6 +782,7 @@ class ShootingPass {
           asInt(data['penalties']) ??
           asInt(data['penalty']),
       position: asNonEmptyString(data['position']) ?? '',
+      penaltyMs: asInt(data['penaltyMs']) ?? asInt(data['penaltyTimeMs']),
     );
   }
 
@@ -284,8 +790,9 @@ class ShootingPass {
   final int? rangeMs;
   final int? misses;
   final String position;
+  final int? penaltyMs;
 
-  bool get hasData => rangeMs != null || misses != null;
+  bool get hasData => rangeMs != null || misses != null || penaltyMs != null;
 }
 
 class BiathlonAnalysis {
@@ -540,6 +1047,9 @@ bool _looksLikeFinishSplit(String value) {
 }
 
 List<Map<String, dynamic>> _readSplitMaps(Map<String, dynamic> data) {
+  final timingPoints = asMapList(data['timingPoints']);
+  if (timingPoints.isNotEmpty) return timingPoints;
+
   final rawPasses = asMapList(data['rawPasses']);
   if (rawPasses.isNotEmpty) return rawPasses;
 

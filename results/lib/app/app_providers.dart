@@ -6,12 +6,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_theme.dart';
 import '../features/auth/data/auth_repository.dart';
+import '../features/athlete/domain/athlete_stage_result.dart';
 import '../features/events/data/events_repository.dart';
 import '../features/events/domain/result_event.dart';
+import '../features/favorites/data/favorite_athletes_repository.dart';
 import '../features/profile/data/athlete_profile_repository.dart';
 import '../features/profile/domain/athlete_profile.dart';
 import '../features/results/data/results_repository.dart';
 import '../features/results/domain/race_result.dart';
+import '../features/results/domain/competition_stage.dart';
 import '../features/results/domain/result_class.dart';
 import '../features/results/domain/result_sort_mode.dart';
 import '../features/results/domain/split_def.dart';
@@ -48,6 +51,20 @@ final resultsRepositoryProvider = Provider<ResultsRepository>((ref) {
   return FirestoreResultsRepository(
     firestore: ref.watch(firebaseFirestoreProvider),
   );
+});
+
+final favoriteAthletesRepositoryProvider = Provider<FavoriteAthletesRepository>(
+  (ref) => FirestoreFavoriteAthletesRepository(
+    firestore: ref.watch(firebaseFirestoreProvider),
+  ),
+);
+
+final favoriteAthleteIdsProvider = StreamProvider<Set<String>>((ref) {
+  final user = ref.watch(authStateProvider).asData?.value;
+  if (user == null) return Stream.value(const <String>{});
+  return ref
+      .watch(favoriteAthletesRepositoryProvider)
+      .watchFavoriteAthleteIds(user.uid);
 });
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
@@ -132,6 +149,106 @@ final classesProvider = StreamProvider.family<List<ResultClass>, String>((
   return ref.watch(resultsRepositoryProvider).watchClasses(eventId);
 });
 
+final competitionStagesProvider =
+    StreamProvider.family<List<CompetitionStage>, String>((ref, eventId) {
+      return ref.watch(resultsRepositoryProvider).watchStages(eventId);
+    });
+
+final stageSplitDefsProvider =
+    StreamProvider.family<
+      List<SplitDef>,
+      ({String eventId, String stageId, String classId})
+    >((ref, args) {
+      return ref
+          .watch(resultsRepositoryProvider)
+          .watchStageSplitDefs(args.eventId, args.stageId, args.classId);
+    });
+
+final stageResultsProvider =
+    StreamProvider.family<
+      List<RaceResult>,
+      ({String eventId, String stageId, String classId})
+    >((ref, args) {
+      final limit = ref.watch(stageResultsLimitProvider(args));
+      return ref
+          .watch(resultsRepositoryProvider)
+          .watchStageResults(
+            args.eventId,
+            args.stageId,
+            args.classId,
+            limit: limit,
+          );
+    });
+
+final stageResultsLimitProvider =
+    StateProvider.family<
+      int,
+      ({String eventId, String stageId, String classId})
+    >((ref, args) {
+      final athleteEvent = ref.watch(linkedAthleteEventProvider(args.eventId));
+      if (athleteEvent?.classId != args.classId) return initialResultsLimit;
+      final rank = athleteEvent!.rank;
+      if (rank == null || rank <= initialResultsLimit) {
+        return initialResultsLimit;
+      }
+      return rank;
+    });
+
+final stageResultProvider =
+    StreamProvider.family<
+      RaceResult?,
+      ({String eventId, String stageId, String classId, String resultId})
+    >((ref, args) {
+      return ref
+          .watch(resultsRepositoryProvider)
+          .watchStageResult(
+            args.eventId,
+            args.stageId,
+            args.classId,
+            args.resultId,
+          );
+    });
+
+typedef AthleteStageResultsRequest = ({
+  String eventId,
+  String classId,
+  String? athleteId,
+  String athleteName,
+});
+
+final athleteStageResultsProvider = FutureProvider.autoDispose
+    .family<List<AthleteStageResult>, AthleteStageResultsRequest>((
+      ref,
+      args,
+    ) async {
+      final stages = await ref.watch(
+        competitionStagesProvider(args.eventId).future,
+      );
+      final classStages = stages
+          .where((stage) => stage.supportsClass(args.classId))
+          .toList(growable: false);
+      if (classStages.length < 2) return const <AthleteStageResult>[];
+
+      final repository = ref.watch(resultsRepositoryProvider);
+      final reads = await Future.wait(
+        classStages.map((stage) async {
+          final results = await repository.fetchStageResults(
+            args.eventId,
+            stage.id,
+            args.classId,
+          );
+          return MapEntry(stage.id, results);
+        }),
+      );
+
+      return buildAthleteStageResults(
+        stages: classStages,
+        resultsByStageId: Map.fromEntries(reads),
+        athleteId: args.athleteId,
+        athleteName: args.athleteName,
+      );
+    });
+
 final splitDefsProvider =
     StreamProvider.family<List<SplitDef>, ({String eventId, String classId})>((
       ref,
@@ -193,6 +310,12 @@ final comparisonClassIdsProvider = StateProvider<List<String>>((ref) {
   return <String>[];
 });
 
+final relayComparisonLegNumbersProvider =
+    StateProvider.family<
+      List<int>,
+      ({String eventId, String stageId, String classId})
+    >((ref, args) => <int>[]);
+
 final biathlonSortKeyProvider = StateProvider<String>((ref) {
   return 'ski';
 });
@@ -204,7 +327,10 @@ final resultAffiliationViewProvider = StateProvider<ResultAffiliationView>((
 });
 
 final resultSearchQueryProvider = StateProvider.autoDispose
-    .family<String, ({String eventId, String classId})>((ref, args) {
+    .family<String, ({String eventId, String stageId, String classId})>((
+      ref,
+      args,
+    ) {
       return '';
     });
 
