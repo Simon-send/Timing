@@ -53,73 +53,64 @@ class ResultsTable extends StatelessWidget {
       sortMode,
     );
     final rowHeight = tableDensity == TableDensity.compact ? 42.0 : 54.0;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      primary: false,
-      child: ResultsLoadMoreScrollView(
-        onLoadMore: onLoadMore,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            DataTable(
-              showCheckboxColumn: false,
-              sortColumnIndex: _sortColumnIndex(sortMode),
-              sortAscending: true,
-              headingRowHeight: 42,
-              dataRowMinHeight: rowHeight,
-              dataRowMaxHeight: rowHeight + 8,
-              horizontalMargin: 12,
-              columnSpacing: 26,
-              columns: [
-                DataColumn(label: Text(l10n.bib.toUpperCase())),
-                DataColumn(label: Text(l10n.athlete.toUpperCase())),
-                DataColumn(
-                  label: ResultAffiliationHeader(
-                    view: affiliationView,
-                    clubLabel: '${l10n.club.toUpperCase()}/TEAM',
-                    teamLabel: 'TEAM/${l10n.club.toUpperCase()}',
-                    onToggle: onAffiliationViewToggle,
-                  ),
-                ),
-                DataColumn(label: Text(l10n.shooting.toUpperCase())),
-                DataColumn(
-                  label: Text(l10n.split.toUpperCase()),
-                  onSort: (columnIndex, ascending) {
-                    onSortModeChanged(ResultSortMode.split);
-                  },
-                ),
-                DataColumn(
-                  label: Text(l10n.time.toUpperCase()),
-                  numeric: true,
-                  onSort: (columnIndex, ascending) {
-                    onSortModeChanged(ResultSortMode.cumulative);
-                  },
-                ),
-                DataColumn(label: Text(l10n.gap.toUpperCase()), numeric: true),
-              ],
-              rows: [
-                for (final (index, row) in visibleRows)
-                  DataRow(
-                    color: _rowColor(context, row),
-                    onSelectChanged: _isDisabled(row)
-                        ? null
-                        : (_) => onAthleteTap(row),
-                    cells: _cellsForResult(
-                      row,
-                      sortedRows,
-                      selectedSplitId,
-                      splitRange,
-                      sortMode,
-                      winnerMs,
-                      index,
-                      affiliationView,
-                    ),
-                  ),
-              ],
+    return ResultsLoadMoreViewport(
+      onLoadMore: onLoadMore,
+      isLoadingMore: isLoadingMore,
+      child: DataTable(
+        showCheckboxColumn: false,
+        sortColumnIndex: _sortColumnIndex(sortMode),
+        sortAscending: true,
+        headingRowHeight: 42,
+        dataRowMinHeight: rowHeight,
+        dataRowMaxHeight: rowHeight + 8,
+        horizontalMargin: 12,
+        columnSpacing: 26,
+        columns: [
+          DataColumn(label: Text(l10n.bib.toUpperCase())),
+          DataColumn(label: Text(l10n.athlete.toUpperCase())),
+          DataColumn(
+            label: ResultAffiliationHeader(
+              view: affiliationView,
+              clubLabel: '${l10n.club.toUpperCase()}/TEAM',
+              teamLabel: 'TEAM/${l10n.club.toUpperCase()}',
+              onToggle: onAffiliationViewToggle,
             ),
-            if (isLoadingMore) const TableLoadingMoreIndicator(),
-          ],
-        ),
+          ),
+          DataColumn(label: Text(l10n.shooting.toUpperCase())),
+          DataColumn(
+            label: Text(l10n.split.toUpperCase()),
+            onSort: (columnIndex, ascending) {
+              onSortModeChanged(ResultSortMode.split);
+            },
+          ),
+          DataColumn(
+            label: Text(l10n.time.toUpperCase()),
+            numeric: true,
+            onSort: (columnIndex, ascending) {
+              onSortModeChanged(ResultSortMode.cumulative);
+            },
+          ),
+          DataColumn(label: Text(l10n.gap.toUpperCase()), numeric: true),
+        ],
+        rows: [
+          for (final (index, row) in visibleRows)
+            DataRow(
+              color: _rowColor(context, row),
+              onSelectChanged: _isDisabled(row)
+                  ? null
+                  : (_) => onAthleteTap(row),
+              cells: _cellsForResult(
+                row,
+                sortedRows,
+                selectedSplitId,
+                splitRange,
+                sortMode,
+                winnerMs,
+                index,
+                affiliationView,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -431,27 +422,121 @@ class ResultsTable extends StatelessWidget {
   }
 }
 
+class ResultsLoadMoreViewport extends StatelessWidget {
+  const ResultsLoadMoreViewport({
+    super.key,
+    required this.child,
+    required this.isLoadingMore,
+    this.onLoadMore,
+  });
+
+  final Widget child;
+  final bool isLoadingMore;
+  final VoidCallback? onLoadMore;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final overlayHeight = (constraints.maxHeight * 0.2).clamp(96.0, 180.0);
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              primary: false,
+              child: ResultsLoadMoreScrollView(
+                onLoadMore: onLoadMore,
+                isLoadingMore: isLoadingMore,
+                child: child,
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: overlayHeight,
+              child: IgnorePointer(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 320),
+                  reverseDuration: const Duration(milliseconds: 380),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    final slide = Tween<Offset>(
+                      begin: const Offset(0, 0.16),
+                      end: Offset.zero,
+                    ).animate(animation);
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(position: slide, child: child),
+                    );
+                  },
+                  child: isLoadingMore
+                      ? const TableLoadingMoreIndicator(
+                          key: ValueKey('results-loading-more'),
+                        )
+                      : const SizedBox.shrink(
+                          key: ValueKey('results-loading-idle'),
+                        ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class TableLoadingMoreIndicator extends StatelessWidget {
   const TableLoadingMoreIndicator({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2.4),
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      label: 'Laster flere resultater',
+      liveRegion: true,
+      child: DecoratedBox(
+        key: const ValueKey('results-loading-more-indicator'),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              colors.surface.withValues(alpha: 0),
+              colors.surface.withValues(alpha: 0.94),
+              colors.surface,
+            ],
+            stops: const [0, 0.28, 1],
           ),
-          SizedBox(width: 12),
-          Text(
-            'Laster flere resultater',
-            style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 36,
+                height: 36,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3.2,
+                  strokeCap: StrokeCap.round,
+                  color: colors.primary,
+                  backgroundColor: colors.primary.withValues(alpha: 0.16),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Laster flere resultater',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: colors.onSurface,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -461,10 +546,12 @@ class ResultsLoadMoreScrollView extends StatefulWidget {
   const ResultsLoadMoreScrollView({
     super.key,
     required this.child,
+    required this.isLoadingMore,
     this.onLoadMore,
   });
 
   final Widget child;
+  final bool isLoadingMore;
   final VoidCallback? onLoadMore;
 
   @override
@@ -500,7 +587,10 @@ class _ResultsLoadMoreScrollViewState extends State<ResultsLoadMoreScrollView> {
   }
 
   void _maybeLoadMore() {
-    if (!mounted || widget.onLoadMore == null || !_controller.hasClients) {
+    if (!mounted ||
+        widget.isLoadingMore ||
+        widget.onLoadMore == null ||
+        !_controller.hasClients) {
       return;
     }
     final position = _controller.position;
