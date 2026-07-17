@@ -2265,4 +2265,20 @@ describe("eq importer http handlers", () => {
       ],
     });
   });
+
+  test("summarizes participant count and valid age range for event filters", () => {
+    const mod = loadModule();
+    const summary = mod._test.buildEventParticipantSummary({
+      "1": {UID: 1, Alder: 42},
+      "2": {UID: 2, Alder: "12"},
+      "3": {UID: 3, Alder: 121},
+      "4": {UID: 4, Alder: null},
+    });
+
+    expect(summary).toEqual({
+      participantCount: 4,
+      ageFrom: 12,
+      ageTo: 42,
+    });
+  });
 });

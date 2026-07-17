@@ -87,6 +87,8 @@ class _EventGrid extends StatefulWidget {
 }
 
 class _EventGridState extends State<_EventGrid> {
+  EventFilterCriteria _criteria = const EventFilterCriteria();
+
   @override
   void initState() {
     super.initState();
@@ -113,51 +115,98 @@ class _EventGridState extends State<_EventGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        EventFilters(controller: widget.searchController),
+        EventFilters(
+          controller: widget.searchController,
+          criteria: _criteria,
+          options: EventFilterOptions.fromEvents(widget.events),
+          filteredCount: filtered.length,
+          totalCount: widget.events.length,
+          onChanged: (criteria) => setState(() => _criteria = criteria),
+          onReset: () {
+            widget.searchController.clear();
+            setState(() => _criteria = const EventFilterCriteria());
+          },
+        ),
         const SizedBox(height: 14),
         Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final columns = constraints.maxWidth >= 1080
-                  ? 3
-                  : constraints.maxWidth >= 700
-                  ? 2
-                  : 1;
-              return GridView.builder(
-                itemCount: filtered.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: columns == 1 ? 2.4 : 1.7,
+          child: filtered.isEmpty
+              ? const _NoFilteredEvents()
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 1080
+                        ? 3
+                        : constraints.maxWidth >= 700
+                        ? 2
+                        : 1;
+                    return GridView.builder(
+                      itemCount: filtered.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: columns == 1 ? 2.4 : 1.7,
+                      ),
+                      itemBuilder: (context, index) {
+                        final event = filtered[index];
+                        return EventCard(
+                          event: event,
+                          onTap: () => widget.onEventTap(event),
+                        );
+                      },
+                    );
+                  },
                 ),
-                itemBuilder: (context, index) {
-                  final event = filtered[index];
-                  return EventCard(
-                    event: event,
-                    onTap: () => widget.onEventTap(event),
-                  );
-                },
-              );
-            },
-          ),
         ),
       ],
     );
   }
 
   List<ResultEvent> _filteredEvents() {
-    final query = widget.searchController.text.trim().toLowerCase();
-    if (query.isEmpty) return widget.events;
-    return widget.events.where((event) {
-      return event.name.toLowerCase().contains(query) ||
-          event.sportName.toLowerCase().contains(query) ||
-          event.place.toLowerCase().contains(query) ||
-          event.id.toLowerCase().contains(query);
-    }).toList();
+    return widget.events
+        .where(
+          (event) => _criteria.matches(event, widget.searchController.text),
+        )
+        .toList();
   }
 
   void _onSearchChanged() {
     setState(() {});
+  }
+}
+
+class _NoFilteredEvents extends StatelessWidget {
+  const _NoFilteredEvents();
+
+  @override
+  Widget build(BuildContext context) {
+    final language = Localizations.localeOf(context).languageCode;
+    final norwegian = language == 'nb' || language == 'no';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.filter_alt_off_outlined, size: 38),
+            const SizedBox(height: 10),
+            Text(
+              norwegian
+                  ? 'Ingen events passer filtrene'
+                  : 'No events match the filters',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              norwegian
+                  ? 'Juster eller nullstill filtrene for å se flere.'
+                  : 'Adjust or reset the filters to see more.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
