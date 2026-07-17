@@ -2560,13 +2560,34 @@ function buildClassOverview(event, participants) {
   return overview;
 }
 
-function buildEventDoc(event, eventId) {
+function buildEventParticipantSummary(participants) {
+  const entries = getParticipantEntries(participants)
+    .filter((entry) => entry[1] && typeof entry[1] === "object");
+  const ages = entries
+    .map((entry) => toNumberOrNull(entry[1].Alder))
+    .filter((age) => age != null && age >= 0 && age <= 120);
+  let ageFrom = null;
+  let ageTo = null;
+  for (const age of ages) {
+    ageFrom = ageFrom == null ? age : Math.min(ageFrom, age);
+    ageTo = ageTo == null ? age : Math.max(ageTo, age);
+  }
+
+  return {
+    participantCount: entries.length,
+    ageFrom,
+    ageTo,
+  };
+}
+
+function buildEventDoc(event, eventId, participants) {
   const sport = event && event.Gren ? event.Gren : {};
   const sportParent = sport && sport.Parent ? sport.Parent : {};
   const discipline = event && event.Disiplin ? event.Disiplin : {};
   const federation = event && event.Forbund ? event.Forbund : {};
   const country = event && event.Land ? event.Land : {};
   const resultSetup = event && event.ResultatOppsett ? event.ResultatOppsett : {};
+  const participantSummary = buildEventParticipantSummary(participants);
 
   const eventProfile = profileForStage(event, eventId, null, null);
   return {
@@ -2580,6 +2601,9 @@ function buildEventDoc(event, eventId) {
     startTime: firstDefined(event && event.StartTid, null),
     stopTime: firstDefined(event && event.StoppTid, null),
     place: firstDefined(event && event.Sted, null),
+    participantCount: participantSummary.participantCount,
+    ageFrom: participantSummary.ageFrom,
+    ageTo: participantSummary.ageTo,
     organizer: firstDefined(event && event.Arrangor, null),
     published: firstDefined(event && event.Publiseres, null),
     resultPublished: firstDefined(event && event.Resultat, null),
@@ -2779,7 +2803,7 @@ async function importEqTimingFromUrls(params) {
 
   // 3) skriv event
   await eventDocRef.set(
-    sanitizeForFirestore(Object.assign({}, buildEventDoc(event, eventId), {
+    sanitizeForFirestore(Object.assign({}, buildEventDoc(event, eventId, participants), {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     })) || {},
     { merge: true }
@@ -3275,7 +3299,7 @@ async function importWholeEvent(params) {
   // Lagre event-meta tidlig
   const eventDocRef = getDb().collection("events").doc(String(eventId));
   await eventDocRef.set(
-    sanitizeForFirestore(Object.assign({}, buildEventDoc(event, eventId), {
+    sanitizeForFirestore(Object.assign({}, buildEventDoc(event, eventId, participants), {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     })) || {},
     { merge: true }
@@ -3370,6 +3394,7 @@ module.exports._test = {
   buildEtappeMap,
   buildStationSetupMap,
   buildClassOverview,
+  buildEventParticipantSummary,
   normalizeTimes,
   normalizeClubName,
   buildDerivedResultMetrics,
