@@ -44,60 +44,56 @@ class BiathlonTable extends StatelessWidget {
         .where((entry) => entry.$2.result.matchesSearch(searchQuery))
         .toList();
     final rowHeight = tableDensity == TableDensity.compact ? 42.0 : 54.0;
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      primary: false,
-      child: ResultsLoadMoreScrollView(
-        onLoadMore: onLoadMore,
-        isLoadingMore: isLoadingMore,
-        itemCount: rows.length,
-        child: RepaintBoundary(
-          child: DataTable(
-            showCheckboxColumn: false,
-            sortColumnIndex: columns.isEmpty
-                ? null
-                : _sortColumnIndex(activeSortKey, columns),
-            sortAscending: true,
-            headingRowHeight: 42,
-            dataRowMinHeight: rowHeight,
-            dataRowMaxHeight: rowHeight + 8,
-            horizontalMargin: 8,
-            columnSpacing: 26,
-            columns: [
-              const DataColumn(label: Text('PLASS')),
-              const DataColumn(label: Text('UTOVER')),
+    return ResultsLoadMoreViewport(
+      onLoadMore: onLoadMore,
+      isLoadingMore: isLoadingMore,
+      itemCount: rows.length,
+      child: RepaintBoundary(
+        child: DataTable(
+          showCheckboxColumn: false,
+          sortColumnIndex: columns.isEmpty
+              ? null
+              : _sortColumnIndex(activeSortKey, columns),
+          sortAscending: true,
+          headingRowHeight: 42,
+          dataRowMinHeight: rowHeight,
+          dataRowMaxHeight: rowHeight + 8,
+          horizontalMargin: 8,
+          columnSpacing: 26,
+          columns: [
+            const DataColumn(label: Text('PLASS')),
+            const DataColumn(label: Text('UTOVER')),
+            DataColumn(
+              label: ResultAffiliationHeader(
+                view: affiliationView,
+                clubLabel: 'KLUBB/TEAM',
+                teamLabel: 'TEAM/KLUBB',
+                onToggle: onAffiliationViewToggle,
+              ),
+            ),
+            for (final column in columns)
               DataColumn(
-                label: ResultAffiliationHeader(
-                  view: affiliationView,
-                  clubLabel: 'KLUBB/TEAM',
-                  teamLabel: 'TEAM/KLUBB',
-                  onToggle: onAffiliationViewToggle,
+                label: SortableTableHeader(label: column.label),
+                numeric: true,
+                onSort: (_, _) => onSortKeyChanged(column.key),
+              ),
+          ],
+          rows: [
+            for (final (index, row) in visibleRows)
+              DataRow(
+                color: _rowColor(context, row),
+                onSelectChanged: _isDisabled(row)
+                    ? null
+                    : (_) => onAthleteTap(row),
+                cells: _cellsForResult(
+                  sortedRows,
+                  index,
+                  columns,
+                  activeSortKey,
+                  affiliationView,
                 ),
               ),
-              for (final column in columns)
-                DataColumn(
-                  label: SortableTableHeader(label: column.label),
-                  numeric: true,
-                  onSort: (_, _) => onSortKeyChanged(column.key),
-                ),
-            ],
-            rows: [
-              for (final (index, row) in visibleRows)
-                DataRow(
-                  color: _rowColor(context, row),
-                  onSelectChanged: _isDisabled(row)
-                      ? null
-                      : (_) => onAthleteTap(row),
-                  cells: _cellsForResult(
-                    sortedRows,
-                    index,
-                    columns,
-                    activeSortKey,
-                    affiliationView,
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     );

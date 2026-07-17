@@ -20,6 +20,53 @@ import 'package:results/results_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets(
+    'load-more state fills the bottom fifth and blocks repeat loads',
+    (WidgetTester tester) async {
+      var isLoadingMore = true;
+      var loadMoreCalls = 0;
+      late StateSetter updateViewport;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 800,
+              height: 500,
+              child: StatefulBuilder(
+                builder: (context, setState) {
+                  updateViewport = setState;
+                  return ResultsLoadMoreViewport(
+                    isLoadingMore: isLoadingMore,
+                    itemCount: 1,
+                    onLoadMore: () => loadMoreCalls++,
+                    child: const SizedBox(width: 900, height: 80),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final indicator = find.byKey(
+        const ValueKey('results-loading-more-indicator'),
+      );
+      expect(indicator, findsOneWidget);
+      expect(tester.getSize(indicator).height, 100);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.text('Laster flere resultater'), findsOneWidget);
+      expect(loadMoreCalls, 0);
+
+      updateViewport(() => isLoadingMore = false);
+      await tester.pumpAndSettle();
+
+      expect(indicator, findsNothing);
+      expect(loadMoreCalls, 1);
+    },
+  );
+
   testWidgets('login has a separate forgot-password flow', (
     WidgetTester tester,
   ) async {
