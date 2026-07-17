@@ -14,23 +14,9 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 function Get-RepoFiles {
   param([string]$RelativePath)
 
-  $target = Join-Path $repoRoot $RelativePath
-  if (-not (Test-Path -LiteralPath $target)) {
-    return @()
-  }
-
-  if (Get-Command rg -ErrorAction SilentlyContinue) {
-    return @(& rg --files $target `
-      -g "!**/.git/**" `
-      -g "!**/.dart_tool/**" `
-      -g "!**/build/**" `
-      -g "!**/node_modules/**" `
-      -g "!**/.firebase/**")
-  }
-
-  return @(Get-ChildItem -LiteralPath $target -File -Recurse | Where-Object {
-      $_.FullName -notmatch "[\\/](\.git|\.dart_tool|build|node_modules|\.firebase)[\\/]"
-    } | ForEach-Object FullName)
+  return @(& git -C $repoRoot ls-files -- $RelativePath | ForEach-Object {
+      Join-Path $repoRoot $_
+    })
 }
 
 function Get-MatchCount {
@@ -52,6 +38,9 @@ function Get-PubspecFacts {
   param([string]$RelativePath)
 
   $path = Join-Path $repoRoot $RelativePath
+  if (-not (Test-Path -LiteralPath $path)) {
+    return "ikke versjonert"
+  }
   $content = [IO.File]::ReadAllText($path)
   $name = [regex]::Match($content, "(?m)^name:\s*([^\r\n]+)").Groups[1].Value.Trim()
   $sdk = [regex]::Match($content, "(?m)^\s{2}sdk:\s*([^\r\n]+)").Groups[1].Value.Trim()

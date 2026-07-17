@@ -60,7 +60,8 @@ void main() {
       expect(loadMoreCalls, 0);
 
       updateViewport(() => isLoadingMore = false);
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
 
       expect(indicator, findsNothing);
       expect(loadMoreCalls, 1);

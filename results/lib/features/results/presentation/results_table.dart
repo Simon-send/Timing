@@ -493,7 +493,9 @@ class _SortableTableHeaderState extends State<SortableTableHeader> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
+    final primary =
+        Theme.of(context).extension<AppPalette>()?.primary ??
+        Theme.of(context).colorScheme.primary;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
@@ -505,7 +507,7 @@ class _SortableTableHeaderState extends State<SortableTableHeader> {
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutCubic,
           style: TextStyle(
-            color: _hovering ? palette.primary : null,
+            color: _hovering ? primary : null,
             fontWeight: FontWeight.w800,
           ),
           child: Text(widget.label),
@@ -638,6 +640,37 @@ class TableLoadingMoreIndicator extends StatelessWidget {
   }
 }
 
+class PendingLoadMoreFooter extends StatelessWidget {
+  const PendingLoadMoreFooter({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 132,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(18, 30, 18, 54),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RepaintBoundary(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.6),
+              ),
+            ),
+            SizedBox(width: 12),
+            Text(
+              'Laster flere resultater',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class ResultsLoadMoreScrollView extends StatefulWidget {
   const ResultsLoadMoreScrollView({
     super.key,
@@ -718,7 +751,14 @@ class _ResultsLoadMoreScrollViewState extends State<ResultsLoadMoreScrollView> {
     return SingleChildScrollView(
       controller: _controller,
       primary: false,
-      child: widget.child,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          widget.child,
+          if (_loadRequestPending && !widget.isLoadingMore)
+            const PendingLoadMoreFooter(),
+        ],
+      ),
     );
   }
 }
