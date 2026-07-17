@@ -34,15 +34,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
               return ResultsPage(
                 eventId: state.pathParameters['eventId']!,
+                selectedStageId:
+                    state.uri.queryParameters[resultStageQueryParameter],
                 selectedClassId:
                     state.uri.queryParameters[resultClassQueryParameter],
                 selectedSplitId: resultSplitQueryValue(
                   state.uri.queryParameters,
                 ),
+                selectedRelayLegNumber: int.tryParse(
+                  state.uri.queryParameters[relayLegQueryParameter] ?? '',
+                ),
                 compareBaseClassId:
                     state.uri.queryParameters[compareBaseClassQueryParameter],
                 compareBaseResultId:
                     state.uri.queryParameters[compareBaseResultQueryParameter],
+                compareBaseRelayLegNumber: int.tryParse(
+                  state
+                          .uri
+                          .queryParameters[compareBaseRelayLegQueryParameter] ??
+                      '',
+                ),
               );
             },
             routes: [
@@ -53,12 +64,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     eventId: state.pathParameters['eventId']!,
                     classId: state.pathParameters['classId']!,
                     resultId: state.pathParameters['resultId']!,
+                    stageId:
+                        state.uri.queryParameters[resultStageQueryParameter],
                     selectedSplitId: resultSplitQueryValue(
                       state.uri.queryParameters,
+                    ),
+                    relayLegNumber: int.tryParse(
+                      state.uri.queryParameters[relayLegQueryParameter] ?? '',
                     ),
                     compareWithResultId: state
                         .uri
                         .queryParameters[compareWithResultQueryParameter],
+                    compareWithRelayLegNumber: int.tryParse(
+                      state
+                              .uri
+                              .queryParameters[compareWithRelayLegQueryParameter] ??
+                          '',
+                    ),
                   );
                 },
               ),

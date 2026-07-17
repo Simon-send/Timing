@@ -216,10 +216,40 @@ class _DistributionDialogState extends State<_DistributionDialog> {
         : _DistributionView.histogram;
 
     return AlertDialog(
-      title: Text(
-        activeView == _DistributionView.regression
-            ? widget.data.regression?.title ?? widget.data.title
-            : widget.data.title,
+      title: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Text(
+              activeView == _DistributionView.regression
+                  ? widget.data.regression?.title ?? widget.data.title
+                  : widget.data.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 16),
+          SegmentedButton<_DistributionView>(
+            segments: [
+              ButtonSegment<_DistributionView>(
+                value: _DistributionView.histogram,
+                enabled: canShowDistribution,
+                icon: const Icon(Icons.bar_chart),
+                label: const Text('Fordeling'),
+              ),
+              ButtonSegment<_DistributionView>(
+                value: _DistributionView.regression,
+                enabled: canShowRegression,
+                icon: const Icon(Icons.show_chart),
+                label: const Text('Regresjon'),
+              ),
+            ],
+            selected: {activeView},
+            onSelectionChanged: (selection) {
+              setState(() => view = selection.first);
+            },
+          ),
+        ],
       ),
       content: SizedBox(
         width: 760,
@@ -227,30 +257,6 @@ class _DistributionDialogState extends State<_DistributionDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SegmentedButton<_DistributionView>(
-                segments: [
-                  ButtonSegment<_DistributionView>(
-                    value: _DistributionView.histogram,
-                    enabled: canShowDistribution,
-                    icon: const Icon(Icons.bar_chart),
-                    label: const Text('Fordeling'),
-                  ),
-                  ButtonSegment<_DistributionView>(
-                    value: _DistributionView.regression,
-                    enabled: canShowRegression,
-                    icon: const Icon(Icons.show_chart),
-                    label: const Text('Regresjon'),
-                  ),
-                ],
-                selected: {activeView},
-                onSelectionChanged: (selection) {
-                  setState(() => view = selection.first);
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
             if (activeView == _DistributionView.regression)
               _RegressionView(data: widget.data.regression!)
             else
@@ -306,10 +312,10 @@ class _DistributionDialogState extends State<_DistributionDialog> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(
-          height: 340,
+          height: 400,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final size = Size(constraints.maxWidth, 340);
+              final size = Size(constraints.maxWidth, 400);
               final chartRect = _HistogramLayout.chartRect(size);
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -476,7 +482,7 @@ class _RegressionView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(
-          height: 360,
+          height: 400,
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: palette.panelAlt,
@@ -538,6 +544,8 @@ class _RegressionSummary extends StatelessWidget {
                 child: _RegressionMetric(
                   label: 'Korrelasjon',
                   value: '$correlationPercent%',
+                  tooltip:
+                      'Viser hvor tett punktene følger en rett linje. Høy prosent betyr sterkere sammenheng.',
                 ),
               ),
               const SizedBox(width: 10),
@@ -545,6 +553,8 @@ class _RegressionSummary extends StatelessWidget {
                 child: _RegressionMetric(
                   label: 'Forklart variasjon',
                   value: '$explainedPercent%',
+                  tooltip:
+                      'Viser hvor mye av variasjonen i sluttresultatet som kan forklares av ${data.subjectLabel.toLowerCase()}.',
                 ),
               ),
               const SizedBox(width: 10),
@@ -555,16 +565,6 @@ class _RegressionSummary extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '${data.subjectLabel} mot sluttresultat: $correlationPercent% '
-            'korrelasjon. 100% betyr at punktene ligger tett rundt linja; '
-            '0% betyr svak sammenheng.',
-            style: TextStyle(
-              color: palette.mutedText,
-              fontWeight: FontWeight.w700,
-            ),
           ),
         ],
       ),
@@ -593,28 +593,55 @@ class _RegressionSummaryBox extends StatelessWidget {
 }
 
 class _RegressionMetric extends StatelessWidget {
-  const _RegressionMetric({required this.label, required this.value});
+  const _RegressionMetric({
+    required this.label,
+    required this.value,
+    this.tooltip,
+  });
 
   final String label;
   final String value;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final labelTextStyle = TextStyle(
+      color: palette.mutedText,
+      fontSize: 11,
+      fontWeight: FontWeight.w800,
+    );
+    final labelText = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: labelTextStyle,
+    );
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: palette.mutedText,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+        tooltip == null
+            ? labelText
+            : Tooltip(
+                message: tooltip!,
+                waitDuration: const Duration(milliseconds: 250),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.help,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Expanded(child: labelText),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.help_outline,
+                        size: 14,
+                        color: palette.mutedText,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
         Text(
           value,
           maxLines: 1,
@@ -991,7 +1018,7 @@ class _PercentileSelection {
 
 class _HistogramLayout {
   static const left = 52.0;
-  static const top = 48.0;
+  static const top = 104.0;
   static const right = 16.0;
   static const bottom = 72.0;
 
@@ -1222,32 +1249,63 @@ class _HistogramPainter extends CustomPainter {
       titleFontSize: 12,
       valueFontSize: 13,
     );
-    final averageBadgeCenter = _badgeCenterWithin(
+    var averageBadgeCenter = _badgeCenterWithin(
       size.width,
       averageX,
       averageSize.width,
     );
+    final currentValue = currentAthleteValue;
+    final currentX = currentValue == null
+        ? null
+        : _valueToX(currentValue, chartValues, chart);
+    final currentValueText = currentValue == null
+        ? null
+        : formatValue(currentValue);
+    final currentSize = currentValueText == null
+        ? null
+        : _badgeSize(
+            currentAthleteLabel,
+            currentValueText,
+            titleFontSize: 12,
+            valueFontSize: 13,
+          );
+    var currentBadgeCenter = currentX == null || currentSize == null
+        ? null
+        : _badgeCenterWithin(size.width, currentX, currentSize.width);
+    if (currentX != null && currentSize != null) {
+      if (averageX <= currentX) {
+        final centers = _badgeCenters(
+          firstX: averageX,
+          secondX: currentX,
+          firstWidth: averageSize.width,
+          secondWidth: currentSize.width,
+          minX: 0,
+          maxX: size.width,
+        );
+        averageBadgeCenter = centers.first;
+        currentBadgeCenter = centers.second;
+      } else {
+        final centers = _badgeCenters(
+          firstX: currentX,
+          secondX: averageX,
+          firstWidth: currentSize.width,
+          secondWidth: averageSize.width,
+          minX: 0,
+          maxX: size.width,
+        );
+        currentBadgeCenter = centers.first;
+        averageBadgeCenter = centers.second;
+      }
+    }
     _drawDottedLine(
       canvas,
       Offset(averageX, chart.top),
       Offset(averageX, chart.bottom),
       averagePaint,
     );
-    final currentValue = currentAthleteValue;
-    if (currentValue != null) {
-      final currentX = _valueToX(currentValue, chartValues, chart);
-      final currentValueText = formatValue(currentValue);
-      final currentSize = _badgeSize(
-        currentAthleteLabel,
-        currentValueText,
-        titleFontSize: 12,
-        valueFontSize: 13,
-      );
-      final currentBadgeCenter = _badgeCenterWithin(
-        size.width,
-        currentX,
-        currentSize.width,
-      );
+    if (currentX != null &&
+        currentValueText != null &&
+        currentBadgeCenter != null) {
       canvas.drawLine(
         Offset(currentX, chart.top),
         Offset(currentX, chart.bottom),
@@ -1259,7 +1317,7 @@ class _HistogramPainter extends CustomPainter {
         currentAthleteLabel,
         currentValueText,
         currentBadgeCenter,
-        showPercentileSystem ? chart.top + 52 : chart.top + 8,
+        showPercentileSystem ? 54 : 10,
         palette,
         fill: palette.danger.withValues(alpha: 0.16),
         stroke: palette.danger,
@@ -1273,7 +1331,7 @@ class _HistogramPainter extends CustomPainter {
       'Snitt',
       averageValueText,
       averageBadgeCenter,
-      showPercentileSystem ? chart.top + 8 : 10,
+      showPercentileSystem ? 54 : 10,
       palette,
       fill: averageColor.withValues(alpha: 0.16),
       stroke: averageColor,

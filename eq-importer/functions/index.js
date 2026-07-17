@@ -22,6 +22,88 @@ function getDb() {
   return db;
 }
 
+function sanitizeForFirestore(value) {
+  if (value == null) return undefined;
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  if (typeof value === "object" && value &&
+    (value._methodName || value.constructor && value.constructor.name === "FieldValue")) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    const values = value
+      .map(sanitizeForFirestore)
+      .filter((item) => item !== undefined);
+    return values.length ? values : undefined;
+  }
+  if (typeof value === "object" &&
+    !(value instanceof Date) &&
+    !(value && typeof value.isEqual === "function")) {
+    const entries = Object.entries(value)
+      .map(([key, item]) => [key, sanitizeForFirestore(item)])
+      .filter(([, item]) => item !== undefined);
+    return entries.length ? Object.fromEntries(entries) : undefined;
+  }
+  return value;
+}
+
+function resultProfileOverrides() {
+  const raw = process.env.RESULT_PROFILE_OVERRIDES;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.warn("Ignoring invalid RESULT_PROFILE_OVERRIDES JSON", error);
+    return {};
+  }
+}
+
+function isBiathlonEvent(event) {
+  return String(event && event.Gren && event.Gren.Kode || "").toUpperCase() === "BT";
+}
+
+function isRelayStage(event, etappe) {
+  const discipline = event && event.Disiplin ? event.Disiplin : {};
+  const disciplineCode = String(discipline.Kode || "").toUpperCase();
+  const disciplineName = String(discipline.Navn || "").toLowerCase();
+  const stageType = String(etappe && etappe.Type || "").toLowerCase();
+  return disciplineCode === "RL" ||
+    disciplineName.includes("relay") ||
+    disciplineName.includes("stafett") ||
+    stageType.includes("relay") ||
+    stageType.includes("stafett");
+}
+
+function classifyResultProfile(event, etappe, explicitOverride) {
+  if (explicitOverride) {
+    return {profile: explicitOverride, determinedBy: "override"};
+  }
+  const sportCode = String(event && event.Gren && event.Gren.Kode || "").toUpperCase();
+  const discipline = event && event.Disiplin ? event.Disiplin : {};
+  const disciplineCode = String(discipline.Kode || "").toUpperCase();
+  const disciplineName = String(discipline.Navn || "").toLowerCase();
+  const stageType = String(etappe && etappe.Type || "").toLowerCase();
+
+  if (sportCode === "BT") return {profile: "biathlon", determinedBy: "eq"};
+  if (isRelayStage(event, etappe)) {
+    return {profile: "relay", determinedBy: "eq"};
+  }
+  if (stageType === "heats" || disciplineName.includes("sprint")) {
+    return {profile: "sprint", determinedBy: "eq"};
+  }
+  return {profile: "standard", determinedBy: "eq"};
+}
+
+function profileForStage(event, eventId, etappeUid, explicitOverride) {
+  const overrides = resultProfileOverrides();
+  const eventOverride = overrides[String(eventId)];
+  const override = explicitOverride ||
+    (eventOverride && eventOverride.stages && eventOverride.stages[String(etappeUid)]) ||
+    (typeof eventOverride === "string" ? eventOverride : eventOverride && eventOverride.profile);
+  const etappe = event && event.Etapper ? event.Etapper[String(etappeUid)] : null;
+  return classifyResultProfile(event, etappe, override);
+}
+
 /**
  * Fetch JSON with browser-like headers.
  */
@@ -91,12 +173,6 @@ function collectTimeItemsFromParticipantPasses(participantsWithPasses, classId, 
       continue;
     }
 
-    const participantEtappeUid = getParticipantEtappeUid(p);
-    if (etappeUid != null && participantEtappeUid != null &&
-      participantEtappeUid !== Number(etappeUid)) {
-      continue;
-    }
-
     const edMap = p.EtappeDeltaker && typeof p.EtappeDeltaker === "object" ?
       p.EtappeDeltaker :
       {};
@@ -156,7 +232,11 @@ async function fetchParticipantPassTimeItems(eventId, classId, etappeUid) {
 }
 function withStation(baseUrl, stationUid, startAt, count) {
   const u = new URL(baseUrl);
-  u.searchParams.set("station", String(stationUid));
+  if (stationUid == null) {
+    u.searchParams.delete("station");
+  } else {
+    u.searchParams.set("station", String(stationUid));
+  }
   u.searchParams.set("passes", "true");
   u.searchParams.set("justTimeData", "true");
   u.searchParams.set("startAt", String(startAt));
@@ -172,7 +252,7 @@ async function batchSetDocs(docWrites) {
   let count = 0;
 
   for (const w of docWrites) {
-    batch.set(w.ref, w.data, { merge: true });
+    batch.set(w.ref, sanitizeForFirestore(w.data) || {}, { merge: true });
     count++;
     if (count >= MAX) {
       await batch.commit();
@@ -204,7 +284,8 @@ async function batchDeleteDocs(docRefs) {
 function isEmptyResultDoc(data) {
   if (!data || typeof data !== "object") return false;
 
-  const rawPasses = Array.isArray(data.rawPasses) ? data.rawPasses : [];
+  const rawPasses = Array.isArray(data.timingPoints) ? data.timingPoints :
+    (Array.isArray(data.rawPasses) ? data.rawPasses : []);
   const splits = data.splits && typeof data.splits === "object" ? data.splits : {};
   return data.totalMs == null &&
     rawPasses.length === 0 &&
@@ -335,13 +416,37 @@ function getParticipantEtappeDeltakerUids(p, etappeUid) {
       null
     );
 
-    if (etappeUid != null && edEtappeUid != null && edEtappeUid !== Number(etappeUid)) {
-      continue;
+    if (etappeUid != null) {
+      if (edEtappeUid != null && edEtappeUid !== Number(etappeUid)) continue;
+      if (edEtappeUid == null) {
+        const participantEtappeUid = getParticipantEtappeUid(p);
+        if (participantEtappeUid != null &&
+          participantEtappeUid !== Number(etappeUid)) continue;
+      }
     }
     out.push(edUid);
   }
 
   return out;
+}
+
+function hasAdvancedToLaterStage(event, participant, etappeUid) {
+  const stages = getEventStages(event);
+  const currentIndex = stages.findIndex((entry) =>
+    entry.id === String(etappeUid));
+  if (currentIndex < 0 || !participant ||
+    !participant.EtappeDeltaker ||
+    typeof participant.EtappeDeltaker !== "object") {
+    return false;
+  }
+
+  const laterStageIds = new Set(
+    stages.slice(currentIndex + 1).map((entry) => entry.id),
+  );
+  return Object.values(participant.EtappeDeltaker).some((stageParticipant) => {
+    const stageId = getEtappeUidFromEtappeDeltaker(stageParticipant);
+    return stageId != null && laterStageIds.has(String(stageId));
+  });
 }
 
 function getClassParticipantRecords(participants, classId, etappeUid) {
@@ -354,14 +459,10 @@ function getClassParticipantRecords(participants, classId, etappeUid) {
       continue;
     }
 
-    const participantEtappeUid = getParticipantEtappeUid(p);
-    if (etappeUid != null && participantEtappeUid != null &&
-      participantEtappeUid !== Number(etappeUid)) {
-      continue;
-    }
-
     const pid = toNumberOrNull(firstDefined(pidStr, p.UID));
     const edUids = getParticipantEtappeDeltakerUids(p, etappeUid);
+
+    if (etappeUid != null && edUids.length === 0) continue;
 
     for (const edUid of edUids) {
       records.push({pid, p, edUid});
@@ -856,7 +957,9 @@ function buildEventListEntry(eventId, eventName) {
 
 function buildAthleteEventResultEntry(result, context) {
   if (!result || result.eventId == null) return null;
-  const analysis = result.analysis || {};
+  const analysis = result.analysis && result.analysis.biathlon ?
+    result.analysis.biathlon.metrics || {} :
+    result.analysis || {};
   return {
     eventId: Number(result.eventId),
     name: (context && context.eventName) || null,
@@ -864,9 +967,7 @@ function buildAthleteEventResultEntry(result, context) {
     className: firstDefined(result.className, null),
     rank: firstDefined(result.rank, null),
     finishRank: firstDefined(result.finishRank, result.rank, null),
-    proneHits: firstDefined(analysis.proneHits, null),
     proneMisses: firstDefined(analysis.proneMisses, null),
-    standingHits: firstDefined(analysis.standingHits, null),
     standingMisses: firstDefined(analysis.standingMisses, null),
     skiRank: firstDefined(analysis.skiRank, null),
     netSkiRank: firstDefined(analysis.netSkiRank, analysis.skiRank, null),
@@ -1186,27 +1287,102 @@ function buildCompactResultIdentity(participantSummary, identityFields) {
   });
 }
 
+function relayMembers(participant) {
+  const members = participant && participant.StafettDeltakere;
+  if (!members || typeof members !== "object") return [];
+  return Object.values(members)
+    .filter((member) => member && typeof member === "object")
+    .map((member) => ({
+      legNumber: toNumberOrNull(firstDefined(member.Sortering, member.Etappe, null)),
+      athleteId: member.UtoverUID != null ? `athlete:${member.UtoverUID}` : null,
+      athleteSourceUid: firstDefined(member.UtoverUID, null),
+      name: firstDefined(
+        member.NavnFormatert,
+        `${member.Fornavn || ""} ${member.Etternavn || ""}`.trim(),
+        null,
+      ),
+      country: member.Nasjon ? {
+        name: firstDefined(member.Nasjon.Navn, null),
+        iso2: firstDefined(member.Nasjon.ISO2, null),
+        iso3: firstDefined(member.Nasjon.ISO3, null),
+      } : null,
+    }))
+    .sort((a, b) => (a.legNumber || 0) - (b.legNumber || 0));
+}
+
+function teamDisplayName(participant, fallback) {
+  const formatted = firstDefined(
+    participant && participant.KlubbTeamFormatert,
+    participant && participant.LagNavn,
+    participant && participant.TeamName,
+    fallback,
+  );
+  return formatted == null ? null : String(formatted).replace(/^\.\s*/, "").trim();
+}
+
+function withoutHitFields(analysis, shooting) {
+  const cleanAnalysis = Object.assign({}, analysis || {});
+  delete cleanAnalysis.hitsTotal;
+  delete cleanAnalysis.targetsTotal;
+  delete cleanAnalysis.proneHits;
+  delete cleanAnalysis.standingHits;
+  const cleanShooting = {};
+  for (const [key, pass] of Object.entries(shooting || {})) {
+    cleanShooting[key] = Object.assign({}, pass);
+    delete cleanShooting[key].hits;
+  }
+  return {metrics: cleanAnalysis, passes: cleanShooting};
+}
+
 function buildResultClassDoc(args) {
-  return Object.assign(
-    {},
-    buildCompactResultIdentity(args.participantSummary, args.identityFields),
-    {
+  const identity = buildCompactResultIdentity(
+    args.participantSummary,
+    args.identityFields,
+  );
+  const members = relayMembers(args.participant);
+  const isTeam = args.isRelay || args.profile === "relay" || members.length > 0;
+  const displayName = isTeam ?
+    teamDisplayName(args.participant, identity.name) :
+    identity.name;
+  const isBiathlon = args.isBiathlon || args.profile === "biathlon";
+  const biathlon = isBiathlon ?
+    withoutHitFields(args.derived.analysis, args.derived.shooting) :
+    null;
+  const relayLegs = isTeam && isBiathlon ?
+    buildRelayLegBiathlon(args.rawSplits) :
+    [];
+  const document = Object.assign({}, identity, {
+    schemaVersion: 3,
     eventId: args.eventId,
     classId: args.classId,
+    stageId: String(args.etappeUid),
     etappeUid: args.etappeUid,
     etappeDeltakerUid: args.etappeDeltakerUid,
     hasTimingData: true,
+    isRelay: isTeam,
+    isBiathlon,
     totalMs: args.totalMs,
     totalText: args.totalText,
     status: args.status,
-    rawPasses: args.derived.rawPasses,
-    analysis: args.derived.analysis,
-    shooting: args.derived.shooting,
-    resultId: admin.firestore.FieldValue.delete(),
-    laps: admin.firestore.FieldValue.delete(),
-    source: admin.firestore.FieldValue.delete(),
+    advanced: args.advanced === true,
+    entrant: {
+      kind: isTeam ? "team" : "athlete",
+      participantUid: identity.participantUid,
+      athleteId: isTeam ? null : identity.athleteId,
+      name: displayName,
+      bib: firstDefined(identity.fullBib, identity.bib, null),
+      clubId: identity.clubId,
+      clubName: identity.clubName,
+      teamId: identity.teamId,
+      teamName: identity.teamName,
+      country: identity.country,
+    },
+    team: isTeam ? {members, legs: relayLegs} : null,
+    timingPoints: args.derived.rawPasses,
+    analysis: biathlon ? {biathlon: Object.assign({version: 1}, biathlon)} : null,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
+  return sanitizeForFirestore(document) || {};
 }
 
 function getItemsArray(payload) {
@@ -1499,6 +1675,7 @@ function buildPersistedRawPass(split) {
   return {
     setupUid: firstDefined(split.setupUid, null),
     code: firstDefined(split.code, null),
+    kind: firstDefined(split.kind, null),
     sort: firstDefined(split.sort, null),
     cumRank: firstDefined(split.cumRank, null),
     legRank: firstDefined(split.legRank, null),
@@ -1509,6 +1686,8 @@ function buildPersistedRawPass(split) {
     status: firstDefined(split.status, null),
     addition: firstDefined(split.addition, null),
     additionParts: firstDefined(split.additionParts, null),
+    legNumber: firstDefined(split.legNumber, split.etappeNumber, null),
+    roundNumber: firstDefined(split.roundNumber, null),
   };
 }
 
@@ -1762,6 +1941,107 @@ function buildDerivedResultMetrics(splits, totalMs) {
   };
 }
 
+function buildRelayLegBiathlon(splits) {
+  const entries = Object.entries(splits || {})
+    .map(([setupUid, split]) => Object.assign({setupUid}, split))
+    .filter((split) => relaySplitLegNumber(split) != null);
+  const legNumbers = Array.from(new Set(entries.map((split) =>
+    relaySplitLegNumber(split)))).sort((a, b) => a - b);
+  const legs = [];
+  let previousEndMs = 0;
+  let previousEndWithoutAdditionMs = 0;
+
+  for (const legNumber of legNumbers) {
+    const legEntries = entries
+      .filter((split) => relaySplitLegNumber(split) === legNumber)
+      .sort(compareSplitRows);
+    const timedEntries = legEntries.filter((split) =>
+      typeof split.cumMs === "number");
+    if (timedEntries.length === 0) continue;
+    const endpoint = timedEntries.reduce((latest, split) =>
+      split.cumMs >= latest.cumMs ? split : latest);
+    const totalMs = endpoint.cumMs - previousEndMs;
+    if (totalMs < 0) continue;
+
+    const originalShotIndexes = [];
+    for (const split of legEntries) {
+      const shotIndex = getShotIndexFromCode(split.code);
+      if (shotIndex != null && !originalShotIndexes.includes(shotIndex)) {
+        originalShotIndexes.push(shotIndex);
+      }
+    }
+    const localShotIndexes = new Map(originalShotIndexes.map(
+      (shotIndex, index) => [shotIndex, index + 1],
+    ));
+    const encounteredShotIndexes = [];
+    const localSplits = {};
+
+    for (const split of legEntries) {
+      const originalShotIndex = getShotIndexFromCode(split.code);
+      if (originalShotIndex != null &&
+        !encounteredShotIndexes.includes(originalShotIndex)) {
+        encounteredShotIndexes.push(originalShotIndex);
+      }
+      const localShotIndex = localShotIndexes.get(originalShotIndex);
+      const codeMatch = String(split.code || "")
+        .match(/^(INS|UTS|IS|US|S)\d+$/i);
+      const code = codeMatch && localShotIndex != null ?
+        `${codeMatch[1]}${localShotIndex}` :
+        split.code;
+      const additionParts = localRelayAdditionParts(
+        getAdditionPartsFromSplit(split),
+        originalShotIndexes,
+        encounteredShotIndexes,
+      );
+      localSplits[split.setupUid] = Object.assign({}, split, {
+        code,
+        cumMs: typeof split.cumMs === "number" ?
+          split.cumMs - previousEndMs : null,
+        cumMsWithoutAddition: typeof split.cumMsWithoutAddition === "number" &&
+          previousEndWithoutAdditionMs != null ?
+          split.cumMsWithoutAddition - previousEndWithoutAdditionMs : null,
+        additionParts,
+        addition: additionParts == null ? null : additionParts.join("+"),
+      });
+    }
+
+    const derived = buildDerivedResultMetrics(localSplits, totalMs);
+    const biathlon = withoutHitFields(derived.analysis, derived.shooting);
+    legs.push({
+      legNumber,
+      totalMs,
+      biathlon: Object.assign({version: 1}, biathlon),
+    });
+    previousEndMs = endpoint.cumMs;
+    if (typeof endpoint.cumMsWithoutAddition === "number") {
+      previousEndWithoutAdditionMs = endpoint.cumMsWithoutAddition;
+    } else {
+      previousEndWithoutAdditionMs = null;
+    }
+  }
+  return legs;
+}
+
+function relaySplitLegNumber(split) {
+  return toNumberOrNull(firstDefined(
+    split && split.legNumber,
+    split && split.etappeNumber,
+    null,
+  ));
+}
+
+function localRelayAdditionParts(parts, originalIndexes, encounteredIndexes) {
+  if (!Array.isArray(parts)) return null;
+  if (encounteredIndexes.length === 0) return [];
+  const maxOriginalIndex = Math.max(...originalIndexes);
+  if (originalIndexes[0] === 1 && parts.length > maxOriginalIndex) {
+    return parts.slice(-encounteredIndexes.length);
+  }
+  return encounteredIndexes
+    .map((index) => parts[index - 1])
+    .filter((value) => typeof value === "number");
+}
+
 function buildDerivedResultMetricsLegacy(splits, totalMs) {
   const splitEntries = Object.entries(splits || {})
     .map(([setupUid, split]) => Object.assign({setupUid}, split))
@@ -1934,17 +2214,21 @@ function buildDerivedResultMetricsLegacy(splits, totalMs) {
 }
 
 function addMetricRanks(results, field, rankField) {
+  const metricsOf = (result) => result.analysis && result.analysis.biathlon ?
+    result.analysis.biathlon.metrics :
+    result.analysis;
   const ranked = results
-    .filter((r) => r.analysis && typeof r.analysis[field] === "number")
-    .sort((a, b) => a.analysis[field] - b.analysis[field]);
+    .filter((r) => metricsOf(r) && typeof metricsOf(r)[field] === "number")
+    .sort((a, b) => metricsOf(a)[field] - metricsOf(b)[field]);
 
   let previousValue = null;
   let previousRank = null;
 
   for (let i = 0; i < ranked.length; i++) {
-    const value = ranked[i].analysis[field];
+    const metrics = metricsOf(ranked[i]);
+    const value = metrics[field];
     const rank = (previousValue != null && value === previousValue) ? previousRank : i + 1;
-    ranked[i].analysis[rankField] = rank;
+    metrics[rankField] = rank;
     previousValue = value;
     previousRank = rank;
   }
@@ -1989,10 +2273,12 @@ function addRawPassRanks(results) {
   const legBySetupUid = new Map();
 
   for (const result of results) {
-    const rawPasses = Array.isArray(result.rawPasses) ? result.rawPasses : [];
+    const rawPasses = Array.isArray(result.timingPoints) ? result.timingPoints : [];
     for (const pass of rawPasses) {
       pass.cumRank = null;
+      pass.cumRankCount = null;
       pass.legRank = null;
+      pass.legRankCount = null;
       if (!pass || pass.setupUid == null) continue;
 
       const key = String(pass.setupUid);
@@ -2007,11 +2293,11 @@ function addRawPassRanks(results) {
     }
   }
 
-  addRawPassRankForGroups(cumBySetupUid, "cumMs", "cumRank");
-  addRawPassRankForGroups(legBySetupUid, "legMs", "legRank");
+  addRawPassRankForGroups(cumBySetupUid, "cumMs", "cumRank", "cumRankCount");
+  addRawPassRankForGroups(legBySetupUid, "legMs", "legRank", "legRankCount");
 }
 
-function addRawPassRankForGroups(groupedPasses, valueField, rankField) {
+function addRawPassRankForGroups(groupedPasses, valueField, rankField, countField) {
   for (const passes of groupedPasses.values()) {
     passes.sort((a, b) => a[valueField] - b[valueField]);
 
@@ -2021,6 +2307,7 @@ function addRawPassRankForGroups(groupedPasses, valueField, rankField) {
       const value = passes[i][valueField];
       const rank = (previousValue != null && value === previousValue) ? previousRank : i + 1;
       passes[i][rankField] = rank;
+      passes[i][countField] = passes.length;
       previousValue = value;
       previousRank = rank;
     }
@@ -2281,7 +2568,9 @@ function buildEventDoc(event, eventId) {
   const country = event && event.Land ? event.Land : {};
   const resultSetup = event && event.ResultatOppsett ? event.ResultatOppsett : {};
 
+  const eventProfile = profileForStage(event, eventId, null, null);
   return {
+    schemaVersion: 3,
     eventId,
     name: event && event.Navn ? event.Navn : null,
     date: firstDefined(event && event.Dato, event && event.Aktiv, null),
@@ -2333,8 +2622,71 @@ function buildEventDoc(event, eventId) {
       nameFormat: firstDefined(resultSetup.NavnFormat, null),
       clubFormat: firstDefined(resultSetup.KlubbFormat, event && event.KlubbFormat, null),
     },
+    resultProfile: eventProfile.profile,
+    resultProfileSource: eventProfile.determinedBy,
     source: admin.firestore.FieldValue.delete(),
   };
+}
+
+function getEventStages(event) {
+  if (!event || !event.Etapper || typeof event.Etapper !== "object") return [];
+  return Object.entries(event.Etapper)
+    .map(([id, stage], index) => ({
+      id: String(firstDefined(stage && stage.UID, id)),
+      index,
+      stage,
+    }))
+    .filter((entry) => entry.stage && typeof entry.stage === "object");
+}
+
+function choosePrimaryStageId(event, classId) {
+  const classKey = String(classId);
+  const candidates = getEventStages(event).filter((entry) => {
+    const classes = entry.stage.Klasser || {};
+    return Object.prototype.hasOwnProperty.call(classes, classKey);
+  });
+  candidates.sort((a, b) => {
+    const aLevel = toNumberOrNull(a.stage.Nivaa);
+    const bLevel = toNumberOrNull(b.stage.Nivaa);
+    const aPriority = aLevel === 1 ? -1 : (aLevel == null ? 1000 : aLevel);
+    const bPriority = bLevel === 1 ? -1 : (bLevel == null ? 1000 : bLevel);
+    return aPriority - bPriority || a.index - b.index;
+  });
+  return candidates.length ? candidates[0].id : null;
+}
+
+function buildStageDoc(event, eventId, etappeUid, profileOverride) {
+  const entry = getEventStages(event).find((candidate) =>
+    candidate.id === String(etappeUid));
+  const stage = entry ? entry.stage : {};
+  const classification = profileForStage(
+    event,
+    eventId,
+    etappeUid,
+    profileOverride,
+  );
+  const classIds = Object.keys(stage.Klasser || {})
+    .map(toNumberOrNull)
+    .filter((id) => id != null);
+  return sanitizeForFirestore({
+    schemaVersion: 3,
+    eventId,
+    stageId: String(etappeUid),
+    etappeUid: Number(etappeUid),
+    name: firstDefined(stage.Navn, `Etappe ${etappeUid}`),
+    type: firstDefined(stage.Type, null),
+    level: firstDefined(stage.Nivaa, null),
+    order: entry ? entry.index : null,
+    distanceKm: firstDefined(stage.Km, null),
+    rounds: firstDefined(stage.Runder, null),
+    firstStart: firstDefined(stage.ForsteStart, null),
+    classIds,
+    resultProfile: classification.profile,
+    resultProfileSource: classification.determinedBy,
+    isRelay: isRelayStage(event, stage),
+    isBiathlon: isBiathlonEvent(event),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }) || {};
 }
 
 function buildClassDoc(event, classId, etappeUid) {
@@ -2344,6 +2696,7 @@ function buildClassDoc(event, classId, etappeUid) {
     null;
 
   return {
+    schemaVersion: 3,
     classId,
     name: (classObj && classObj.Navn) ? classObj.Navn : null,
     ageFrom: firstDefined(classObj && classObj.AlderFom, null),
@@ -2369,7 +2722,10 @@ function buildClassDoc(event, classId, etappeUid) {
     ),
     rankingResolution: firstDefined(event && event.RangeringOpplosning, null),
     stopStationName: firstDefined(etappeObj && etappeObj.StasjonStoppNavn, null),
-    isBiathlon: !!(event && event.Gren && event.Gren.Kode === "BT"),
+    isBiathlon: isBiathlonEvent(event),
+    isRelay: isRelayStage(event, etappeObj),
+    primaryStageId: choosePrimaryStageId(event, classId) ||
+      (etappeUid != null ? String(etappeUid) : null),
   };
 }
 
@@ -2377,7 +2733,7 @@ function buildClassStructureDoc(args) {
   const resultIds = Array.from(args.resultDocIds || []).sort();
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     eventId: args.eventId,
     classId: args.classId,
     etappeUid: args.etappeUid != null ? Number(args.etappeUid) : null,
@@ -2423,17 +2779,17 @@ async function importEqTimingFromUrls(params) {
 
   // 3) skriv event
   await eventDocRef.set(
-    Object.assign({}, buildEventDoc(event, eventId), {
+    sanitizeForFirestore(Object.assign({}, buildEventDoc(event, eventId), {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }),
+    })) || {},
     { merge: true }
   );
 
   // 4) skriv class meta
   await classDocRef.set(
-    Object.assign({}, buildClassDoc(event, classId, null), {
+    sanitizeForFirestore(Object.assign({}, buildClassDoc(event, classId, null), {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }),
+    })) || {},
     { merge: true }
   );
 
@@ -2448,6 +2804,34 @@ async function importEqTimingFromUrls(params) {
   if (etappeUid == null) {
     etappeUid = getEtappeUidFromEvent(event, classId, participants);
   }
+
+  if (etappeUid == null) throw new Error("Could not determine etappeUid");
+  const stageDocRef = eventDocRef.collection("stages").doc(String(etappeUid));
+  const stageClassDocRef = stageDocRef.collection("classes").doc(String(classId));
+  const classification = profileForStage(
+    event,
+    eventId,
+    etappeUid,
+    params.resultProfile,
+  );
+  await stageDocRef.set(
+    buildStageDoc(event, eventId, etappeUid, params.resultProfile),
+    {merge: true},
+  );
+  await stageClassDocRef.set(
+    sanitizeForFirestore(Object.assign({}, buildClassDoc(event, classId, etappeUid), {
+      eventId,
+      stageId: String(etappeUid),
+      resultProfile: classification.profile,
+      isRelay: isRelayStage(
+        event,
+        event && event.Etapper ? event.Etapper[String(etappeUid)] : null,
+      ),
+      isBiathlon: isBiathlonEvent(event),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })) || {},
+    {merge: true},
+  );
 
   if (etappeUid == null) {
     const classObj2 = (event && event.Klasser) ?
@@ -2470,12 +2854,12 @@ async function importEqTimingFromUrls(params) {
   // skriv splitDefs
   if (setupMap) {
     const splitWrites = classSplits.splitOrder.map((setupUid) => ({
-      ref: classDocRef.collection("splitDefs").doc(setupUid),
-      data: classSplits.splitDefs[setupUid],
+      ref: stageClassDocRef.collection("splitDefs").doc(setupUid),
+      data: sanitizeForFirestore(classSplits.splitDefs[setupUid]) || {},
     }));
     await batchSetDocs(splitWrites);
     splitDefCleanup = await deleteDocsNotInSet(
-      classDocRef.collection("splitDefs"),
+      stageClassDocRef.collection("splitDefs"),
       new Set(classSplits.splitOrder),
     );
   }
@@ -2491,6 +2875,24 @@ async function importEqTimingFromUrls(params) {
       source: "Result/Class",
     });
     allTimeItems = allTimeItems.concat(itemsForStation);
+  }
+  if (stationUids.length === 0) {
+    try {
+      const itemsWithoutStation = await fetchAllForStation(timesUrlBase, null);
+      stationFetches.push({
+        stationUid: null,
+        count: itemsWithoutStation.length,
+        source: "Result/Class",
+      });
+      allTimeItems = allTimeItems.concat(itemsWithoutStation);
+    } catch (error) {
+      stationFetches.push({
+        stationUid: null,
+        count: 0,
+        source: "Result/Class",
+        error: error && error.message ? error.message : String(error),
+      });
+    }
   }
 
   // Lag "times" objekt som normalizeTimes() kan lese
@@ -2591,6 +2993,9 @@ async function importEqTimingFromUrls(params) {
         isShootingStation: firstDefined(meta.isShootingStation, null),
         isStart: firstDefined(meta.isStart, null),
         isStop: firstDefined(meta.isStop, null),
+        etappeNumber: firstDefined(meta.etappeNumber, null),
+        legNumber: firstDefined(meta.legNumber, null),
+        roundNumber: firstDefined(meta.roundNumber, r.roundNumber, null),
         cumMs: r.cumMs,
         cumMsSmoothed: r.cumMsSmoothed,
         cumMsNet: r.cumMsNet,
@@ -2611,7 +3016,7 @@ async function importEqTimingFromUrls(params) {
         passTime: r.passTime,
         smoothedTime: r.smoothedTime,
         timezoneOffset: r.timezoneOffset,
-        roundNumber: r.roundNumber,
+        sourceRoundNumber: r.roundNumber,
         addition: r.addition,
         additionParts: r.additionParts,
         additionTotal: r.additionTotal,
@@ -2629,12 +3034,14 @@ async function importEqTimingFromUrls(params) {
         km: firstDefined(meta.km, null),
         stationName: firstDefined(meta.stationName, null),
         isShootingStation: firstDefined(meta.isShootingStation, null),
+        etappeNumber: firstDefined(meta.etappeNumber, null),
+        legNumber: firstDefined(meta.legNumber, null),
         cumMs: r.cumMs,
         cumText: r.cumText,
         legMs: r.legMs,
         legText: r.legText,
         status: r.status,
-        roundNumber: r.roundNumber,
+        roundNumber: firstDefined(meta.roundNumber, r.roundNumber, null),
         addition: r.addition,
         additionTotal: r.additionTotal,
       };
@@ -2658,7 +3065,7 @@ async function importEqTimingFromUrls(params) {
     const derived = buildDerivedResultMetrics(rawSplits, totalMs);
 
     const docId = String(base.participantUid != null ? base.participantUid : edUid);
-    const ref = classDocRef.collection("results").doc(docId);
+    const ref = stageClassDocRef.collection("results").doc(docId);
 
     preparedResults.push({
       ref,
@@ -2673,15 +3080,24 @@ async function importEqTimingFromUrls(params) {
         totalMs,
         totalText,
         status: resultStatus,
+        advanced: hasAdvancedToLaterStage(event, p, etappeUid),
         splits,
+        rawSplits,
         derived,
+        profile: classification.profile,
+        isRelay: isRelayStage(
+          event,
+          event && event.Etapper ? event.Etapper[String(etappeUid)] : null,
+        ),
+        isBiathlon: isBiathlonEvent(event),
+        participant: p,
       }),
     });
   }
 
   const resultDocIds = new Set(preparedResults.map((r) => r.ref.id));
   const staleResultCleanup = await deleteStaleEmptyResults(
-    classDocRef.collection("results"),
+    stageClassDocRef.collection("results"),
     resultDocIds,
   );
 
@@ -2698,7 +3114,10 @@ async function importEqTimingFromUrls(params) {
 
   await batchSetDocs(Array.from(clubWritesById.values()).map(prepareEntityWrite));
   await batchSetDocs(Array.from(athleteWritesById.values()).map(prepareEntityWrite));
-  const resultWrites = preparedResults;
+  const resultWrites = preparedResults.map((result) => ({
+    ref: result.ref,
+    data: sanitizeForFirestore(result.data) || {},
+  }));
   await batchSetDocs(resultWrites);
 
   const finalResultDocIds = new Set([
@@ -2719,7 +3138,7 @@ async function importEqTimingFromUrls(params) {
     },
   };
 
-  await classDocRef.set(Object.assign(
+  const stageClassSummary = sanitizeForFirestore(Object.assign(
     {},
     buildClassDoc(event, classId, etappeUid),
     buildClassStructureDoc({
@@ -2740,9 +3159,15 @@ async function importEqTimingFromUrls(params) {
       timeSources,
     }),
     {
+      stageId: String(etappeUid),
+      resultProfile: classification.profile,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
-  ), { merge: true });
+  )) || {};
+  await stageClassDocRef.set(stageClassSummary, { merge: true });
+  if (String(buildClassDoc(event, classId, etappeUid).primaryStageId) === String(etappeUid)) {
+    await classDocRef.set(stageClassSummary, {merge: true});
+  }
 
   // 13) return debug
   return {
@@ -2792,6 +3217,41 @@ function getImportableClassIds(event, participants) {
   return Array.from(set.values());
 }
 
+function getImportTargets(event, participants) {
+  const targets = new Map();
+  const excludedStageIds = new Set();
+  const add = (stageId, classId, order) => {
+    const sid = toNumberOrNull(stageId);
+    const cid = toNumberOrNull(classId);
+    if (sid == null || cid == null) return;
+    if (excludedStageIds.has(String(sid))) return;
+    const key = `${sid}/${cid}`;
+    if (!targets.has(key)) targets.set(key, {stageId: sid, classId: cid, order});
+  };
+
+  for (const entry of getEventStages(event)) {
+    const level = toNumberOrNull(entry.stage.Nivaa);
+    const name = normalizeCodeForMatch(entry.stage.Navn);
+    if (level === 0 || name === "PAMELDING" || name === "REGISTRATION") {
+      excludedStageIds.add(String(entry.id));
+      continue;
+    }
+    for (const classId of Object.keys(entry.stage.Klasser || {})) {
+      add(entry.id, classId, entry.index);
+    }
+  }
+  for (const [, participant] of getParticipantEntries(participants)) {
+    const classId = getParticipantClassUid(participant);
+    const stageEntries = participant && participant.EtappeDeltaker || {};
+    for (const stageParticipant of Object.values(stageEntries)) {
+      add(getEtappeUidFromEtappeDeltaker(stageParticipant), classId, 10000);
+    }
+  }
+
+  return Array.from(targets.values()).sort((a, b) =>
+    a.order - b.order || a.stageId - b.stageId || a.classId - b.classId);
+}
+
 async function importWholeEvent(params) {
   const eventId = Number(params.eventId);
   if (Number.isNaN(eventId)) throw new Error("eventId must be a number");
@@ -2810,31 +3270,26 @@ async function importWholeEvent(params) {
 
   // Finn alle klasser som enten finnes i event-oppsettet eller har contestants.
   // Noen resultatklasser (for eksempel U23) kan mangle egne contestants i participants-endpointet.
-  const classIds = getImportableClassIds(event, participants);
-  classIds.sort((a, b) => a - b);
+  const importTargets = getImportTargets(event, participants);
 
   // Lagre event-meta tidlig
   const eventDocRef = getDb().collection("events").doc(String(eventId));
   await eventDocRef.set(
-    Object.assign({}, buildEventDoc(event, eventId), {
+    sanitizeForFirestore(Object.assign({}, buildEventDoc(event, eventId), {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }),
+    })) || {},
     { merge: true }
   );
 
   // Slice (chunk)
-  const slice = classIds.slice(classIndex, classIndex + classCount);
+  const slice = importTargets.slice(classIndex, classIndex + classCount);
 
   const results = [];
   let classesImported = 0;
 
-  for (const classId of slice) {
-    const etappeUid = getEtappeUidFromEvent(event, classId, participants);
-
-    if (etappeUid == null) {
-      results.push({ classId, ok: false, error: "Could not determine etappeUid" });
-      continue;
-    }
+  for (const target of slice) {
+    const classId = target.classId;
+    const etappeUid = target.stageId;
 
     const timesUrlBase = buildTimesUrlBase(eventId, etappeUid, classId);
 
@@ -2851,12 +3306,13 @@ async function importWholeEvent(params) {
   }
 
   const nextClassIndex = classIndex + slice.length;
-  const done = nextClassIndex >= classIds.length;
+  const done = nextClassIndex >= importTargets.length;
 
   return {
     ok: true,
     eventId,
-    classesFound: classIds.length,
+    classesFound: importTargets.length,
+    stageClassesFound: importTargets.length,
     classIndex,
     classCount,
     classesAttempted: slice.length,
@@ -2917,6 +3373,10 @@ module.exports._test = {
   normalizeTimes,
   normalizeClubName,
   buildDerivedResultMetrics,
+  buildRelayLegBiathlon,
+  sanitizeForFirestore,
+  classifyResultProfile,
+  buildStageDoc,
   addMetricRanks,
   buildClubDoc,
   buildAffiliationDoc,
@@ -2929,6 +3389,8 @@ module.exports._test = {
   getClassIdsWithContestants,
   getClassIdsFromEtapper,
   getImportableClassIds,
+  getImportTargets,
+  hasAdvancedToLaterStage,
   collectTimeItemsFromParticipantPasses,
   buildContestantsPassesUrl,
 };

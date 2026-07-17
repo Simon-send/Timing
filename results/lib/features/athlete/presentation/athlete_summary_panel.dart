@@ -12,12 +12,18 @@ class AthleteSummaryPanel extends StatelessWidget {
     this.placementLabel,
     this.isComparing = false,
     this.onComparePressed,
+    this.isFavorite = false,
+    this.isFavoriteUpdating = false,
+    this.onFavoritePressed,
   });
 
   final RaceResult result;
   final String? placementLabel;
   final bool isComparing;
   final VoidCallback? onComparePressed;
+  final bool isFavorite;
+  final bool isFavoriteUpdating;
+  final VoidCallback? onFavoritePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +49,24 @@ class AthleteSummaryPanel extends StatelessWidget {
                   ),
                 ),
               ),
+              if (onFavoritePressed != null) ...[
+                const SizedBox(width: 10),
+                IconButton.outlined(
+                  tooltip: isFavorite
+                      ? 'Fjern stjernemerking'
+                      : 'Stjernemerk utøver',
+                  onPressed: isFavoriteUpdating ? null : onFavoritePressed,
+                  color: isFavorite
+                      ? Theme.of(context).colorScheme.tertiary
+                      : null,
+                  icon: isFavoriteUpdating
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(isFavorite ? Icons.star : Icons.star_border),
+                ),
+              ],
               if (onComparePressed != null) ...[
                 const SizedBox(width: 10),
                 IconButton.outlined(
@@ -86,10 +110,8 @@ class AthleteSummaryPanel extends StatelessWidget {
                 label: l10n.time,
                 value: result.totalText.isEmpty ? '-' : result.totalText,
               ),
-              _InfoChip(
-                label: l10n.shooting,
-                value: result.shooting.isEmpty ? '-' : result.shooting,
-              ),
+              if (result.shooting.trim().isNotEmpty)
+                _InfoChip(label: l10n.shooting, value: result.shooting),
             ],
           ),
         ],

@@ -8,6 +8,8 @@ class SplitDef {
     required this.kind,
     required this.stationName,
     required this.isPublic,
+    this.legNumber,
+    this.roundNumber,
   });
 
   factory SplitDef.fromMap(String id, Map<String, dynamic> data) {
@@ -29,6 +31,8 @@ class SplitDef {
           asBool(data['Er_offentlig']) ??
           asBool(data['erOffentlig']) ??
           true,
+      legNumber: asInt(data['legNumber']) ?? asInt(data['etappeNumber']),
+      roundNumber: asInt(data['roundNumber']),
     );
   }
 
@@ -38,6 +42,8 @@ class SplitDef {
   final String kind;
   final String stationName;
   final bool isPublic;
+  final int? legNumber;
+  final int? roundNumber;
 }
 
 class SplitOption {
@@ -59,22 +65,26 @@ class SplitRangeSelection {
     required this.fromSplitId,
     required this.toSplitId,
     this.includedSplitIds = const [],
+    this.isIndependent = false,
   });
 
   final String? fromSplitId;
   final String toSplitId;
   final List<String> includedSplitIds;
+  final bool isIndependent;
 
   SplitRangeSelection copyWith({
     String? fromSplitId,
     bool clearFromSplitId = false,
     String? toSplitId,
     List<String>? includedSplitIds,
+    bool? isIndependent,
   }) {
     return SplitRangeSelection(
       fromSplitId: clearFromSplitId ? null : fromSplitId ?? this.fromSplitId,
       toSplitId: toSplitId ?? this.toSplitId,
       includedSplitIds: includedSplitIds ?? this.includedSplitIds,
+      isIndependent: isIndependent ?? this.isIndependent,
     );
   }
 }

@@ -9,6 +9,7 @@ class ResultClass {
     required this.etappeUid,
     this.etappeName,
     this.etappeKm,
+    this.primaryStageId,
   });
 
   factory ResultClass.fromMap(String id, Map<String, dynamic> data) {
@@ -23,6 +24,7 @@ class ResultClass {
       etappeUid: asInt(data['etappeUid']) ?? asInt(data['etappeUID']),
       etappeName: asNonEmptyString(data['etappeName']),
       etappeKm: _asPositiveDouble(data['etappeKm']),
+      primaryStageId: asNonEmptyString(data['primaryStageId']),
     );
   }
 
@@ -33,8 +35,18 @@ class ResultClass {
   final int? etappeUid;
   final String? etappeName;
   final double? etappeKm;
+  final String? primaryStageId;
 
-  String? get disciplineName => _disciplineName(etappeName);
+  List<String> get disciplineNames => _disciplineNames('$etappeName $name');
+
+  String? get disciplineName {
+    final names = disciplineNames;
+    return names.isEmpty ? null : names.first;
+  }
+
+  /// Participant data was not stored by older imports, so result count is the
+  /// best available athlete count for those documents.
+  int get athleteCount => participantCount > 0 ? participantCount : resultCount;
 
   int? get distanceMeters {
     final importedKm = etappeKm;
@@ -74,9 +86,8 @@ List<ResultClass> sortResultClassesByDistance(Iterable<ResultClass> classes) {
 String? combinedDisciplineLabel(Iterable<ResultClass> classes) {
   final disciplines = <String>[];
   for (final raceClass in classes) {
-    final discipline = raceClass.disciplineName;
-    if (discipline != null && !disciplines.contains(discipline)) {
-      disciplines.add(discipline);
+    for (final discipline in raceClass.disciplineNames) {
+      if (!disciplines.contains(discipline)) disciplines.add(discipline);
     }
   }
   disciplines.sort((a, b) {
@@ -98,10 +109,8 @@ ResultClass initialResultClass(
   }
 
   return classes.reduce((best, candidate) {
-    if (candidate.participantCount != best.participantCount) {
-      return candidate.participantCount > best.participantCount
-          ? candidate
-          : best;
+    if (candidate.athleteCount != best.athleteCount) {
+      return candidate.athleteCount > best.athleteCount ? candidate : best;
     }
     if (candidate.resultCount != best.resultCount) {
       return candidate.resultCount > best.resultCount ? candidate : best;
@@ -123,9 +132,9 @@ double? _asPositiveDouble(Object? value) {
   return parsed != null && parsed > 0 ? parsed : null;
 }
 
-String? _disciplineName(String? text) {
-  final normalized = text?.trim().toLowerCase();
-  if (normalized == null || normalized.isEmpty) return null;
+List<String> _disciplineNames(String text) {
+  var remaining = text.trim().toLowerCase();
+  if (remaining.isEmpty) return const [];
 
   const disciplines = <(String, String)>[
     ('kort normal', 'Kort normal'),
@@ -139,10 +148,19 @@ String? _disciplineName(String? text) {
     ('prolog', 'Prolog'),
     ('individuell', 'Individuell'),
   ];
+  final found = <String>[];
   for (final (needle, label) in disciplines) {
-    if (normalized.contains(needle)) return label;
+    if (!remaining.contains(needle)) continue;
+    if (!found.contains(label)) found.add(label);
+    // Avoid also finding "sprint" inside "supersprint" while still allowing
+    // combined names such as "Sprint/Fellestart" to yield both disciplines.
+    remaining = remaining.replaceAll(needle, ' ');
   }
-  return null;
+  found.sort((a, b) {
+    final orderCompare = _disciplineOrder(a).compareTo(_disciplineOrder(b));
+    return orderCompare != 0 ? orderCompare : a.compareTo(b);
+  });
+  return found;
 }
 
 int? _distanceMetersFromText(String text) {

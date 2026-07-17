@@ -49,57 +49,55 @@ class BiathlonTable extends StatelessWidget {
       primary: false,
       child: ResultsLoadMoreScrollView(
         onLoadMore: onLoadMore,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            DataTable(
-              showCheckboxColumn: false,
-              sortColumnIndex: columns.isEmpty
-                  ? null
-                  : _sortColumnIndex(activeSortKey, columns),
-              sortAscending: true,
-              headingRowHeight: 42,
-              dataRowMinHeight: rowHeight,
-              dataRowMaxHeight: rowHeight + 8,
-              horizontalMargin: 12,
-              columnSpacing: 26,
-              columns: [
-                const DataColumn(label: Text('STARTNR')),
-                const DataColumn(label: Text('UTOVER')),
+        isLoadingMore: isLoadingMore,
+        itemCount: rows.length,
+        child: RepaintBoundary(
+          child: DataTable(
+            showCheckboxColumn: false,
+            sortColumnIndex: columns.isEmpty
+                ? null
+                : _sortColumnIndex(activeSortKey, columns),
+            sortAscending: true,
+            headingRowHeight: 42,
+            dataRowMinHeight: rowHeight,
+            dataRowMaxHeight: rowHeight + 8,
+            horizontalMargin: 8,
+            columnSpacing: 26,
+            columns: [
+              const DataColumn(label: Text('PLASS')),
+              const DataColumn(label: Text('UTOVER')),
+              DataColumn(
+                label: ResultAffiliationHeader(
+                  view: affiliationView,
+                  clubLabel: 'KLUBB/TEAM',
+                  teamLabel: 'TEAM/KLUBB',
+                  onToggle: onAffiliationViewToggle,
+                ),
+              ),
+              for (final column in columns)
                 DataColumn(
-                  label: ResultAffiliationHeader(
-                    view: affiliationView,
-                    clubLabel: 'KLUBB/TEAM',
-                    teamLabel: 'TEAM/KLUBB',
-                    onToggle: onAffiliationViewToggle,
+                  label: SortableTableHeader(label: column.label),
+                  numeric: true,
+                  onSort: (_, _) => onSortKeyChanged(column.key),
+                ),
+            ],
+            rows: [
+              for (final (index, row) in visibleRows)
+                DataRow(
+                  color: _rowColor(context, row),
+                  onSelectChanged: _isDisabled(row)
+                      ? null
+                      : (_) => onAthleteTap(row),
+                  cells: _cellsForResult(
+                    sortedRows,
+                    index,
+                    columns,
+                    activeSortKey,
+                    affiliationView,
                   ),
                 ),
-                for (final column in columns)
-                  DataColumn(
-                    label: Text(column.label),
-                    numeric: true,
-                    onSort: (_, _) => onSortKeyChanged(column.key),
-                  ),
-              ],
-              rows: [
-                for (final (index, row) in visibleRows)
-                  DataRow(
-                    color: _rowColor(context, row),
-                    onSelectChanged: _isDisabled(row)
-                        ? null
-                        : (_) => onAthleteTap(row),
-                    cells: _cellsForResult(
-                      sortedRows,
-                      index,
-                      columns,
-                      activeSortKey,
-                      affiliationView,
-                    ),
-                  ),
-              ],
-            ),
-            if (isLoadingMore) const TableLoadingMoreIndicator(),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -119,6 +117,7 @@ class BiathlonTable extends StatelessWidget {
       );
     }
     final color = switch (row.highlight) {
+      ResultRowHighlight.favorite => Theme.of(context).colorScheme.tertiary,
       ResultRowHighlight.self => Theme.of(context).colorScheme.primary,
       ResultRowHighlight.affiliationMate => Theme.of(
         context,
@@ -126,7 +125,12 @@ class BiathlonTable extends StatelessWidget {
       ResultRowHighlight.none => null,
     };
     if (color == null) return null;
-    final alpha = row.highlight == ResultRowHighlight.self ? 0.22 : 0.14;
+    final alpha = switch (row.highlight) {
+      ResultRowHighlight.favorite => 0.24,
+      ResultRowHighlight.self => 0.22,
+      ResultRowHighlight.affiliationMate => 0.14,
+      ResultRowHighlight.none => 0.0,
+    };
     return WidgetStatePropertyAll(color.withValues(alpha: alpha));
   }
 
@@ -139,20 +143,16 @@ class BiathlonTable extends StatelessWidget {
   ) {
     final row = sortedRows[index];
     final result = row.result;
-    final analysis = result.biathlon;
+    final analysis = result.biathlon ?? const BiathlonAnalysis.empty();
+    final placement = _placement(
+      sortedRows,
+      index,
+      activeSortKey,
+      showOriginalPlacement: true,
+    );
     return [
-      DataCell(_MonoText(result.bib.isEmpty ? '-' : result.bib)),
-      DataCell(
-        _NameCell(
-          row: row,
-          placement: _placement(
-            sortedRows,
-            index,
-            activeSortKey,
-            showOriginalPlacement: true,
-          ),
-        ),
-      ),
+      DataCell(_MonoText(placement)),
+      DataCell(_NameCell(row: row)),
       DataCell(Text(_affiliationText(result, affiliationView))),
       for (final column in columns)
         DataCell(_MonoText(column.text(analysis), alignEnd: true)),
@@ -168,12 +168,12 @@ class BiathlonTable extends StatelessWidget {
   }
 
   static bool hasBiathlonData(List<ResultTableRow> rows) {
-    return rows.any((row) => row.result.biathlon.hasData);
+    return rows.any((row) => row.result.biathlon?.hasData ?? false);
   }
 
   static List<_BiathlonColumn> _visibleColumns(List<ResultTableRow> rows) {
     final columns = <_BiathlonColumn>[];
-    if (rows.any((row) => row.result.biathlon.skiTimeMs != null)) {
+    if (rows.any((row) => row.result.biathlon?.skiTimeMs != null)) {
       columns.add(
         _BiathlonColumn(
           key: 'ski',
@@ -182,7 +182,7 @@ class BiathlonTable extends StatelessWidget {
         ),
       );
     }
-    if (rows.any((row) => row.result.biathlon.shootingTimeMs != null)) {
+    if (rows.any((row) => row.result.biathlon?.shootingTimeMs != null)) {
       columns.add(
         _BiathlonColumn(
           key: 'shooting',
@@ -191,7 +191,7 @@ class BiathlonTable extends StatelessWidget {
         ),
       );
     }
-    if (rows.any((row) => row.result.biathlon.penaltyTimeMs != null)) {
+    if (rows.any((row) => row.result.biathlon?.penaltyTimeMs != null)) {
       columns.add(
         _BiathlonColumn(
           key: 'penalty',
@@ -200,7 +200,7 @@ class BiathlonTable extends StatelessWidget {
         ),
       );
     }
-    if (rows.any((row) => row.result.biathlon.missesTotal != null)) {
+    if (rows.any((row) => row.result.biathlon?.missesTotal != null)) {
       columns.add(
         _BiathlonColumn(
           key: 'misses',
@@ -213,7 +213,7 @@ class BiathlonTable extends StatelessWidget {
     final indexes = <int>{};
     for (final row in rows) {
       indexes.addAll(
-        row.result.biathlon.passes
+        (row.result.biathlon?.passes ?? const <ShootingPass>[])
             .where((pass) => pass.rangeMs != null)
             .map((pass) => pass.index),
       );
@@ -255,6 +255,7 @@ class BiathlonTable extends StatelessWidget {
 
   static int? _sortValue(RaceResult result, String sortKey) {
     final analysis = result.biathlon;
+    if (analysis == null) return null;
     if (sortKey == 'ski') return analysis.skiTimeMs;
     if (sortKey == 'shooting') return analysis.shootingTimeMs;
     if (sortKey == 'penalty') return analysis.penaltyTimeMs;
@@ -286,6 +287,10 @@ class BiathlonTable extends StatelessWidget {
     final status = row.result.status.trim();
     if (!row.result.isFinished) {
       final placement = status.isEmpty ? 'DNF' : status;
+      final relayOverallRank = row.result.relayOverallRank;
+      if (relayOverallRank != null && relayOverallRank > 0) {
+        return '$placement($relayOverallRank)';
+      }
       return showOriginalPlacement ? '$placement(DNF)' : placement;
     }
 
@@ -339,10 +344,9 @@ class _BiathlonColumn {
 }
 
 class _NameCell extends StatelessWidget {
-  const _NameCell({required this.row, required this.placement});
+  const _NameCell({required this.row});
 
   final ResultTableRow row;
-  final String placement;
 
   @override
   Widget build(BuildContext context) {
@@ -351,8 +355,11 @@ class _NameCell extends StatelessWidget {
       width: 320,
       child: Row(
         children: [
-          SizedBox(width: 78, child: _MonoText(placement)),
-          const SizedBox(width: 10),
+          SizedBox(
+            width: 52,
+            child: _MonoText(result.bib.isEmpty ? '-' : result.bib),
+          ),
+          const SizedBox(width: 8),
           Container(
             width: 8,
             height: 32,
@@ -363,11 +370,29 @@ class _NameCell extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              result.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    result.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (result.advanced) ...[
+                  const SizedBox(width: 8),
+                  const AdvancementBadge(),
+                ],
+                if (row.highlight == ResultRowHighlight.favorite) ...[
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.star,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
+                ],
+              ],
             ),
           ),
         ],

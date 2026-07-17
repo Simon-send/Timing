@@ -16,6 +16,8 @@ import '../../results/presentation/result_locations.dart';
 import '../../settings/presentation/settings_menu.dart';
 import '../data/athlete_profile_repository.dart';
 import '../domain/athlete_profile.dart';
+import 'race_pacing_profile_panel.dart';
+import 'result_history_panel.dart';
 
 class MePage extends ConsumerWidget {
   const MePage({super.key});
@@ -196,22 +198,59 @@ class _LinkedAthleteContent extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 14),
-          ShellPanel(
-            child: races.when(
-              skipLoadingOnReload: true,
-              loading: () => const SizedBox(
+          races.when(
+            skipLoadingOnReload: true,
+            loading: () => const ShellPanel(
+              child: SizedBox(
                 height: 220,
                 child: LoadingState(label: 'Laster løp'),
               ),
-              error: (error, _) => SizedBox(
+            ),
+            error: (error, _) => ShellPanel(
+              child: SizedBox(
                 height: 260,
                 child: ErrorState(
                   title: 'Kunne ikke lese løp',
                   error: athleteProfileErrorMessage(error),
                 ),
               ),
-              data: (races) =>
-                  _RaceList(profile: profile, races: races, events: events),
+            ),
+            data: (races) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (races.isNotEmpty) ...[
+                  ShellPanel(
+                    child: ResultHistoryPanel(
+                      entries: _historyEntries(profile, races, events),
+                      onEntryTap: (entry) {
+                        if (entry.eventId.isEmpty ||
+                            entry.classId.isEmpty ||
+                            entry.resultId.isEmpty) {
+                          return;
+                        }
+                        context.go(
+                          athleteLocation(
+                            eventId: entry.eventId,
+                            classId: entry.classId,
+                            resultId: entry.resultId,
+                            stageId: entry.stageId,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  ShellPanel(child: RacePacingProfilePanel(races: races)),
+                  const SizedBox(height: 14),
+                ],
+                ShellPanel(
+                  child: _RaceList(
+                    profile: profile,
+                    races: races,
+                    events: events,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -495,6 +534,7 @@ class _RaceTile extends StatelessWidget {
                   eventId: race.eventId,
                   classId: race.classId,
                   resultId: race.resultId,
+                  stageId: race.stageId,
                 ),
               )
             : null,
@@ -920,6 +960,29 @@ List<_DisplayedRace> _displayedRaces(
   ]..sort(_compareDisplayedRaces);
 
   return displayed;
+}
+
+List<ResultHistoryEntry> _historyEntries(
+  AthleteProfile profile,
+  List<AthleteRace> races,
+  List<ResultEvent> events,
+) {
+  return [
+    for (final displayed in _displayedRaces(profile, races, events).reversed)
+      if ((displayed.race.finishRank ?? displayed.race.rank ?? 0) > 0)
+        ResultHistoryEntry(
+          eventId: displayed.race.eventId,
+          classId: displayed.race.classId,
+          resultId: displayed.race.resultId,
+          stageId: displayed.race.stageId,
+          eventName: displayed.eventName,
+          className: displayed.race.className,
+          date: displayed.eventDate,
+          rank: displayed.race.finishRank ?? displayed.race.rank!,
+          participantCount: displayed.race.participantCount,
+          totalText: displayed.race.totalText,
+        ),
+  ];
 }
 
 AthleteEvent? _athleteEventForEvent(AthleteProfile profile, String eventId) {

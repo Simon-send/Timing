@@ -42,15 +42,30 @@ class ResultsTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final sortedRows = _sortedRows(rows, selectedSplitId, splitRange, sortMode);
+    final effectiveSortMode = splitRange?.isIndependent == true
+        ? ResultSortMode.split
+        : sortMode;
+    final sortedRows = _sortedRows(
+      rows,
+      selectedSplitId,
+      splitRange,
+      effectiveSortMode,
+    );
     final visibleRows = sortedRows.indexed
         .where((entry) => entry.$2.result.matchesSearch(searchQuery))
         .toList();
+    final hasShootingData = sortedRows.any(
+      (row) => _shootingText(
+        row.result,
+        selectedSplitId,
+        splitRange,
+      ).replaceAll('-', '').trim().isNotEmpty,
+    );
     final winnerMs = _winnerMs(
       sortedRows,
       selectedSplitId,
       splitRange,
-      sortMode,
+      effectiveSortMode,
     );
     final rowHeight = tableDensity == TableDensity.compact ? 42.0 : 54.0;
     return SingleChildScrollView(
@@ -58,67 +73,74 @@ class ResultsTable extends StatelessWidget {
       primary: false,
       child: ResultsLoadMoreScrollView(
         onLoadMore: onLoadMore,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            DataTable(
-              showCheckboxColumn: false,
-              sortColumnIndex: _sortColumnIndex(sortMode),
-              sortAscending: true,
-              headingRowHeight: 42,
-              dataRowMinHeight: rowHeight,
-              dataRowMaxHeight: rowHeight + 8,
-              horizontalMargin: 12,
-              columnSpacing: 26,
-              columns: [
-                DataColumn(label: Text(l10n.bib.toUpperCase())),
-                DataColumn(label: Text(l10n.athlete.toUpperCase())),
-                DataColumn(
-                  label: ResultAffiliationHeader(
-                    view: affiliationView,
-                    clubLabel: '${l10n.club.toUpperCase()}/TEAM',
-                    teamLabel: 'TEAM/${l10n.club.toUpperCase()}',
-                    onToggle: onAffiliationViewToggle,
-                  ),
-                ),
-                DataColumn(label: Text(l10n.shooting.toUpperCase())),
-                DataColumn(
-                  label: Text(l10n.split.toUpperCase()),
-                  onSort: (columnIndex, ascending) {
-                    onSortModeChanged(ResultSortMode.split);
-                  },
-                ),
-                DataColumn(
-                  label: Text(l10n.time.toUpperCase()),
-                  numeric: true,
-                  onSort: (columnIndex, ascending) {
-                    onSortModeChanged(ResultSortMode.cumulative);
-                  },
-                ),
-                DataColumn(label: Text(l10n.gap.toUpperCase()), numeric: true),
-              ],
-              rows: [
-                for (final (index, row) in visibleRows)
-                  DataRow(
-                    color: _rowColor(context, row),
-                    onSelectChanged: _isDisabled(row)
-                        ? null
-                        : (_) => onAthleteTap(row),
-                    cells: _cellsForResult(
-                      row,
-                      sortedRows,
-                      selectedSplitId,
-                      splitRange,
-                      sortMode,
-                      winnerMs,
-                      index,
-                      affiliationView,
-                    ),
-                  ),
-              ],
+        isLoadingMore: isLoadingMore,
+        itemCount: rows.length,
+        child: RepaintBoundary(
+          child: DataTable(
+            showCheckboxColumn: false,
+            sortColumnIndex: _sortColumnIndex(
+              effectiveSortMode,
+              hasShootingData: hasShootingData,
             ),
-            if (isLoadingMore) const TableLoadingMoreIndicator(),
-          ],
+            sortAscending: true,
+            headingRowHeight: 42,
+            dataRowMinHeight: rowHeight,
+            dataRowMaxHeight: rowHeight + 8,
+            horizontalMargin: 8,
+            columnSpacing: 26,
+            columns: [
+              DataColumn(label: Text(l10n.place.toUpperCase())),
+              DataColumn(label: Text(l10n.athlete.toUpperCase())),
+              DataColumn(
+                label: ResultAffiliationHeader(
+                  view: affiliationView,
+                  clubLabel: '${l10n.club.toUpperCase()}/TEAM',
+                  teamLabel: 'TEAM/${l10n.club.toUpperCase()}',
+                  onToggle: onAffiliationViewToggle,
+                ),
+              ),
+              if (hasShootingData)
+                DataColumn(label: Text(l10n.shooting.toUpperCase())),
+              DataColumn(
+                label: SortableTableHeader(label: l10n.split.toUpperCase()),
+                onSort: (columnIndex, ascending) {
+                  onSortModeChanged(ResultSortMode.split);
+                },
+              ),
+              DataColumn(
+                label: splitRange?.isIndependent == true
+                    ? Text(l10n.time.toUpperCase())
+                    : SortableTableHeader(label: l10n.time.toUpperCase()),
+                numeric: true,
+                onSort: splitRange?.isIndependent == true
+                    ? null
+                    : (columnIndex, ascending) {
+                        onSortModeChanged(ResultSortMode.cumulative);
+                      },
+              ),
+              DataColumn(label: Text(l10n.gap.toUpperCase()), numeric: true),
+            ],
+            rows: [
+              for (final (index, row) in visibleRows)
+                DataRow(
+                  color: _rowColor(context, row),
+                  onSelectChanged: _isDisabled(row)
+                      ? null
+                      : (_) => onAthleteTap(row),
+                  cells: _cellsForResult(
+                    row,
+                    sortedRows,
+                    selectedSplitId,
+                    splitRange,
+                    effectiveSortMode,
+                    winnerMs,
+                    index,
+                    affiliationView,
+                    hasShootingData,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -138,6 +160,7 @@ class ResultsTable extends StatelessWidget {
       );
     }
     final color = switch (row.highlight) {
+      ResultRowHighlight.favorite => Theme.of(context).colorScheme.tertiary,
       ResultRowHighlight.self => Theme.of(context).colorScheme.primary,
       ResultRowHighlight.affiliationMate => Theme.of(
         context,
@@ -145,7 +168,12 @@ class ResultsTable extends StatelessWidget {
       ResultRowHighlight.none => null,
     };
     if (color == null) return null;
-    final alpha = row.highlight == ResultRowHighlight.self ? 0.22 : 0.14;
+    final alpha = switch (row.highlight) {
+      ResultRowHighlight.favorite => 0.24,
+      ResultRowHighlight.self => 0.22,
+      ResultRowHighlight.affiliationMate => 0.14,
+      ResultRowHighlight.none => 0.0,
+    };
     return WidgetStatePropertyAll(color.withValues(alpha: alpha));
   }
 
@@ -158,6 +186,7 @@ class ResultsTable extends StatelessWidget {
     int? winnerMs,
     int index,
     ResultAffiliationView affiliationView,
+    bool hasShootingData,
   ) {
     final result = row.result;
     final showOriginalPlacement = !_isFinalTimeSort(
@@ -166,31 +195,33 @@ class ResultsTable extends StatelessWidget {
       splitRange,
       sortMode,
     );
+    final placement = _placement(
+      row,
+      sortedRows,
+      index,
+      selectedSplitId: selectedSplitId,
+      splitRange: splitRange,
+      sortMode: sortMode,
+      showOriginalPlacement: showOriginalPlacement,
+    );
     return [
-      DataCell(_MonoText(result.bib.isEmpty ? '-' : result.bib)),
-      DataCell(
-        _NameCell(
-          row: row,
-          placement: _placement(
-            row,
-            sortedRows,
-            index,
-            selectedSplitId: selectedSplitId,
-            splitRange: splitRange,
-            sortMode: sortMode,
-            showOriginalPlacement: showOriginalPlacement,
-          ),
-        ),
-      ),
+      DataCell(_MonoText(placement)),
+      DataCell(_NameCell(row: row)),
       DataCell(Text(_affiliationText(result, affiliationView))),
-      DataCell(_MonoText(_shootingText(result, selectedSplitId, splitRange))),
+      if (hasShootingData)
+        DataCell(_MonoText(_shootingText(result, selectedSplitId, splitRange))),
       DataCell(
         _MonoText(
           _splitText(result, selectedSplitId, splitRange),
           alignEnd: true,
         ),
       ),
-      DataCell(_MonoText(_timeText(result, selectedSplitId), alignEnd: true)),
+      DataCell(
+        _MonoText(
+          _timeText(result, selectedSplitId, splitRange),
+          alignEnd: true,
+        ),
+      ),
       DataCell(
         _MonoText(
           _gapText(result, selectedSplitId, splitRange, sortMode, winnerMs),
@@ -267,7 +298,12 @@ class ResultsTable extends StatelessWidget {
     return derivedText.isEmpty ? '-' : derivedText;
   }
 
-  static String _timeText(RaceResult result, String? selectedSplitId) {
+  static String _timeText(
+    RaceResult result,
+    String? selectedSplitId,
+    SplitRangeSelection? splitRange,
+  ) {
+    if (splitRange?.isIndependent == true) return '-';
     if (selectedSplitId == null) {
       return result.totalText.isEmpty ? '-' : result.totalText;
     }
@@ -376,13 +412,21 @@ class ResultsTable extends StatelessWidget {
     }
     final status = result.status.trim();
     final placement = status.isEmpty ? 'DNF' : status;
+    final relayOverallRank = result.relayOverallRank;
+    if (relayOverallRank != null && relayOverallRank > 0) {
+      return '$placement($relayOverallRank)';
+    }
     return showOriginalPlacement ? '$placement(DNF)' : placement;
   }
 
-  static int _sortColumnIndex(ResultSortMode sortMode) {
+  static int _sortColumnIndex(
+    ResultSortMode sortMode, {
+    required bool hasShootingData,
+  }) {
+    final shootingOffset = hasShootingData ? 1 : 0;
     return switch (sortMode) {
-      ResultSortMode.split => 4,
-      ResultSortMode.cumulative => 5,
+      ResultSortMode.split => 3 + shootingOffset,
+      ResultSortMode.cumulative => 4 + shootingOffset,
     };
   }
 
@@ -392,6 +436,10 @@ class ResultsTable extends StatelessWidget {
     SplitRangeSelection? splitRange,
     ResultSortMode sortMode,
   ) {
+    // A relay leg always keeps the team's overall relay placement in
+    // parentheses, including when the selected split is Etappetid.
+    if (result.relayLegNumber != null) return false;
+    if (splitRange?.isIndependent == true) return false;
     if (sortMode != ResultSortMode.cumulative) return false;
     final effectiveSplitId = splitRange?.toSplitId ?? selectedSplitId;
     if (effectiveSplitId == null) return true;
@@ -406,6 +454,9 @@ class ResultsTable extends StatelessWidget {
     SplitRangeSelection? splitRange,
   ) {
     if (splitRange == null) return null;
+    if (splitRange.isIndependent) {
+      return combinedSplitLegMs(result, splitRange.includedSplitIds);
+    }
     final toMs = result.splitValues[splitRange.toSplitId]?.cumMs;
     if (toMs == null) return null;
     final fromSplitId = splitRange.fromSplitId;
@@ -431,27 +482,74 @@ class ResultsTable extends StatelessWidget {
   }
 }
 
+class SortableTableHeader extends StatelessWidget {
+  const SortableTableHeader({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: primary.withValues(alpha: 0.16),
+        border: Border.all(color: primary.withValues(alpha: 0.42)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class TableLoadMoreFooter extends StatelessWidget {
+  const TableLoadMoreFooter({super.key, required this.isLoading});
+
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: isLoading
+          ? const TableLoadingMoreIndicator()
+          : const SizedBox.shrink(),
+    );
+  }
+}
+
 class TableLoadingMoreIndicator extends StatelessWidget {
   const TableLoadingMoreIndicator({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2.4),
+    return Semantics(
+      label: 'Laster flere resultater',
+      liveRegion: true,
+      child: const SizedBox(
+        height: 132,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(18, 30, 18, 54),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RepaintBoundary(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.6),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Laster flere resultater',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ],
           ),
-          SizedBox(width: 12),
-          Text(
-            'Laster flere resultater',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -461,10 +559,14 @@ class ResultsLoadMoreScrollView extends StatefulWidget {
   const ResultsLoadMoreScrollView({
     super.key,
     required this.child,
+    required this.itemCount,
+    required this.isLoadingMore,
     this.onLoadMore,
   });
 
   final Widget child;
+  final int itemCount;
+  final bool isLoadingMore;
   final VoidCallback? onLoadMore;
 
   @override
@@ -477,6 +579,7 @@ class _ResultsLoadMoreScrollViewState extends State<ResultsLoadMoreScrollView> {
 
   final _controller = ScrollController();
   bool _loadMoreQueued = false;
+  bool _loadRequestPending = false;
 
   @override
   void initState() {
@@ -488,6 +591,11 @@ class _ResultsLoadMoreScrollViewState extends State<ResultsLoadMoreScrollView> {
   @override
   void didUpdateWidget(covariant ResultsLoadMoreScrollView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final receivedMoreItems = widget.itemCount > oldWidget.itemCount;
+    final loadFinished = oldWidget.isLoadingMore && !widget.isLoadingMore;
+    if (receivedMoreItems || loadFinished) {
+      _loadRequestPending = false;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoadMore());
   }
 
@@ -506,9 +614,15 @@ class _ResultsLoadMoreScrollViewState extends State<ResultsLoadMoreScrollView> {
     final position = _controller.position;
     final nearBottom =
         position.maxScrollExtent <= 0 || position.extentAfter < _loadMoreExtent;
-    if (!nearBottom || _loadMoreQueued) return;
+    if (!nearBottom ||
+        _loadMoreQueued ||
+        _loadRequestPending ||
+        widget.isLoadingMore) {
+      return;
+    }
 
     _loadMoreQueued = true;
+    setState(() => _loadRequestPending = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadMoreQueued = false;
       if (!mounted) return;
@@ -521,7 +635,15 @@ class _ResultsLoadMoreScrollViewState extends State<ResultsLoadMoreScrollView> {
     return SingleChildScrollView(
       controller: _controller,
       primary: false,
-      child: widget.child,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          widget.child,
+          TableLoadMoreFooter(
+            isLoading: widget.isLoadingMore || _loadRequestPending,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -568,10 +690,9 @@ class ResultAffiliationHeader extends StatelessWidget {
 }
 
 class _NameCell extends StatelessWidget {
-  const _NameCell({required this.row, required this.placement});
+  const _NameCell({required this.row});
 
   final ResultTableRow row;
-  final String placement;
 
   @override
   Widget build(BuildContext context) {
@@ -580,8 +701,11 @@ class _NameCell extends StatelessWidget {
       width: 320,
       child: Row(
         children: [
-          SizedBox(width: 78, child: _MonoText(placement)),
-          const SizedBox(width: 10),
+          SizedBox(
+            width: 52,
+            child: _MonoText(result.bib.isEmpty ? '-' : result.bib),
+          ),
+          const SizedBox(width: 8),
           Container(
             width: 8,
             height: 32,
@@ -592,14 +716,63 @@ class _NameCell extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              result.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    result.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (result.advanced) ...[
+                  const SizedBox(width: 8),
+                  const AdvancementBadge(),
+                ],
+                if (row.highlight == ResultRowHighlight.favorite) ...[
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.star,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
+                ],
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class AdvancementBadge extends StatelessWidget {
+  const AdvancementBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: 'Kvalifisert videre',
+      child: Semantics(
+        label: 'Kvalifisert videre',
+        child: Container(
+          key: const Key('advancement-badge'),
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: colors.tertiaryContainer,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            'Q',
+            style: TextStyle(
+              color: colors.onTertiaryContainer,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -612,38 +785,50 @@ class ResultTableRow {
     required this.className,
     required this.color,
     required this.originalPlacementLabel,
+    this.sourceClassId,
     this.highlight = ResultRowHighlight.none,
+    this.isCurrentAthlete = false,
   });
 
   final RaceResult result;
   final String classId;
   final String className;
+  final String? sourceClassId;
   final Color? color;
   final String originalPlacementLabel;
   final ResultRowHighlight highlight;
+  final bool isCurrentAthlete;
 
   ResultTableRow copyWith({String? originalPlacementLabel}) {
     return ResultTableRow(
       result: result,
       classId: classId,
       className: className,
+      sourceClassId: sourceClassId,
       color: color,
       originalPlacementLabel:
           originalPlacementLabel ?? this.originalPlacementLabel,
       highlight: highlight,
+      isCurrentAthlete: isCurrentAthlete,
     );
   }
 }
 
-enum ResultRowHighlight { none, self, affiliationMate }
+enum ResultRowHighlight { none, self, affiliationMate, favorite }
 
 ResultRowHighlight resultHighlightFor(
   RaceResult result, {
   required String? linkedAthleteId,
   required String? linkedClubName,
   required String? linkedTeamName,
+  Set<String> favoriteAthleteIds = const <String>{},
 }) {
   final athleteId = result.athleteId?.trim();
+  if (athleteId != null &&
+      athleteId.isNotEmpty &&
+      favoriteAthleteIds.contains(athleteId)) {
+    return ResultRowHighlight.favorite;
+  }
   final currentAthleteId = linkedAthleteId?.trim();
   if (athleteId != null &&
       athleteId.isNotEmpty &&
