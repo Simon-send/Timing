@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:results/l10n/app_localizations.dart';
 
+import '../../../app/app_theme.dart';
 import '../../../core/formatting/time_formatters.dart';
 import '../../settings/domain/user_settings.dart';
 import '../domain/race_result.dart';
@@ -83,13 +84,13 @@ class ResultsTable extends StatelessWidget {
                 ),
                 DataColumn(label: Text(l10n.shooting.toUpperCase())),
                 DataColumn(
-                  label: Text(l10n.split.toUpperCase()),
+                  label: _SortableHeaderLabel(l10n.split.toUpperCase()),
                   onSort: (columnIndex, ascending) {
                     onSortModeChanged(ResultSortMode.split);
                   },
                 ),
                 DataColumn(
-                  label: Text(l10n.time.toUpperCase()),
+                  label: _SortableHeaderLabel(l10n.time.toUpperCase()),
                   numeric: true,
                   onSort: (columnIndex, ascending) {
                     onSortModeChanged(ResultSortMode.cumulative);
@@ -600,6 +601,42 @@ class _NameCell extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SortableHeaderLabel extends StatefulWidget {
+  const _SortableHeaderLabel(this.label);
+
+  final String label;
+
+  @override
+  State<_SortableHeaderLabel> createState() => _SortableHeaderLabelState();
+}
+
+class _SortableHeaderLabelState extends State<_SortableHeaderLabel> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: AnimatedScale(
+        scale: _hovering ? 1.04 : 1,
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          style: TextStyle(
+            color: _hovering ? palette.primary : null,
+            fontWeight: FontWeight.w800,
+          ),
+          child: Text(widget.label),
+        ),
       ),
     );
   }
