@@ -9,7 +9,19 @@ class AppLocalizationsSv extends AppLocalizations {
   AppLocalizationsSv([String locale = 'sv']) : super(locale);
 
   @override
-  String get appTitle => 'EQ Results';
+  String get importWaiting => 'Väntar på resultat';
+
+  @override
+  String get importInProgress => 'Importerar';
+
+  @override
+  String get importPartial => 'Delvis importerat';
+
+  @override
+  String get importUpdated => 'Uppdaterat';
+
+  @override
+  String get appTitle => 'Resultat';
 
   @override
   String get eventsTitle => 'Choose an event';
@@ -75,7 +87,7 @@ class AppLocalizationsSv extends AppLocalizations {
   String get split => 'Split';
 
   @override
-  String get searchResults => 'Search athlete, club or team';
+  String get searchResults => 'Sök efter idrottare, klubb eller lag';
 
   @override
   String get athlete => 'Athlete';
@@ -85,6 +97,38 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get shooting => 'Shooting';
+
+  @override
+  String biathlonShootingIn(int index) {
+    return 'In till skjutning $index';
+  }
+
+  @override
+  String get biathlonPositionProne => 'prone';
+
+  @override
+  String get biathlonPositionStanding => 'standing';
+
+  @override
+  String get biathlonPositionUnknown => 'unknown position';
+
+  @override
+  String biathlonMisses(int count) {
+    return '$count misses';
+  }
+
+  @override
+  String biathlonPenalty(String time) {
+    return 'Penalty $time';
+  }
+
+  @override
+  String biathlonRankNumber(int rank) {
+    return 'No. $rank';
+  }
+
+  @override
+  String get biathlonRankUnavailable => 'Nr –';
 
   @override
   String get time => 'Time';
@@ -142,4 +186,41 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get createAccount => 'Create account';
+
+  @override
+  String get connectAthlete => 'Link athlete';
+
+  @override
+  String get connectAthleteDescription =>
+      'Search by full name to link your account to the right athlete.';
+
+  @override
+  String get connectAthleteOnboardingTitle => 'Find your athlete profile';
+
+  @override
+  String get connectAthleteOnboardingDescription =>
+      'Link your account to your own results, or choose Not now.';
+
+  @override
+  String get fullName => 'Full name';
+
+  @override
+  String get findAthlete => 'Find athlete';
+
+  @override
+  String get noAthleteMatches => 'No athlete was found with this full name.';
+
+  @override
+  String get notNow => 'Not now';
+
+  @override
+  String get enterFullName => 'Enter your full name first.';
+
+  @override
+  String athleteLinked(String name) {
+    return '$name is linked to your account';
+  }
+
+  @override
+  String get couldNotReadAthleteLink => 'Could not read the athlete link';
 }

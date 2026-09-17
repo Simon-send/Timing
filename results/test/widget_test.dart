@@ -10,9 +10,12 @@ import 'package:results/features/settings/data/settings_repository.dart';
 import 'package:results/features/settings/domain/user_settings.dart';
 import 'package:results/features/results/presentation/results_split_graph.dart';
 import 'package:results/features/results/presentation/results_table.dart';
+import 'package:results/features/results/presentation/result_locations.dart';
+import 'package:results/features/results/presentation/results_page.dart';
 import 'package:results/features/results/presentation/relay_leg_selector.dart';
 import 'package:results/features/athlete/presentation/relay_team_panel.dart';
 import 'package:results/features/athlete/presentation/biathlon_result_panel.dart';
+import 'package:results/features/events/presentation/event_card.dart';
 import 'package:results/features/results/presentation/split_selector.dart';
 import 'package:results/l10n/app_localizations.dart';
 import 'package:results/results_app.dart';
@@ -20,6 +23,63 @@ import 'package:results/results_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets('participated events use a highlighted card background', (
+    WidgetTester tester,
+  ) async {
+    const participated = ResultEvent(
+      id: 'event-participated',
+      name: 'Deltatt renn',
+      sportName: 'Langrenn',
+      date: null,
+      place: '',
+    );
+    const ordinary = ResultEvent(
+      id: 'event-ordinary',
+      name: 'Annet renn',
+      sportName: 'Langrenn',
+      date: null,
+      place: '',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(AppThemeVariant.nordicDark),
+        locale: const Locale('nb'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Row(
+            children: [
+              SizedBox(
+                width: 300,
+                height: 220,
+                child: EventCard(
+                  event: participated,
+                  participated: true,
+                  onTap: () {},
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 300,
+                height: 220,
+                child: EventCard(event: ordinary, onTap: () {}),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final highlighted = tester.widget<Card>(
+      find.byKey(const ValueKey('event-card-event-participated')),
+    );
+    final normal = tester.widget<Card>(
+      find.byKey(const ValueKey('event-card-event-ordinary')),
+    );
+    expect(highlighted.color, isNot(normal.color));
+  });
+
   testWidgets(
     'load-more state fills the bottom fifth and blocks repeat loads',
     (WidgetTester tester) async {
@@ -843,6 +903,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: buildAppTheme(AppThemeVariant.nordicDark),
+        locale: const Locale('nb'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: const Scaffold(
           body: SingleChildScrollView(
             child: BiathlonResultPanel(analysis: analysis),
@@ -852,8 +915,8 @@ void main() {
     );
 
     expect(find.text('Skiskytinganalyse'), findsOneWidget);
-    expect(find.text('Skyting 3 · liggende'), findsOneWidget);
-    expect(find.text('Skyting 4 · stående'), findsOneWidget);
+    expect(find.text('Inn skyting 3'), findsOneWidget);
+    expect(find.text('Inn skyting 4'), findsOneWidget);
     expect(find.textContaining('1 bom'), findsOneWidget);
   });
 
@@ -1015,22 +1078,86 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('AKSA Cup 7'), findsOneWidget);
+    final eventsScroll = find.byKey(const Key('events-page-scroll'));
+    expect(
+      find.descendant(
+        of: eventsScroll,
+        matching: find.byKey(const Key('event-filters-toggle')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: eventsScroll,
+        matching: find.byKey(const ValueKey('event-card-83078')),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('AKSA Cup 7'));
     await tester.pumpAndSettle();
 
     expect(
       resultsRepository.watchedRequests,
-      contains((classId: '1292218', limit: 37)),
+      contains((classId: '1292218', limit: 50)),
     );
-    expect(find.text('Sprint / Fellesstart'), findsOneWidget);
-    expect(find.text('J11-12, 5 x 400 m'), findsWidgets);
-    expect(find.text('CLUB/TEAM'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('result-body-heading'))).data,
+      'J11-12, 5 x 400 m · Sprint jenter',
+    );
+    final mobileClassArrow = find.byKey(const Key('mobile-class-menu-button'));
+    final bodyHeading = find.byKey(const Key('result-body-heading'));
+    expect(
+      tester.getTopRight(mobileClassArrow).dx,
+      lessThanOrEqualTo(tester.getTopLeft(bodyHeading).dx),
+    );
+
+    final originalPhysicalSize = tester.view.physicalSize;
+    final devicePixelRatio = tester.view.devicePixelRatio;
+    addTearDown(tester.view.resetPhysicalSize);
+    tester.view.physicalSize = Size(
+      1200 * devicePixelRatio,
+      800 * devicePixelRatio,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('classes-collapse-toggle')));
+    await tester.pumpAndSettle();
+    final inlineClassArrow = find.byKey(const Key('classes-expand-inline'));
+    expect(inlineClassArrow, findsOneWidget);
+    expect(find.byKey(const Key('classes-collapse-toggle')), findsNothing);
+    expect(
+      tester.getTopRight(inlineClassArrow).dx,
+      lessThanOrEqualTo(tester.getTopLeft(bodyHeading).dx),
+    );
+    await tester.tap(inlineClassArrow);
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = originalPhysicalSize;
+    await tester.pumpAndSettle();
+
+    expect(find.text('CLUB/TEAM'), findsNothing);
     expect(find.text('Elle Simensen'), findsOneWidget);
-    expect(find.text('Alta Skiskytterlag'), findsOneWidget);
+    expect(find.text('Alta Skiskytterlag'), findsNothing);
     expect(find.text('Team Alta'), findsNothing);
     expect(find.text('Maal'), findsOneWidget);
-    expect(tester.widget<DataTable>(find.byType(DataTable)).sortColumnIndex, 5);
+    final resultTable = find.byType(DataTable);
+    final resultTableContext = tester.element(resultTable);
+    expect(
+      Theme.of(resultTableContext).dataTableTheme.headingTextStyle?.color,
+      Theme.of(resultTableContext).colorScheme.onSurface,
+    );
+    expect(tester.widget<DataTable>(resultTable).sortColumnIndex, 2);
+
+    final pageScroll = find.byKey(const Key('results-page-scroll'));
+    final infoCard = find.byKey(const Key('results-info-card'));
+    expect(
+      find.descendant(of: pageScroll, matching: find.byType(DataTable)),
+      findsOneWidget,
+    );
+    expect(find.descendant(of: pageScroll, matching: infoCard), findsOneWidget);
+    expect(
+      tester.getTopLeft(infoCard).dy,
+      greaterThan(tester.getBottomLeft(find.byType(DataTable)).dy),
+    );
 
     final resultSearch = find.byKey(const Key('result-search-field'));
     expect(resultSearch, findsOneWidget);
@@ -1044,8 +1171,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final selectors = find.byType(DropdownButtonFormField<String>);
-    expect(selectors, findsNWidgets(2));
-    await tester.tap(selectors.last);
+    expect(selectors, findsOneWidget);
+    await tester.tap(selectors.first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mellomtid').last);
     await tester.pumpAndSettle();
@@ -1055,19 +1182,40 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.tap(find.byKey(const Key('mobile-class-menu-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('G10, 3 x 400 m (1)').last);
+    expect(find.byKey(const Key('mobile-class-panel')), findsOneWidget);
+    expect(find.byKey(const Key('classes-collapse-toggle')), findsNothing);
+    final mobileDisciplineHeading = find.text('Sprint / Fellesstart').last;
+    final mobileHeadingDefaults = DefaultTextStyle.of(
+      tester.element(mobileDisciplineHeading),
+    ).style;
+    expect(mobileHeadingDefaults.color, isNot(Colors.red));
+    expect(mobileHeadingDefaults.decoration, isNot(TextDecoration.underline));
+    final logicalWidth =
+        tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    await tester.tapAt(Offset(logicalWidth - 4, 100));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('mobile-class-panel')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('mobile-class-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('G10, 3 x 400 m').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Mellomtid'), findsOneWidget);
     expect(tester.widget<DataTable>(find.byType(DataTable)).sortColumnIndex, 4);
 
-    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.tap(find.byKey(const Key('mobile-class-menu-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('J11-12, 5 x 400 m (1)').last);
+    await tester.tap(find.text('J11-12, 5 x 400 m').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Next split'));
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = Size(
+      1200 * devicePixelRatio,
+      900 * devicePixelRatio,
+    );
     await tester.pumpAndSettle();
     tester.widget<DataTable>(find.byType(DataTable)).columns[5].onSort!(
       5,
@@ -1089,6 +1237,64 @@ void main() {
     expect(find.text('Athlete details'), findsOneWidget);
     expect(find.text('Split breakdown'), findsOneWidget);
     expect(find.text('Head to head'), findsNothing);
+  });
+
+  testWidgets('a shared independent split URL opens the matching selection', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final uri = Uri.parse(
+      resultsLocation(
+        eventId: '83078',
+        classId: '1292218',
+        stageId: '337936',
+        splitRange: const SplitRangeSelection(
+          fromSplitId: null,
+          toSplitId: 'finish',
+          includedSplitIds: ['mid', 'finish'],
+          isIndependent: true,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          eventsRepositoryProvider.overrideWithValue(_FakeEventsRepository()),
+          resultsRepositoryProvider.overrideWithValue(_FakeResultsRepository()),
+          authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+          settingsRepositoryProvider.overrideWithValue(
+            _FakeSettingsRepository(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildAppTheme(AppThemeVariant.nordicDark),
+          locale: const Locale('nb'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: ResultsPage(
+              eventId: '83078',
+              selectedClassId: '1292218',
+              selectedStageId: '337936',
+              selectedSplitId: resultSplitQueryValue(uri.queryParameters),
+              selectedSplitRange: resultSplitRangeQueryValue(
+                uri.queryParameters,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final checkbox = tester.widget<CheckboxListTile>(
+      find.byKey(const Key('independent-splits-checkbox')),
+    );
+    expect(checkbox.value, isTrue);
+    expect(find.byKey(const Key('independent-splits-picker')), findsOneWidget);
   });
 }
 
@@ -1530,7 +1736,12 @@ class _FakeAuthRepository implements AuthRepository {
   }) async {}
 
   @override
-  Future<void> signInWithGoogle() async {}
+  Future<GoogleSignInOutcome> signInWithGoogle() async {
+    return GoogleSignInOutcome.signedIn;
+  }
+
+  @override
+  Future<User?> completeGoogleRedirect() async => null;
 
   @override
   Future<void> signOut() async {}

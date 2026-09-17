@@ -73,11 +73,6 @@ class _AthleteSplitsPanelState extends State<AthleteSplitsPanel> {
           else
             Column(
               children: [
-                _DispositionHistogram(
-                  groups: dispositionGroups,
-                  onSplitSelected: widget.onSplitSelected,
-                ),
-                if (dispositionGroups.isNotEmpty) const SizedBox(height: 8),
                 _ClassAverageComparison(
                   result: widget.result,
                   classResults: widget.classResults,
@@ -112,24 +107,40 @@ class _AthleteSplitsPanelState extends State<AthleteSplitsPanel> {
                   },
                 ),
                 const SizedBox(height: 8),
-                if (_splitDisplayMode == _SplitDisplayMode.graph)
-                  _SplitRankHistogram(
-                    splits: splits,
-                    onSplitSelected: widget.onSplitSelected,
-                  )
-                else
-                  Column(
-                    children: [
-                      for (var index = 0; index < splits.length; index++) ...[
-                        _SplitTile(
-                          split: splits[index],
+                KeyedSubtree(
+                  key: const ValueKey('athlete-split-times'),
+                  child: _splitDisplayMode == _SplitDisplayMode.graph
+                      ? _SplitRankHistogram(
+                          splits: splits,
                           onSplitSelected: widget.onSplitSelected,
+                        )
+                      : Column(
+                          children: [
+                            for (
+                              var index = 0;
+                              index < splits.length;
+                              index++
+                            ) ...[
+                              _SplitTile(
+                                split: splits[index],
+                                onSplitSelected: widget.onSplitSelected,
+                              ),
+                              if (index < splits.length - 1)
+                                const SizedBox(height: 4),
+                            ],
+                          ],
                         ),
-                        if (index < splits.length - 1)
-                          const SizedBox(height: 4),
-                      ],
-                    ],
+                ),
+                if (dispositionGroups.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  KeyedSubtree(
+                    key: const ValueKey('athlete-disposition-overview'),
+                    child: _DispositionHistogram(
+                      groups: dispositionGroups,
+                      onSplitSelected: widget.onSplitSelected,
+                    ),
                   ),
+                ],
               ],
             ),
         ],
@@ -311,7 +322,7 @@ class _ClassAverageComparison extends StatelessWidget {
               return Row(
                 children: [
                   Expanded(child: title),
-                  controls,
+                  Flexible(child: controls),
                 ],
               );
             },
@@ -1619,10 +1630,13 @@ class _DispositionHistogramState extends State<_DispositionHistogram> {
                   ),
                 ),
               ),
-              _DispositionLegend(
-                colors: colors,
-                valueMode: _valueMode,
-                baselineLapNumber: baselineLapNumber,
+              Flexible(
+                child: _DispositionLegend(
+                  colors: colors,
+                  valueMode: _valueMode,
+                  baselineLapNumber: baselineLapNumber,
+                  lapNumbers: availableBaselineLaps,
+                ),
               ),
             ],
           ),
@@ -1647,11 +1661,13 @@ class _DispositionLegend extends StatelessWidget {
     required this.colors,
     required this.valueMode,
     required this.baselineLapNumber,
+    required this.lapNumbers,
   });
 
   final List<Color> colors;
   final _DispositionValueMode valueMode;
   final int baselineLapNumber;
+  final List<int> lapNumbers;
 
   @override
   Widget build(BuildContext context) {
@@ -1678,17 +1694,20 @@ class _DispositionLegend extends StatelessWidget {
       );
     }
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var index = 0; index < 3; index++) ...[
-          if (index > 0) const SizedBox(width: 6),
-          _DispositionLegendItem(
-            color: colors[index % colors.length],
-            label: 'R${index + 1}',
-          ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var index = 0; index < lapNumbers.length; index++) ...[
+            if (index > 0) const SizedBox(width: 6),
+            _DispositionLegendItem(
+              color: _lapColorForLap(colors, lapNumbers[index]),
+              label: 'R${lapNumbers[index]}',
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -1755,7 +1774,15 @@ class _DispositionChart extends StatelessWidget {
             ? constraints.maxWidth
             : 360.0;
         final height = _dispositionChartHeight(width, groups.length);
-        final size = Size(width, height);
+        final lapSlotCount = _maxDispositionLapNumber(groups);
+        final minimumGroupWidth = math.max(86.0, 30.0 + lapSlotCount * 12.0);
+        final contentWidth = math.max(
+          width,
+          _DispositionChartLayout.left +
+              _DispositionChartLayout.right +
+              groups.length * minimumGroupWidth,
+        );
+        final size = Size(contentWidth, height);
         final chart = _DispositionChartLayout.chartRect(size);
         final bars = _dispositionBarTargets(
           chart: chart,
@@ -1771,23 +1798,30 @@ class _DispositionChart extends StatelessWidget {
 
         return SizedBox(
           height: height,
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _DispositionHistogramPainter(
-                    groups: groups,
-                    axisRange: axisRange,
-                    valueMode: valueMode,
-                    metricMode: metricMode,
-                    baselineLapNumber: baselineLapNumber,
-                    palette: context.palette,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: contentWidth,
+              height: height,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _DispositionHistogramPainter(
+                        groups: groups,
+                        axisRange: axisRange,
+                        valueMode: valueMode,
+                        metricMode: metricMode,
+                        baselineLapNumber: baselineLapNumber,
+                        palette: context.palette,
+                      ),
+                    ),
                   ),
-                ),
+                  ...bars,
+                ],
               ),
-              ...bars,
-            ],
+            ),
           ),
         );
       },
@@ -1825,6 +1859,7 @@ class _DispositionBar extends StatelessWidget {
           '${group.usesFallbackBaseline(baselineLapNumber) ? '\nMangler valgt 0-runde for denne strekningen' : ''}'
           '\nKlikk for a apne splitten',
       child: Semantics(
+        key: ValueKey('disposition-bar-${lap.splitId}'),
         link: true,
         button: true,
         label: 'Apne ${lap.splitLabel}',
@@ -1878,24 +1913,31 @@ List<Widget> _dispositionBarTargets({
   if (groups.isEmpty || colors.isEmpty) return const [];
   final widgets = <Widget>[];
   final slotWidth = chart.width / groups.length;
+  final lapSlotCount = _maxDispositionLapNumber(groups);
 
   for (var groupIndex = 0; groupIndex < groups.length; groupIndex++) {
     final group = groups[groupIndex];
     final slotLeft = chart.left + slotWidth * groupIndex;
     final innerPadding = math.min(18.0, slotWidth * 0.16);
     final innerWidth = math.max(12.0, slotWidth - innerPadding * 2);
-    final gap = innerWidth < 58 ? 3.0 : 5.0;
-    final barWidth = math.max(5.0, math.min(24.0, (innerWidth - gap * 2) / 3));
-    final barsWidth = barWidth * 3 + gap * 2;
+    final gap = lapSlotCount <= 1
+        ? 0.0
+        : innerWidth < lapSlotCount * 14
+        ? 2.0
+        : 4.0;
+    final totalGap = gap * math.max(0, lapSlotCount - 1);
+    final barWidth = math.max(
+      4.0,
+      math.min(24.0, (innerWidth - totalGap) / lapSlotCount),
+    );
+    final barsWidth = barWidth * lapSlotCount + totalGap;
     final barsLeft = slotLeft + (slotWidth - barsWidth) / 2;
 
     final laps = group.histogramLaps;
     for (var lapIndex = 0; lapIndex < laps.length; lapIndex++) {
       final lap = laps[lapIndex];
-      final slotIndex = lap.lapNumber >= 1 && lap.lapNumber <= 3
-          ? lap.lapNumber - 1
-          : lapIndex;
-      if (slotIndex < 0 || slotIndex > 2) continue;
+      final slotIndex = lap.lapNumber >= 1 ? lap.lapNumber - 1 : lapIndex;
+      if (slotIndex < 0 || slotIndex >= lapSlotCount) continue;
       final value = group.chartValueFor(
         lap,
         valueMode,
@@ -2095,12 +2137,7 @@ class _DispositionGroup {
   }
 
   List<_DispositionLap> get histogramLaps {
-    final visible = [
-      for (final lap in laps)
-        if (lap.lapNumber >= 1 && lap.lapNumber <= 3) lap,
-    ]..sort((a, b) => a.lapNumber - b.lapNumber);
-    if (visible.isNotEmpty) return visible;
-    return laps.take(3).toList();
+    return [...laps]..sort((a, b) => a.lapNumber - b.lapNumber);
   }
 
   double percentFor(_DispositionLap lap, int baselineLapNumber) {
@@ -2297,6 +2334,16 @@ String _normalizeStation(String value) {
 double _dispositionChartHeight(double width, int groupCount) {
   final compactHeight = width < 520 ? 230.0 : 250.0;
   return math.max(compactHeight, math.min(310.0, 220.0 + groupCount * 4.0));
+}
+
+int _maxDispositionLapNumber(List<_DispositionGroup> groups) {
+  var maximum = 1;
+  for (final group in groups) {
+    for (final lap in group.laps) {
+      maximum = math.max(maximum, lap.lapNumber);
+    }
+  }
+  return maximum;
 }
 
 _DispositionAxisRange _dispositionAxisRange(

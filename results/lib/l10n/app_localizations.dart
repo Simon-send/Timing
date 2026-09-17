@@ -114,10 +114,34 @@ abstract class AppLocalizations {
     Locale('sv'),
   ];
 
+  /// No description provided for @importWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for results'**
+  String get importWaiting;
+
+  /// No description provided for @importInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing'**
+  String get importInProgress;
+
+  /// No description provided for @importPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Partially imported'**
+  String get importPartial;
+
+  /// No description provided for @importUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated'**
+  String get importUpdated;
+
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'EQ Results'**
+  /// **'Results'**
   String get appTitle;
 
   /// No description provided for @eventsTitle.
@@ -270,6 +294,54 @@ abstract class AppLocalizations {
   /// **'Shooting'**
   String get shooting;
 
+  /// No description provided for @biathlonShootingIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Into shooting {index}'**
+  String biathlonShootingIn(int index);
+
+  /// No description provided for @biathlonPositionProne.
+  ///
+  /// In en, this message translates to:
+  /// **'prone'**
+  String get biathlonPositionProne;
+
+  /// No description provided for @biathlonPositionStanding.
+  ///
+  /// In en, this message translates to:
+  /// **'standing'**
+  String get biathlonPositionStanding;
+
+  /// No description provided for @biathlonPositionUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown position'**
+  String get biathlonPositionUnknown;
+
+  /// No description provided for @biathlonMisses.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} misses'**
+  String biathlonMisses(int count);
+
+  /// No description provided for @biathlonPenalty.
+  ///
+  /// In en, this message translates to:
+  /// **'Penalty {time}'**
+  String biathlonPenalty(String time);
+
+  /// No description provided for @biathlonRankNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'No. {rank}'**
+  String biathlonRankNumber(int rank);
+
+  /// No description provided for @biathlonRankUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No. –'**
+  String get biathlonRankUnavailable;
+
   /// No description provided for @time.
   ///
   /// In en, this message translates to:
@@ -383,6 +455,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Create account'**
   String get createAccount;
+
+  /// No description provided for @connectAthlete.
+  ///
+  /// In en, this message translates to:
+  /// **'Link athlete'**
+  String get connectAthlete;
+
+  /// No description provided for @connectAthleteDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by full name to link your account to the right athlete.'**
+  String get connectAthleteDescription;
+
+  /// No description provided for @connectAthleteOnboardingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find your athlete profile'**
+  String get connectAthleteOnboardingTitle;
+
+  /// No description provided for @connectAthleteOnboardingDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Link your account to your own results, or choose Not now.'**
+  String get connectAthleteOnboardingDescription;
+
+  /// No description provided for @fullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get fullName;
+
+  /// No description provided for @findAthlete.
+  ///
+  /// In en, this message translates to:
+  /// **'Find athlete'**
+  String get findAthlete;
+
+  /// No description provided for @noAthleteMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No athlete was found with this full name.'**
+  String get noAthleteMatches;
+
+  /// No description provided for @notNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get notNow;
+
+  /// No description provided for @enterFullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your full name first.'**
+  String get enterFullName;
+
+  /// No description provided for @athleteLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is linked to your account'**
+  String athleteLinked(String name);
+
+  /// No description provided for @couldNotReadAthleteLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the athlete link'**
+  String get couldNotReadAthleteLink;
 }
 
 class _AppLocalizationsDelegate

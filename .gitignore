@@ -6,3 +6,17 @@
 **/node_modules/
 **/.firebase/
 
+# Local prototypes, archives, diagnostics, and machine-specific reports.
+/AI/
+/eq/
+/webScraper/
+/releases/
+/flutter_version.txt
+/flutter_version_err.txt
+/overnight-*.md
+/tools/overnight-qwen-diagnose.sh
+/tools/prepare_logo_assets.py
+
+# Hosting output is generated locally; retain only its placeholder file.
+/eq-importer/hosting/*
+!/eq-importer/hosting/.gitignore

@@ -27,6 +27,7 @@ typedef _RelayRankResultsRequest = ({
 
 final _relayRankResultsProvider = FutureProvider.autoDispose
     .family<List<RaceResult>, _RelayRankResultsRequest>((ref, request) {
+      ref.watch(appDataRefreshProvider);
       final repository = ref.watch(resultsRepositoryProvider);
       final stageId = request.stageId;
       if (stageId == null) {
@@ -47,6 +48,7 @@ class AthleteDetailPage extends ConsumerStatefulWidget {
     required this.resultId,
     this.stageId,
     this.selectedSplitId,
+    this.selectedSplitRange,
     this.relayLegNumber,
     this.compareWithResultId,
     this.compareWithRelayLegNumber,
@@ -57,6 +59,7 @@ class AthleteDetailPage extends ConsumerStatefulWidget {
   final String resultId;
   final String? stageId;
   final String? selectedSplitId;
+  final SplitRangeSelection? selectedSplitRange;
   final int? relayLegNumber;
   final String? compareWithResultId;
   final int? compareWithRelayLegNumber;
@@ -129,6 +132,7 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
             stageId: widget.stageId,
             relayLegNumber: widget.relayLegNumber,
             splitId: widget.selectedSplitId,
+            splitRange: widget.selectedSplitRange,
           ),
         ),
         icon: const Icon(Icons.arrow_back),
@@ -138,7 +142,11 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         loading: () =>
             ShellPanel(child: LoadingState(label: l10n.loadingResults)),
         error: (error, _) => ShellPanel(
-          child: ErrorState(title: l10n.couldNotReadResults, error: error),
+          child: ErrorState(
+            title: l10n.couldNotReadResults,
+            error: error,
+            onRetry: () => refreshAppData(ref),
+          ),
         ),
         data: (rawResult) {
           if (rawResult == null) {
@@ -157,6 +165,7 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
               child: ErrorState(
                 title: l10n.couldNotReadResults,
                 error: splitDefs.error!,
+                onRetry: () => refreshAppData(ref),
               ),
             );
           }
@@ -387,6 +396,7 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         child: ErrorState(
           title: 'Kunne ikke lese utovere',
           error: classResults.error!,
+          onRetry: () => refreshAppData(ref),
         ),
       );
     }
@@ -444,6 +454,7 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         stageId: widget.stageId,
         relayLegNumber: widget.relayLegNumber,
         splitId: widget.selectedSplitId,
+        splitRange: widget.selectedSplitRange,
         compareBaseClassId: widget.classId,
         compareBaseResultId: widget.resultId,
         compareBaseRelayLegNumber: widget.relayLegNumber,
@@ -460,12 +471,12 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         stageId: widget.stageId,
         relayLegNumber: widget.relayLegNumber,
         splitId: widget.selectedSplitId,
+        splitRange: widget.selectedSplitRange,
       ),
     );
   }
 
   void _openResultsSplit(String splitId) {
-    ref.read(splitRangeSelectionProvider.notifier).state = null;
     ref
         .read(settingsControllerProvider.notifier)
         .setDefaultClass(widget.classId);

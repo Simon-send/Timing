@@ -2,6 +2,75 @@ rules_version='2'
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isVerifiedOwner(userId) {
+      return request.auth != null
+        && request.auth.uid == userId
+        && request.auth.token.email_verified == true;
+    }
+
+    function hasOptionalBoundedString(fieldName, maxLength) {
+      return !(fieldName in request.resource.data)
+        || request.resource.data[fieldName] == null
+        || (request.resource.data[fieldName] is string
+          && request.resource.data[fieldName].size() <= maxLength);
+    }
+
+    function hasOptionalTimestamp(fieldName) {
+      return !(fieldName in request.resource.data)
+        || request.resource.data[fieldName] == null
+        || request.resource.data[fieldName] is timestamp;
+    }
+
+    function validSettingsWrite() {
+      return request.resource.data.keys().hasOnly([
+          'localeCode',
+          'defaultEventId',
+          'defaultClassId',
+          'preferredSplitId',
+          'tableDensity',
+          'themeVariant'
+        ])
+        && request.resource.data.localeCode is string
+        && request.resource.data.localeCode in [
+          'de', 'en', 'es', 'et', 'fi', 'fr', 'it', 'nb', 'ru', 'sv'
+        ]
+        && hasOptionalBoundedString('defaultEventId', 128)
+        && hasOptionalBoundedString('defaultClassId', 128)
+        && hasOptionalBoundedString('preferredSplitId', 128)
+        && request.resource.data.tableDensity is string
+        && request.resource.data.tableDensity in ['comfortable', 'compact']
+        && request.resource.data.themeVariant is string
+        && request.resource.data.themeVariant in [
+          'nordicDark', 'graphite', 'alpineLight', 'stadium'
+        ];
+    }
+
+    function validProfileWrite() {
+      return request.resource.data.keys().hasOnly([
+          'athleteId',
+          'athleteName',
+          'athleteLinkOnboardingCompleted',
+          'updatedAt',
+          'linkedAt'
+        ])
+        && hasOptionalBoundedString('athleteId', 128)
+        && hasOptionalBoundedString('athleteName', 200)
+        && request.resource.data.athleteLinkOnboardingCompleted is bool
+        && request.resource.data.updatedAt is timestamp
+        && hasOptionalTimestamp('linkedAt');
+    }
+
+    function validFavoriteWrite() {
+      return request.resource.data.keys().hasOnly([
+          'athleteId', 'athleteName', 'updatedAt'
+        ])
+        && request.resource.data.athleteId is string
+        && request.resource.data.athleteId.size() <= 128
+        && request.resource.data.athleteName is string
+        && request.resource.data.athleteName.size() <= 200
+        && request.resource.data.updatedAt is timestamp;
+    }
+
     match /events/{eventId} {
       allow read: if true;
       allow write: if false;
@@ -18,6 +87,10 @@ service cloud.firestore {
         match /results/{resultId} {
           allow read: if true;
           allow write: if false;
+
+          match /privateAnalysis/{documentId} {
+            allow read, write: if false;
+          }
         }
       }
 
@@ -37,6 +110,10 @@ service cloud.firestore {
           match /results/{resultId} {
             allow read: if true;
             allow write: if false;
+
+            match /privateAnalysis/{documentId} {
+              allow read, write: if false;
+            }
           }
         }
       }
@@ -52,30 +129,79 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    match /{path=**}/results/{resultId} {
-      allow read: if true;
-      allow write: if false;
+    // Rundeanalyse access, quotas, events and statistics are handled only by
+    // trusted callable Functions.  The app receives the small public event
+    // summary it needs from getRundeanalyseAccessStatus instead of reading
+    // these documents directly.
+    match /rundeanalyseConfig/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rundeanalyseUsers/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rundeanalyseCodes/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rundeanalyseEvents/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rundeanalyseEventStats/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rundeanalyseUsage/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rundeanalyseIdempotency/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rundeanalyseGuestSessions/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rundeanalyseStats/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rundeanalyseAdminAudit/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rundeanalyseAdminGrants/{document=**} {
+      allow read, write: if false;
     }
 
     match /users/{userId} {
       allow read, write: if false;
 
       match /settings/{documentId} {
-        allow read, write: if request.auth != null
-          && request.auth.uid == userId
-          && request.auth.token.email_verified == true;
+        allow read: if isVerifiedOwner(userId);
+        allow create, update: if isVerifiedOwner(userId)
+          && documentId == 'app'
+          && validSettingsWrite();
+        allow delete: if false;
       }
 
       match /profile/{documentId} {
-        allow read, write: if request.auth != null
-          && request.auth.uid == userId
-          && request.auth.token.email_verified == true;
+        allow read: if isVerifiedOwner(userId);
+        allow create, update: if isVerifiedOwner(userId)
+          && documentId == 'main'
+          && validProfileWrite();
+        allow delete: if false;
       }
 
       match /favoriteAthletes/{athleteId} {
-        allow read, write: if request.auth != null
-          && request.auth.uid == userId
-          && request.auth.token.email_verified == true;
+        allow read: if isVerifiedOwner(userId);
+        allow create, update: if isVerifiedOwner(userId)
+          && request.resource.data.athleteId == athleteId
+          && validFavoriteWrite();
+        allow delete: if isVerifiedOwner(userId);
       }
     }
 

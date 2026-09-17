@@ -11,6 +11,7 @@ import '../features/events/data/events_repository.dart';
 import '../features/events/domain/result_event.dart';
 import '../features/favorites/data/favorite_athletes_repository.dart';
 import '../features/profile/data/athlete_profile_repository.dart';
+import '../features/profile/domain/athlete_link_state.dart';
 import '../features/profile/domain/athlete_profile.dart';
 import '../features/results/data/results_repository.dart';
 import '../features/results/domain/race_result.dart';
@@ -41,6 +42,33 @@ final authStateProvider = StreamProvider((ref) {
   return ref.watch(authRepositoryProvider).authStateChanges();
 });
 
+/// One redirect completion per application scope, independent of the route.
+final googleRedirectProvider = FutureProvider<User?>(retry: (_, _) => null, (
+  ref,
+) async {
+  final repository = ref.read(authRepositoryProvider);
+  final preferences = ref.read(sharedPreferencesProvider);
+  const key = 'google_sign_in_redirect_pending';
+  final pending = preferences.getBool(key) == true;
+  try {
+    final user = await repository.completeGoogleRedirect();
+    if (pending && user == null && repository.currentUser == null) {
+      throw FirebaseAuthException(code: 'redirect-cancelled-by-user');
+    }
+    return user ?? (pending ? repository.currentUser : null);
+  } finally {
+    if (pending) await preferences.remove(key);
+  }
+});
+
+/// Changes when the browser returns to the foreground or the user retries a
+/// failed load, recreating Firestore subscriptions without reloading the page.
+final appDataRefreshProvider = StateProvider<int>((ref) => 0);
+
+void refreshAppData(WidgetRef ref) {
+  ref.read(appDataRefreshProvider.notifier).state++;
+}
+
 final eventsRepositoryProvider = Provider<EventsRepository>((ref) {
   return FirestoreEventsRepository(
     firestore: ref.watch(firebaseFirestoreProvider),
@@ -60,6 +88,7 @@ final favoriteAthletesRepositoryProvider = Provider<FavoriteAthletesRepository>(
 );
 
 final favoriteAthleteIdsProvider = StreamProvider<Set<String>>((ref) {
+  ref.watch(appDataRefreshProvider);
   final user = ref.watch(authStateProvider).asData?.value;
   if (user == null) return Stream.value(const <String>{});
   return ref
@@ -89,10 +118,12 @@ final settingsControllerProvider =
     });
 
 final eventsProvider = StreamProvider<List<ResultEvent>>((ref) {
+  ref.watch(appDataRefreshProvider);
   return ref.watch(eventsRepositoryProvider).watchEvents();
 });
 
 final linkedAthleteIdProvider = StreamProvider<String?>((ref) {
+  ref.watch(appDataRefreshProvider);
   final user = ref.watch(authStateProvider).asData?.value;
   if (user == null) return Stream.value(null);
   return ref
@@ -100,10 +131,24 @@ final linkedAthleteIdProvider = StreamProvider<String?>((ref) {
       .watchLinkedAthleteId(user.uid);
 });
 
+final athleteLinkStateProvider = StreamProvider<AthleteLinkState>((ref) {
+  ref.watch(appDataRefreshProvider);
+  final user = ref.watch(authStateProvider).asData?.value;
+  if (user == null) {
+    return Stream.value(
+      const AthleteLinkState(athleteId: null, onboardingCompleted: true),
+    );
+  }
+  return ref
+      .watch(athleteProfileRepositoryProvider)
+      .watchAthleteLinkState(user.uid);
+});
+
 final athleteProfileProvider = StreamProvider.family<AthleteProfile?, String>((
   ref,
   athleteId,
 ) {
+  ref.watch(appDataRefreshProvider);
   return ref.watch(athleteProfileRepositoryProvider).watchAthlete(athleteId);
 });
 
@@ -111,6 +156,7 @@ final athleteRacesProvider = StreamProvider.family<List<AthleteRace>, String>((
   ref,
   athleteId,
 ) {
+  ref.watch(appDataRefreshProvider);
   return ref
       .watch(athleteProfileRepositoryProvider)
       .watchAthleteRaces(athleteId);
@@ -132,11 +178,25 @@ final linkedAthleteEventProvider = Provider.family<AthleteEvent?, String>((
   return null;
 });
 
+final participatedEventIdsProvider = Provider<Set<String>>((ref) {
+  final athleteId = ref.watch(linkedAthleteIdProvider).asData?.value;
+  if (athleteId == null) return const <String>{};
+
+  final profile = ref.watch(athleteProfileProvider(athleteId)).asData?.value;
+  if (profile == null) return const <String>{};
+
+  return {
+    for (final event in profile.events)
+      if (event.eventId.isNotEmpty && event.classId.isNotEmpty) event.eventId,
+  };
+});
+
 final athleteAffiliationsProvider =
     FutureProvider.family<
       AthleteAffiliations,
       ({String? clubId, String? teamId})
     >((ref, args) {
+      ref.watch(appDataRefreshProvider);
       return ref
           .watch(athleteProfileRepositoryProvider)
           .fetchAffiliations(clubId: args.clubId, teamId: args.teamId);
@@ -146,11 +206,13 @@ final classesProvider = StreamProvider.family<List<ResultClass>, String>((
   ref,
   eventId,
 ) {
+  ref.watch(appDataRefreshProvider);
   return ref.watch(resultsRepositoryProvider).watchClasses(eventId);
 });
 
 final competitionStagesProvider =
     StreamProvider.family<List<CompetitionStage>, String>((ref, eventId) {
+      ref.watch(appDataRefreshProvider);
       return ref.watch(resultsRepositoryProvider).watchStages(eventId);
     });
 
@@ -159,6 +221,7 @@ final stageSplitDefsProvider =
       List<SplitDef>,
       ({String eventId, String stageId, String classId})
     >((ref, args) {
+      ref.watch(appDataRefreshProvider);
       return ref
           .watch(resultsRepositoryProvider)
           .watchStageSplitDefs(args.eventId, args.stageId, args.classId);
@@ -169,6 +232,7 @@ final stageResultsProvider =
       List<RaceResult>,
       ({String eventId, String stageId, String classId})
     >((ref, args) {
+      ref.watch(appDataRefreshProvider);
       final limit = ref.watch(stageResultsLimitProvider(args));
       return ref
           .watch(resultsRepositoryProvider)
@@ -199,6 +263,7 @@ final stageResultProvider =
       RaceResult?,
       ({String eventId, String stageId, String classId, String resultId})
     >((ref, args) {
+      ref.watch(appDataRefreshProvider);
       return ref
           .watch(resultsRepositoryProvider)
           .watchStageResult(
@@ -221,6 +286,7 @@ final athleteStageResultsProvider = FutureProvider.autoDispose
       ref,
       args,
     ) async {
+      ref.watch(appDataRefreshProvider);
       final stages = await ref.watch(
         competitionStagesProvider(args.eventId).future,
       );
@@ -254,6 +320,7 @@ final splitDefsProvider =
       ref,
       args,
     ) {
+      ref.watch(appDataRefreshProvider);
       return ref
           .watch(resultsRepositoryProvider)
           .watchSplitDefs(args.eventId, args.classId);
@@ -276,6 +343,7 @@ final raceResultsLimitProvider =
 final raceResultsProvider =
     StreamProvider.family<List<RaceResult>, ({String eventId, String classId})>(
       (ref, args) {
+        ref.watch(appDataRefreshProvider);
         final limit = ref.watch(raceResultsLimitProvider(args));
         return ref
             .watch(resultsRepositoryProvider)
@@ -288,6 +356,7 @@ final raceResultProvider =
       RaceResult?,
       ({String eventId, String classId, String resultId})
     >((ref, args) {
+      ref.watch(appDataRefreshProvider);
       return ref
           .watch(resultsRepositoryProvider)
           .watchResult(args.eventId, args.classId, args.resultId);
@@ -333,10 +402,6 @@ final resultSearchQueryProvider = StateProvider.autoDispose
     ) {
       return '';
     });
-
-final splitRangeSelectionProvider = StateProvider<SplitRangeSelection?>((ref) {
-  return null;
-});
 
 class SettingsController extends StateNotifier<UserSettings> {
   SettingsController(this._repository) : super(UserSettings.defaults()) {

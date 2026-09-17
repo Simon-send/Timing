@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:results/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,7 +21,7 @@ import '../domain/result_class.dart';
 import '../domain/result_sort_mode.dart';
 import '../domain/split_def.dart';
 import 'biathlon_table.dart';
-import 'class_selector.dart';
+import 'import_status_label.dart';
 import 'result_distribution_button.dart';
 import 'result_locations.dart';
 import 'relay_leg_selector.dart';
@@ -35,6 +37,7 @@ class ResultsPage extends ConsumerWidget {
     this.selectedStageId,
     this.selectedClassId,
     this.selectedSplitId,
+    this.selectedSplitRange,
     this.selectedRelayLegNumber,
     this.compareBaseClassId,
     this.compareBaseResultId,
@@ -45,6 +48,7 @@ class ResultsPage extends ConsumerWidget {
   final String? selectedStageId;
   final String? selectedClassId;
   final String? selectedSplitId;
+  final SplitRangeSelection? selectedSplitRange;
   final int? selectedRelayLegNumber;
   final String? compareBaseClassId;
   final String? compareBaseResultId;
@@ -58,8 +62,13 @@ class ResultsPage extends ConsumerWidget {
     final stages = ref.watch(competitionStagesProvider(eventId));
 
     return AppShell(
-      title: l10n.results,
-      subtitle: eventId,
+      title:
+          events.asData?.value
+              .where((event) => event.id == eventId)
+              .firstOrNull
+              ?.name ??
+          eventId,
+      subtitle: null,
       leading: IconButton.outlined(
         tooltip: l10n.eventsTitle,
         onPressed: () => context.go('/events'),
@@ -67,18 +76,27 @@ class ResultsPage extends ConsumerWidget {
       ),
       actions: const [AccountMenu(), SettingsMenu()],
       child: ShellPanel(
+        padding: EdgeInsets.all(
+          MediaQuery.sizeOf(context).width < 600 ? 4 : 16,
+        ),
         child: events.when(
           loading: () => LoadingState(label: l10n.loadingEvents),
-          error: (error, _) =>
-              ErrorState(title: l10n.couldNotReadEvents, error: error),
+          error: (error, _) => ErrorState(
+            title: l10n.couldNotReadEvents,
+            error: error,
+            onRetry: () => refreshAppData(ref),
+          ),
           data: (events) {
             final event = events
                 .where((event) => event.id == eventId)
                 .firstOrNull;
             return classes.when(
               loading: () => LoadingState(label: l10n.loadingResults),
-              error: (error, _) =>
-                  ErrorState(title: l10n.couldNotReadResults, error: error),
+              error: (error, _) => ErrorState(
+                title: l10n.couldNotReadResults,
+                error: error,
+                onRetry: () => refreshAppData(ref),
+              ),
               data: (classes) {
                 if (classes.isEmpty) {
                   return EmptyState(
@@ -88,8 +106,11 @@ class ResultsPage extends ConsumerWidget {
                 }
                 return stages.when(
                   loading: () => LoadingState(label: l10n.loadingResults),
-                  error: (error, _) =>
-                      ErrorState(title: l10n.couldNotReadResults, error: error),
+                  error: (error, _) => ErrorState(
+                    title: l10n.couldNotReadResults,
+                    error: error,
+                    onRetry: () => refreshAppData(ref),
+                  ),
                   data: (stages) {
                     return _ResultsContent(
                       eventId: eventId,
@@ -99,6 +120,7 @@ class ResultsPage extends ConsumerWidget {
                       selectedStageId: selectedStageId,
                       selectedClassId: selectedClassId,
                       selectedSplitId: selectedSplitId,
+                      selectedSplitRange: selectedSplitRange,
                       selectedRelayLegNumber: selectedRelayLegNumber,
                       compareBaseClassId: compareBaseClassId,
                       compareBaseResultId: compareBaseResultId,
@@ -115,7 +137,7 @@ class ResultsPage extends ConsumerWidget {
   }
 }
 
-class _ResultsContent extends ConsumerWidget {
+class _ResultsContent extends ConsumerStatefulWidget {
   const _ResultsContent({
     required this.eventId,
     required this.event,
@@ -124,6 +146,7 @@ class _ResultsContent extends ConsumerWidget {
     required this.selectedStageId,
     required this.selectedClassId,
     required this.selectedSplitId,
+    required this.selectedSplitRange,
     required this.selectedRelayLegNumber,
     required this.compareBaseClassId,
     required this.compareBaseResultId,
@@ -137,13 +160,41 @@ class _ResultsContent extends ConsumerWidget {
   final String? selectedStageId;
   final String? selectedClassId;
   final String? selectedSplitId;
+  final SplitRangeSelection? selectedSplitRange;
   final int? selectedRelayLegNumber;
   final String? compareBaseClassId;
   final String? compareBaseResultId;
   final int? compareBaseRelayLegNumber;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ResultsContent> createState() => _ResultsContentState();
+}
+
+class _ResultsContentState extends ConsumerState<_ResultsContent> {
+  bool _classesCollapsed = false;
+  final ScrollController _pageScrollController = ScrollController();
+
+  String get eventId => widget.eventId;
+  ResultEvent? get event => widget.event;
+  List<ResultClass> get classes => widget.classes;
+  List<CompetitionStage> get stages => widget.stages;
+  String? get selectedStageId => widget.selectedStageId;
+  String? get selectedClassId => widget.selectedClassId;
+  String? get selectedSplitId => widget.selectedSplitId;
+  SplitRangeSelection? get selectedSplitRange => widget.selectedSplitRange;
+  int? get selectedRelayLegNumber => widget.selectedRelayLegNumber;
+  String? get compareBaseClassId => widget.compareBaseClassId;
+  String? get compareBaseResultId => widget.compareBaseResultId;
+  int? get compareBaseRelayLegNumber => widget.compareBaseRelayLegNumber;
+
+  @override
+  void dispose() {
+    _pageScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final athleteEvent = ref.watch(linkedAthleteEventProvider(eventId));
     final compareSelection = _CompareSelection.tryParse(
       classId: compareBaseClassId,
@@ -179,58 +230,100 @@ class _ResultsContent extends ConsumerWidget {
       )),
     );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final showClassSidebar = constraints.maxWidth >= 880;
-        final resultsArea = _ResultsArea(
-          eventId: eventId,
-          event: event,
-          activeClass: activeClass,
-          classes: classes,
-          activeStage: activeStage,
-          stages: classStages,
-          showClassDropdown: !showClassSidebar,
-          splitDefs: splitDefs,
-          results: results,
-          selectedSplitId: selectedSplitId,
-          selectedRelayLegNumber: selectedRelayLegNumber,
-          compareSelection: compareSelection,
-        );
-
-        if (!showClassSidebar) return resultsArea;
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              width: 280,
-              child: _ClassSidebar(
+    return SingleChildScrollView(
+      key: const Key('results-page-scroll'),
+      controller: _pageScrollController,
+      primary: false,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showClassSidebar = constraints.maxWidth >= 1050;
+          void onClassChanged(String? value) {
+            final retainedStageId = preservedStageIdForClassChange(
+              activeStageId: activeStage.id,
+              targetClassId: value,
+              stages: stages,
+            );
+            ref
+                .read(settingsControllerProvider.notifier)
+                .setDefaultClass(value);
+            ref.read(comparisonClassIdsProvider.notifier).state = [];
+            context.go(
+              resultsLocation(
                 eventId: eventId,
-                classes: classes,
-                selectedClassId: classId,
-                activeSplitDefs: splitDefs,
-                onChanged: (value) {
-                  ref
-                      .read(settingsControllerProvider.notifier)
-                      .setDefaultClass(value);
-                  ref.read(splitRangeSelectionProvider.notifier).state = null;
-                  ref.read(comparisonClassIdsProvider.notifier).state = [];
-                  context.go(
-                    resultsLocation(
-                      eventId: eventId,
-                      classId: value,
-                      stageId: null,
-                      splitId: selectedSplitId,
-                    ),
-                  );
-                },
+                classId: value,
+                stageId: retainedStageId,
+                splitId: selectedSplitId,
               ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(child: resultsArea),
-          ],
-        );
-      },
+            );
+          }
+
+          final Widget? headingLeading = !showClassSidebar
+              ? _MobileClassMenu(
+                  eventId: eventId,
+                  classes: classes,
+                  selectedClassId: classId,
+                  activeSplitDefs: splitDefs,
+                  onChanged: onClassChanged,
+                )
+              : _classesCollapsed
+              ? IconButton(
+                  key: const Key('classes-expand-inline'),
+                  tooltip: 'Vis klasser',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 40,
+                    height: 40,
+                  ),
+                  onPressed: () => setState(() => _classesCollapsed = false),
+                  icon: const Icon(Icons.chevron_right),
+                )
+              : null;
+          final resultsArea = _ResultsArea(
+            eventId: eventId,
+            event: event,
+            activeClass: activeClass,
+            classes: classes,
+            activeStage: activeStage,
+            stages: classStages,
+            headingLeading: headingLeading,
+            splitDefs: splitDefs,
+            results: results,
+            selectedSplitId: selectedSplitId,
+            selectedSplitRange: selectedSplitRange,
+            selectedRelayLegNumber: selectedRelayLegNumber,
+            compareSelection: compareSelection,
+            pageScrollController: _pageScrollController,
+          );
+
+          if (!showClassSidebar) return resultsArea;
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!_classesCollapsed) ...[
+                SizedBox(
+                  width: 280,
+                  child: _ClassSidebar(
+                    eventId: eventId,
+                    classes: classes,
+                    selectedClassId: classId,
+                    activeSplitDefs: splitDefs,
+                    collapsed: false,
+                    fillAvailableHeight: false,
+                    onCollapseChanged: (collapsed) {
+                      setState(() => _classesCollapsed = collapsed);
+                    },
+                    onChanged: onClassChanged,
+                  ),
+                ),
+                const SizedBox(width: 14),
+              ],
+              Expanded(child: resultsArea),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -242,14 +335,40 @@ class _ResultsContent extends ConsumerWidget {
     ResultClass raceClass,
     List<CompetitionStage> classStages,
   ) {
-    if (classStages.isEmpty) return null;
-    final preferredId = selectedStageId ?? raceClass.primaryStageId;
-    return classStages.where((stage) => stage.id == preferredId).firstOrNull ??
-        classStages.first;
+    return selectActiveCompetitionStage(
+      raceClass: raceClass,
+      classStages: classStages,
+      selectedStageId: selectedStageId,
+    );
   }
 }
 
-class _ResultsArea extends ConsumerWidget {
+CompetitionStage? selectActiveCompetitionStage({
+  required ResultClass raceClass,
+  required List<CompetitionStage> classStages,
+  String? selectedStageId,
+}) {
+  if (classStages.isEmpty) return null;
+  final preferredId = selectedStageId ?? raceClass.primaryStageId;
+  return classStages.where((stage) => stage.id == preferredId).firstOrNull ??
+      classStages.first;
+}
+
+String? preservedStageIdForClassChange({
+  required String activeStageId,
+  required String? targetClassId,
+  required List<CompetitionStage> stages,
+}) {
+  if (targetClassId == null || targetClassId.trim().isEmpty) return null;
+  return stages.any(
+        (stage) =>
+            stage.id == activeStageId && stage.supportsClass(targetClassId),
+      )
+      ? activeStageId
+      : null;
+}
+
+class _ResultsArea extends ConsumerStatefulWidget {
   const _ResultsArea({
     required this.eventId,
     required this.event,
@@ -257,12 +376,14 @@ class _ResultsArea extends ConsumerWidget {
     required this.classes,
     required this.activeStage,
     required this.stages,
-    required this.showClassDropdown,
+    required this.headingLeading,
     required this.splitDefs,
     required this.results,
     required this.selectedSplitId,
+    required this.selectedSplitRange,
     required this.selectedRelayLegNumber,
     required this.compareSelection,
+    required this.pageScrollController,
   });
 
   final String eventId;
@@ -271,15 +392,37 @@ class _ResultsArea extends ConsumerWidget {
   final List<ResultClass> classes;
   final CompetitionStage activeStage;
   final List<CompetitionStage> stages;
-  final bool showClassDropdown;
+  final Widget? headingLeading;
   final AsyncValue<List<SplitDef>> splitDefs;
   final AsyncValue<List<RaceResult>> results;
   final String? selectedSplitId;
+  final SplitRangeSelection? selectedSplitRange;
   final int? selectedRelayLegNumber;
   final _CompareSelection? compareSelection;
+  final ScrollController pageScrollController;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ResultsArea> createState() => _ResultsAreaState();
+}
+
+class _ResultsAreaState extends ConsumerState<_ResultsArea> {
+  String get eventId => widget.eventId;
+  ResultEvent? get event => widget.event;
+  ResultClass get activeClass => widget.activeClass;
+  List<ResultClass> get classes => widget.classes;
+  CompetitionStage get activeStage => widget.activeStage;
+  List<CompetitionStage> get stages => widget.stages;
+  Widget? get headingLeading => widget.headingLeading;
+  AsyncValue<List<SplitDef>> get splitDefs => widget.splitDefs;
+  AsyncValue<List<RaceResult>> get results => widget.results;
+  String? get selectedSplitId => widget.selectedSplitId;
+  SplitRangeSelection? get selectedSplitRange => widget.selectedSplitRange;
+  int? get selectedRelayLegNumber => widget.selectedRelayLegNumber;
+  _CompareSelection? get compareSelection => widget.compareSelection;
+  ScrollController get pageScrollController => widget.pageScrollController;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final settings = ref.watch(settingsControllerProvider);
     final sortMode = ref.watch(resultSortModeProvider(eventId));
@@ -305,7 +448,7 @@ class _ResultsArea extends ConsumerWidget {
     final comparisonClassIds = compareSelection == null
         ? ref.watch(comparisonClassIdsProvider)
         : <String>[];
-    final requestedSplitRange = ref.watch(splitRangeSelectionProvider);
+    final requestedSplitRange = selectedSplitRange;
     final classId = activeClass.id;
     final searchArgs = (
       eventId: eventId,
@@ -325,575 +468,598 @@ class _ResultsArea extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ResultTitle(event: event, raceClass: activeClass, stage: activeStage),
-        if (showClassDropdown || stages.length > 1) ...[
+        _ResultTitle(
+          event: event,
+          raceClass: activeClass,
+          stage: activeStage,
+          leading: headingLeading,
+        ),
+        ImportStatusLabel(state: activeStage.classImportStates[classId]),
+        if (stages.length > 1) ...[
           const SizedBox(height: 14),
           Wrap(
             spacing: 12,
             runSpacing: 12,
             children: [
-              if (showClassDropdown)
-                SizedBox(
-                  width: 300,
-                  child: ClassSelector(
-                    classes: classes,
-                    selectedClassId: classId,
-                    onChanged: (value) {
-                      ref
-                          .read(settingsControllerProvider.notifier)
-                          .setDefaultClass(value);
-                      ref.read(splitRangeSelectionProvider.notifier).state =
-                          null;
-                      context.go(
-                        resultsLocation(
-                          eventId: eventId,
-                          classId: value,
-                          splitId: selectedSplitId,
-                        ),
-                      );
-                    },
-                  ),
+              SizedBox(
+                width: 300,
+                child: _CompetitionStageSelector(
+                  stages: stages,
+                  selectedStageId: activeStage.id,
+                  onChanged: (value) {
+                    ref.read(comparisonClassIdsProvider.notifier).state = [];
+                    context.go(
+                      resultsLocation(
+                        eventId: eventId,
+                        classId: classId,
+                        stageId: value,
+                        splitId: selectedSplitId,
+                      ),
+                    );
+                  },
                 ),
-              if (stages.length > 1)
-                SizedBox(
-                  width: 300,
-                  child: _CompetitionStageSelector(
-                    stages: stages,
-                    selectedStageId: activeStage.id,
-                    onChanged: (value) {
-                      ref.read(splitRangeSelectionProvider.notifier).state =
-                          null;
-                      ref.read(comparisonClassIdsProvider.notifier).state = [];
-                      context.go(
-                        resultsLocation(
-                          eventId: eventId,
-                          classId: classId,
-                          stageId: value,
-                          splitId: selectedSplitId,
-                        ),
-                      );
-                    },
-                  ),
-                ),
+              ),
             ],
           ),
         ],
         const SizedBox(height: 14),
-        Expanded(
-          child: splitDefs.when(
-            loading: () => LoadingState(label: l10n.loadingResults),
-            error: (error, _) =>
-                ErrorState(title: l10n.couldNotReadResults, error: error),
-            data: (splitDefs) {
-              return results.when(
-                skipLoadingOnReload: true,
-                skipError: true,
-                loading: () => LoadingState(label: l10n.loadingResults),
-                error: (error, _) =>
-                    ErrorState(title: l10n.couldNotReadResults, error: error),
-                data: (loadedResults) {
-                  if (loadedResults.isEmpty) {
-                    return EmptyState(
-                      title: l10n.noResultsTitle,
-                      message: l10n.noResultsMessage,
-                    );
-                  }
-                  final availableRelayLegs =
-                      activeStage.isRelay ||
-                          loadedResults.any(
-                            (result) =>
-                                result.entrant?.kind == ResultEntrantKind.team,
-                          )
-                      ? relayLegNumbers(loadedResults)
-                      : const <int>[];
-                  final preferredRelayLeg =
-                      selectedRelayLegNumber ??
-                      compareSelection?.relayLegNumber;
-                  final activeRelayLeg =
-                      availableRelayLegs.contains(preferredRelayLeg)
-                      ? preferredRelayLeg
-                      : null;
-                  final relayComparisonLegs = activeRelayLeg == null
-                      ? const <int>[]
-                      : requestedRelayComparisonLegs
-                            .where(
-                              (leg) =>
-                                  leg != activeRelayLeg &&
-                                  availableRelayLegs.contains(leg),
-                            )
-                            .toList();
-                  final displayedPrimaryResults = activeRelayLeg == null
-                      ? loadedResults
-                      : relayLegRaceResults(loadedResults, activeRelayLeg);
-                  final displayedSplitDefs = activeRelayLeg == null
-                      ? splitDefs
-                      : relayLegSplitDefs(
-                          splitDefs,
-                          activeRelayLeg,
-                          displayedPrimaryResults,
-                        );
-                  final primaryViewClass = activeRelayLeg == null
-                      ? activeClass
-                      : _relayLegClass(
-                          activeClass,
-                          activeRelayLeg,
-                          displayedPrimaryResults.length,
-                        );
-                  final selectableSplitDefs =
-                      activeRelayLeg != null && relayComparisonLegs.isNotEmpty
-                      ? displayedSplitDefs
-                            .where((split) => split.id == relayLegFinishSplitId)
-                            .toList()
-                      : displayedSplitDefs;
-                  final comparisonRead = activeRelayLeg == null
-                      ? _readComparisonData(
-                          ref,
-                          displayedSplitDefs,
-                          comparisonClassIds,
+        splitDefs.when(
+          loading: () => LoadingState(label: l10n.loadingResults),
+          error: (error, _) => ErrorState(
+            title: l10n.couldNotReadResults,
+            error: error,
+            onRetry: () => refreshAppData(ref),
+          ),
+          data: (splitDefs) {
+            return results.when(
+              skipLoadingOnReload: true,
+              skipError: true,
+              loading: () => LoadingState(label: l10n.loadingResults),
+              error: (error, _) => ErrorState(
+                title: l10n.couldNotReadResults,
+                error: error,
+                onRetry: () => refreshAppData(ref),
+              ),
+              data: (loadedResults) {
+                if (loadedResults.isEmpty) {
+                  return EmptyState(
+                    title: l10n.noResultsTitle,
+                    message: l10n.noResultsMessage,
+                  );
+                }
+                final availableRelayLegs =
+                    activeStage.isRelay ||
+                        loadedResults.any(
+                          (result) =>
+                              result.entrant?.kind == ResultEntrantKind.team,
                         )
-                      : _ComparisonRead.data([
-                          for (final legNumber in relayComparisonLegs)
-                            _ComparisonRows(
-                              raceClass: _relayLegClass(
-                                activeClass,
-                                legNumber,
-                                loadedResults.length,
-                              ),
-                              sourceClassId: activeClass.id,
-                              results: relayLegRaceResults(
-                                loadedResults,
-                                legNumber,
-                              ),
+                    ? relayLegNumbers(loadedResults)
+                    : const <int>[];
+                final preferredRelayLeg =
+                    selectedRelayLegNumber ?? compareSelection?.relayLegNumber;
+                final activeRelayLeg =
+                    availableRelayLegs.contains(preferredRelayLeg)
+                    ? preferredRelayLeg
+                    : null;
+                final relayComparisonLegs = activeRelayLeg == null
+                    ? const <int>[]
+                    : requestedRelayComparisonLegs
+                          .where(
+                            (leg) =>
+                                leg != activeRelayLeg &&
+                                availableRelayLegs.contains(leg),
+                          )
+                          .toList();
+                final displayedPrimaryResults = activeRelayLeg == null
+                    ? loadedResults
+                    : relayLegRaceResults(loadedResults, activeRelayLeg);
+                final displayedSplitDefs = activeRelayLeg == null
+                    ? splitDefs
+                    : relayLegSplitDefs(
+                        splitDefs,
+                        activeRelayLeg,
+                        displayedPrimaryResults,
+                      );
+                final primaryViewClass = activeRelayLeg == null
+                    ? activeClass
+                    : _relayLegClass(
+                        activeClass,
+                        activeRelayLeg,
+                        displayedPrimaryResults.length,
+                      );
+                final selectableSplitDefs =
+                    activeRelayLeg != null && relayComparisonLegs.isNotEmpty
+                    ? displayedSplitDefs
+                          .where((split) => split.id == relayLegFinishSplitId)
+                          .toList()
+                    : displayedSplitDefs;
+                final comparisonRead = activeRelayLeg == null
+                    ? _readComparisonData(
+                        ref,
+                        displayedSplitDefs,
+                        comparisonClassIds,
+                      )
+                    : _ComparisonRead.data([
+                        for (final legNumber in relayComparisonLegs)
+                          _ComparisonRows(
+                            raceClass: _relayLegClass(
+                              activeClass,
+                              legNumber,
+                              loadedResults.length,
                             ),
-                        ]);
-                  if (comparisonRead.isLoading && comparisonRead.rows.isEmpty) {
-                    return LoadingState(label: l10n.loadingResults);
-                  }
-                  if (comparisonRead.error != null) {
-                    return ErrorState(
-                      title: l10n.couldNotReadResults,
-                      error: comparisonRead.error!,
-                    );
-                  }
-                  final isLoadingMore =
-                      (results.isLoading && results.hasValue) ||
-                      comparisonRead.isLoading;
-                  final canLoadMore = _canLoadMoreResults(
+                            sourceClassId: activeClass.id,
+                            results: relayLegRaceResults(
+                              loadedResults,
+                              legNumber,
+                            ),
+                          ),
+                      ]);
+                if (comparisonRead.isLoading && comparisonRead.rows.isEmpty) {
+                  return LoadingState(label: l10n.loadingResults);
+                }
+                if (comparisonRead.error != null) {
+                  return ErrorState(
+                    title: l10n.couldNotReadResults,
+                    error: comparisonRead.error!,
+                    onRetry: () => refreshAppData(ref),
+                  );
+                }
+                final isLoadingMore =
+                    (results.isLoading && results.hasValue) ||
+                    comparisonRead.isLoading;
+                final canLoadMore = _canLoadMoreResults(
+                  ref,
+                  primaryResults: loadedResults,
+                  comparisons: activeRelayLeg == null
+                      ? comparisonRead.rows
+                      : const [],
+                );
+                final tableRows = _buildTableRows(
+                  primaryClass: primaryViewClass,
+                  primaryResults: displayedPrimaryResults,
+                  comparisons: comparisonRead.rows,
+                  linkedAthleteId: linkedAthleteId,
+                  linkedClubName: linkedAffiliations?.clubName,
+                  linkedTeamName: linkedAffiliations?.teamName,
+                  favoriteAthleteIds: favoriteAthleteIds,
+                );
+                final baseRow = compareSelection == null
+                    ? null
+                    : tableRows.where((row) {
+                        return row.sourceClassId == compareSelection!.classId &&
+                            row.result.detailResultId ==
+                                compareSelection!.resultId &&
+                            row.result.relayLegNumber ==
+                                compareSelection!.relayLegNumber;
+                      }).firstOrNull;
+                final hasBiathlonData = BiathlonTable.hasBiathlonData(
+                  tableRows,
+                );
+                final allSplitOptions = _splitOptions(
+                  selectableSplitDefs,
+                  displayedPrimaryResults,
+                  hasBiathlonData,
+                );
+                final splitOptions =
+                    activeRelayLeg != null && relayComparisonLegs.isNotEmpty
+                    ? allSplitOptions
+                          .where(
+                            (split) =>
+                                split.id == relayLegFinishSplitId ||
+                                split.id == _biathlonSplitId,
+                          )
+                          .toList()
+                    : allSplitOptions;
+                final activeSplitId = _activeSplitId(
+                  selectedSplitId,
+                  splitOptions,
+                );
+                final isBiathlonSplit = activeSplitId == _biathlonSplitId;
+                final rangeSplitOptions = splitOptions
+                    .where((split) => split.id != _biathlonSplitId)
+                    .toList();
+                final activeSplitRange = isBiathlonSplit
+                    ? null
+                    : _activeSplitRange(
+                        requestedSplitRange,
+                        activeSplitId,
+                        rangeSplitOptions,
+                      );
+                final selectedResultSplitId =
+                    activeSplitRange?.toSplitId ?? activeSplitId;
+                final effectiveSortMode =
+                    activeSplitRange?.isIndependent == true
+                    ? ResultSortMode.split
+                    : sortMode;
+                final distributionData = _distributionData(
+                  tableRows: tableRows,
+                  analysisClassId: primaryViewClass.id,
+                  isBiathlonSplit: isBiathlonSplit,
+                  activeSplitId: selectedResultSplitId,
+                  splitRange: activeSplitRange,
+                  sortMode: effectiveSortMode,
+                  biathlonSortKey: biathlonSortKey,
+                );
+                Future<ResultDistributionData?> loadFullDistributionData() {
+                  return _loadFullDistributionData(
+                    ref: ref,
+                    primarySplitDefs: selectableSplitDefs,
+                    comparisonClassIds: comparisonClassIds,
+                    relayLegNumber: activeRelayLeg,
+                    relayComparisonLegNumbers: relayComparisonLegs,
+                    isBiathlonSplit: isBiathlonSplit,
+                    activeSplitId: selectedResultSplitId,
+                    splitRange: activeSplitRange,
+                    sortMode: effectiveSortMode,
+                    biathlonSortKey: biathlonSortKey,
+                    linkedAthleteId: linkedAthleteId,
+                    linkedClubName: linkedAffiliations?.clubName,
+                    linkedTeamName: linkedAffiliations?.teamName,
+                    favoriteAthleteIds: favoriteAthleteIds,
+                  );
+                }
+
+                void loadMoreResults() {
+                  _loadMoreResults(
                     ref,
                     primaryResults: loadedResults,
                     comparisons: activeRelayLeg == null
                         ? comparisonRead.rows
                         : const [],
                   );
-                  final tableRows = _buildTableRows(
-                    primaryClass: primaryViewClass,
-                    primaryResults: displayedPrimaryResults,
-                    comparisons: comparisonRead.rows,
-                    linkedAthleteId: linkedAthleteId,
-                    linkedClubName: linkedAffiliations?.clubName,
-                    linkedTeamName: linkedAffiliations?.teamName,
-                    favoriteAthleteIds: favoriteAthleteIds,
-                  );
-                  final baseRow = compareSelection == null
-                      ? null
-                      : tableRows.where((row) {
-                          return row.sourceClassId ==
-                                  compareSelection!.classId &&
-                              row.result.detailResultId ==
-                                  compareSelection!.resultId &&
-                              row.result.relayLegNumber ==
-                                  compareSelection!.relayLegNumber;
-                        }).firstOrNull;
-                  final hasBiathlonData = BiathlonTable.hasBiathlonData(
-                    tableRows,
-                  );
-                  final allSplitOptions = _splitOptions(
-                    selectableSplitDefs,
-                    displayedPrimaryResults,
-                    hasBiathlonData,
-                  );
-                  final splitOptions =
-                      activeRelayLeg != null && relayComparisonLegs.isNotEmpty
-                      ? allSplitOptions
-                            .where(
-                              (split) =>
-                                  split.id == relayLegFinishSplitId ||
-                                  split.id == _biathlonSplitId,
-                            )
-                            .toList()
-                      : allSplitOptions;
-                  final activeSplitId = _activeSplitId(
-                    selectedSplitId,
-                    splitOptions,
-                  );
-                  final isBiathlonSplit = activeSplitId == _biathlonSplitId;
-                  final rangeSplitOptions = splitOptions
-                      .where((split) => split.id != _biathlonSplitId)
-                      .toList();
-                  final activeSplitRange = isBiathlonSplit
-                      ? null
-                      : _activeSplitRange(
-                          requestedSplitRange,
-                          activeSplitId,
-                          rangeSplitOptions,
-                        );
-                  final selectedResultSplitId =
-                      activeSplitRange?.toSplitId ?? activeSplitId;
-                  final effectiveSortMode =
-                      activeSplitRange?.isIndependent == true
-                      ? ResultSortMode.split
-                      : sortMode;
-                  final distributionData = _distributionData(
-                    tableRows: tableRows,
-                    isBiathlonSplit: isBiathlonSplit,
-                    activeSplitId: selectedResultSplitId,
-                    splitRange: activeSplitRange,
-                    sortMode: effectiveSortMode,
-                    biathlonSortKey: biathlonSortKey,
-                  );
-                  Future<ResultDistributionData?> loadFullDistributionData() {
-                    return _loadFullDistributionData(
-                      ref: ref,
-                      primarySplitDefs: selectableSplitDefs,
-                      comparisonClassIds: comparisonClassIds,
-                      relayLegNumber: activeRelayLeg,
-                      relayComparisonLegNumbers: relayComparisonLegs,
-                      isBiathlonSplit: isBiathlonSplit,
-                      activeSplitId: selectedResultSplitId,
-                      splitRange: activeSplitRange,
-                      sortMode: effectiveSortMode,
-                      biathlonSortKey: biathlonSortKey,
-                      linkedAthleteId: linkedAthleteId,
-                      linkedClubName: linkedAffiliations?.clubName,
-                      linkedTeamName: linkedAffiliations?.teamName,
-                      favoriteAthleteIds: favoriteAthleteIds,
-                    );
-                  }
+                }
 
-                  void loadMoreResults() {
-                    _loadMoreResults(
-                      ref,
-                      primaryResults: loadedResults,
-                      comparisons: activeRelayLeg == null
-                          ? comparisonRead.rows
-                          : const [],
-                    );
-                  }
+                final stickyClassHeader = _StickyResultClassHeader(
+                  raceClass: primaryViewClass,
+                  stage: activeStage,
+                  leading: headingLeading,
+                );
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (availableRelayLegs.isNotEmpty) ...[
-                        RelayLegSelector(
-                          legNumbers: availableRelayLegs,
-                          activeLegNumber: activeRelayLeg,
-                          comparisonLegNumbers: relayComparisonLegs,
-                          onPrimaryChanged: (legNumber) {
-                            ref
-                                    .read(splitRangeSelectionProvider.notifier)
-                                    .state =
-                                null;
-                            ref
-                                    .read(
-                                      relayComparisonLegNumbersProvider(
-                                        relaySelectionArgs,
-                                      ).notifier,
-                                    )
-                                    .state =
-                                [];
-                            context.go(
-                              resultsLocation(
-                                eventId: eventId,
-                                classId: classId,
-                                stageId: activeStage.id,
-                                relayLegNumber: legNumber,
-                                splitId: legNumber == null
-                                    ? null
-                                    : relayLegFinishSplitId,
-                              ),
-                            );
-                          },
-                          onComparisonChanged: (legNumber, selected) {
-                            final next = [...relayComparisonLegs];
-                            if (selected) {
-                              if (!next.contains(legNumber)) {
-                                next.add(legNumber);
-                              }
-                            } else {
-                              next.remove(legNumber);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (availableRelayLegs.isNotEmpty) ...[
+                      RelayLegSelector(
+                        legNumbers: availableRelayLegs,
+                        activeLegNumber: activeRelayLeg,
+                        comparisonLegNumbers: relayComparisonLegs,
+                        onPrimaryChanged: (legNumber) {
+                          ref
+                                  .read(
+                                    relayComparisonLegNumbersProvider(
+                                      relaySelectionArgs,
+                                    ).notifier,
+                                  )
+                                  .state =
+                              [];
+                          context.go(
+                            resultsLocation(
+                              eventId: eventId,
+                              classId: classId,
+                              stageId: activeStage.id,
+                              relayLegNumber: legNumber,
+                              splitId: legNumber == null
+                                  ? null
+                                  : relayLegFinishSplitId,
+                            ),
+                          );
+                        },
+                        onComparisonChanged: (legNumber, selected) {
+                          final next = [...relayComparisonLegs];
+                          if (selected) {
+                            if (!next.contains(legNumber)) {
+                              next.add(legNumber);
                             }
-                            next.sort();
-                            ref
-                                    .read(
-                                      relayComparisonLegNumbersProvider(
-                                        relaySelectionArgs,
-                                      ).notifier,
-                                    )
-                                    .state =
-                                next;
-                          },
+                          } else {
+                            next.remove(legNumber);
+                          }
+                          next.sort();
+                          ref
+                                  .read(
+                                    relayComparisonLegNumbersProvider(
+                                      relaySelectionArgs,
+                                    ).notifier,
+                                  )
+                                  .state =
+                              next;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    if (compareSelection != null) ...[
+                      _CompareSelectionBanner(
+                        baseName: baseRow?.result.name ?? 'Valgt utover',
+                        onCancel: () => context.go(
+                          resultsLocation(
+                            eventId: eventId,
+                            classId: classId,
+                            stageId: activeStage.id,
+                            relayLegNumber: activeRelayLeg,
+                            splitId: selectedResultSplitId,
+                            splitRange: activeSplitRange,
+                          ),
                         ),
-                        const SizedBox(height: 10),
-                      ],
-                      if (compareSelection != null) ...[
-                        _CompareSelectionBanner(
-                          baseName: baseRow?.result.name ?? 'Valgt utover',
-                          onCancel: () => context.go(
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    _SplitAndInfoRow(
+                      sticky: false,
+                      splitOptions: splitOptions,
+                      rangeSplitOptions: rangeSplitOptions,
+                      selectedSplitId: selectedResultSplitId,
+                      splitRange: activeSplitRange,
+                      distributionData: distributionData,
+                      loadFullDistributionData: loadFullDistributionData,
+                      searchField: _ResultSearchField(
+                        key: ValueKey(
+                          '${searchArgs.eventId}/${searchArgs.classId}',
+                        ),
+                        initialQuery: searchQuery,
+                        onChanged: (value) {
+                          ref
+                                  .read(
+                                    resultSearchQueryProvider(
+                                      searchArgs,
+                                    ).notifier,
+                                  )
+                                  .state =
+                              value;
+                          if (value.trim().isNotEmpty) {
+                            _loadAllResultsForSearch(ref, comparisonClassIds);
+                          }
+                        },
+                      ),
+                      onSplitChanged: (value) {
+                        ref
+                            .read(settingsControllerProvider.notifier)
+                            .setPreferredSplit(value);
+                        context.go(
+                          resultsLocation(
+                            eventId: eventId,
+                            classId: classId,
+                            stageId: activeStage.id,
+                            relayLegNumber: activeRelayLeg,
+                            splitId: value,
+                            compareBaseClassId: compareSelection?.classId,
+                            compareBaseResultId: compareSelection?.resultId,
+                            compareBaseRelayLegNumber:
+                                compareSelection?.relayLegNumber,
+                          ),
+                        );
+                      },
+                      onRangeToggle: () {
+                        if (activeSplitRange != null) {
+                          context.go(
                             resultsLocation(
                               eventId: eventId,
                               classId: classId,
                               stageId: activeStage.id,
                               relayLegNumber: activeRelayLeg,
                               splitId: selectedResultSplitId,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-                      _SplitAndInfoRow(
-                        event: event,
-                        raceClass: primaryViewClass,
-                        resultCount:
-                            activeRelayLeg == null &&
-                                activeClass.resultCount > 0
-                            ? activeClass.resultCount
-                            : tableRows.length,
-                        splitOptions: splitOptions,
-                        rangeSplitOptions: rangeSplitOptions,
-                        selectedSplitId: selectedResultSplitId,
-                        splitRange: activeSplitRange,
-                        distributionData: distributionData,
-                        loadFullDistributionData: loadFullDistributionData,
-                        searchField: _ResultSearchField(
-                          key: ValueKey(
-                            '${searchArgs.eventId}/${searchArgs.classId}',
-                          ),
-                          initialQuery: searchQuery,
-                          onChanged: (value) {
-                            ref
-                                    .read(
-                                      resultSearchQueryProvider(
-                                        searchArgs,
-                                      ).notifier,
-                                    )
-                                    .state =
-                                value;
-                            if (value.trim().isNotEmpty) {
-                              _loadAllResultsForSearch(ref, comparisonClassIds);
-                            }
-                          },
-                        ),
-                        onSplitChanged: (value) {
-                          ref.read(splitRangeSelectionProvider.notifier).state =
-                              null;
-                          ref
-                              .read(settingsControllerProvider.notifier)
-                              .setPreferredSplit(value);
-                          context.go(
-                            resultsLocation(
-                              eventId: eventId,
-                              classId: classId,
-                              stageId: activeStage.id,
-                              relayLegNumber: activeRelayLeg,
-                              splitId: value,
                               compareBaseClassId: compareSelection?.classId,
                               compareBaseResultId: compareSelection?.resultId,
                               compareBaseRelayLegNumber:
                                   compareSelection?.relayLegNumber,
                             ),
                           );
-                        },
-                        onRangeToggle: () {
-                          final rangeNotifier = ref.read(
-                            splitRangeSelectionProvider.notifier,
-                          );
-                          if (activeSplitRange != null) {
-                            rangeNotifier.state = null;
-                            return;
-                          }
-                          final range = _initialSplitRange(
-                            activeSplitId,
-                            rangeSplitOptions,
-                          );
-                          if (range != null) rangeNotifier.state = range;
-                        },
-                        onRangeFromChanged: (value) {
-                          final current = activeSplitRange;
-                          if (current == null) return;
-                          ref
-                              .read(splitRangeSelectionProvider.notifier)
-                              .state = _normalizeSplitRange(
-                            current.copyWith(
-                              fromSplitId: value,
-                              clearFromSplitId: value == null,
-                            ),
-                            rangeSplitOptions,
-                          );
-                        },
-                        onRangeToChanged: (value) {
-                          if (value == null) return;
-                          final current = activeSplitRange;
-                          if (current == null) return;
-                          final next = _normalizeSplitRange(
-                            current.copyWith(toSplitId: value),
-                            rangeSplitOptions,
-                          );
-                          ref.read(splitRangeSelectionProvider.notifier).state =
-                              next;
-                          ref
-                              .read(settingsControllerProvider.notifier)
-                              .setPreferredSplit(next?.toSplitId);
-                          context.go(
-                            resultsLocation(
-                              eventId: eventId,
-                              classId: classId,
-                              stageId: activeStage.id,
-                              relayLegNumber: activeRelayLeg,
-                              splitId: next?.toSplitId,
-                              compareBaseClassId: compareSelection?.classId,
-                              compareBaseResultId: compareSelection?.resultId,
-                              compareBaseRelayLegNumber:
-                                  compareSelection?.relayLegNumber,
-                            ),
-                          );
-                        },
-                        onIndependentChanged: (enabled) {
-                          final current = activeSplitRange;
-                          if (current == null) return;
-                          final next = _normalizeSplitRange(
-                            current.copyWith(isIndependent: enabled),
-                            rangeSplitOptions,
-                          );
-                          ref.read(splitRangeSelectionProvider.notifier).state =
-                              next;
-                        },
-                        onIncludedSplitsChanged: (splitIds) {
-                          final current = activeSplitRange;
-                          if (current == null || !current.isIndependent) {
-                            return;
-                          }
-                          final next = _normalizeSplitRange(
-                            current.copyWith(includedSplitIds: splitIds),
-                            rangeSplitOptions,
-                          );
-                          ref.read(splitRangeSelectionProvider.notifier).state =
-                              next;
-                          if (next == null ||
-                              next.toSplitId == current.toSplitId) {
-                            return;
-                          }
+                          return;
+                        }
+                        final range = _initialSplitRange(
+                          activeSplitId,
+                          rangeSplitOptions,
+                        );
+                        if (range == null) return;
+                        context.go(
+                          resultsLocation(
+                            eventId: eventId,
+                            classId: classId,
+                            stageId: activeStage.id,
+                            relayLegNumber: activeRelayLeg,
+                            splitRange: range,
+                            compareBaseClassId: compareSelection?.classId,
+                            compareBaseResultId: compareSelection?.resultId,
+                            compareBaseRelayLegNumber:
+                                compareSelection?.relayLegNumber,
+                          ),
+                        );
+                      },
+                      onRangeFromChanged: (value) {
+                        final current = activeSplitRange;
+                        if (current == null) return;
+                        final next = _normalizeSplitRange(
+                          current.copyWith(
+                            fromSplitId: value,
+                            clearFromSplitId: value == null,
+                          ),
+                          rangeSplitOptions,
+                        );
+                        context.go(
+                          resultsLocation(
+                            eventId: eventId,
+                            classId: classId,
+                            stageId: activeStage.id,
+                            relayLegNumber: activeRelayLeg,
+                            splitId: next?.toSplitId ?? selectedResultSplitId,
+                            splitRange: next,
+                            compareBaseClassId: compareSelection?.classId,
+                            compareBaseResultId: compareSelection?.resultId,
+                            compareBaseRelayLegNumber:
+                                compareSelection?.relayLegNumber,
+                          ),
+                        );
+                      },
+                      onRangeToChanged: (value) {
+                        if (value == null) return;
+                        final current = activeSplitRange;
+                        if (current == null) return;
+                        final next = _normalizeSplitRange(
+                          current.copyWith(toSplitId: value),
+                          rangeSplitOptions,
+                        );
+                        ref
+                            .read(settingsControllerProvider.notifier)
+                            .setPreferredSplit(next?.toSplitId);
+                        context.go(
+                          resultsLocation(
+                            eventId: eventId,
+                            classId: classId,
+                            stageId: activeStage.id,
+                            relayLegNumber: activeRelayLeg,
+                            splitId: next?.toSplitId ?? selectedResultSplitId,
+                            splitRange: next,
+                            compareBaseClassId: compareSelection?.classId,
+                            compareBaseResultId: compareSelection?.resultId,
+                            compareBaseRelayLegNumber:
+                                compareSelection?.relayLegNumber,
+                          ),
+                        );
+                      },
+                      onIndependentChanged: (enabled) {
+                        final current = activeSplitRange;
+                        if (current == null) return;
+                        final next = _normalizeSplitRange(
+                          current.copyWith(isIndependent: enabled),
+                          rangeSplitOptions,
+                        );
+                        context.go(
+                          resultsLocation(
+                            eventId: eventId,
+                            classId: classId,
+                            stageId: activeStage.id,
+                            relayLegNumber: activeRelayLeg,
+                            splitId: next?.toSplitId ?? selectedResultSplitId,
+                            splitRange: next,
+                            compareBaseClassId: compareSelection?.classId,
+                            compareBaseResultId: compareSelection?.resultId,
+                            compareBaseRelayLegNumber:
+                                compareSelection?.relayLegNumber,
+                          ),
+                        );
+                      },
+                      onIncludedSplitsChanged: (splitIds) {
+                        final current = activeSplitRange;
+                        if (current == null || !current.isIndependent) {
+                          return;
+                        }
+                        final next = _normalizeSplitRange(
+                          current.copyWith(includedSplitIds: splitIds),
+                          rangeSplitOptions,
+                        );
+                        if (next != null) {
                           ref
                               .read(settingsControllerProvider.notifier)
                               .setPreferredSplit(next.toSplitId);
-                          context.go(
-                            resultsLocation(
-                              eventId: eventId,
-                              classId: classId,
-                              stageId: activeStage.id,
-                              relayLegNumber: activeRelayLeg,
-                              splitId: next.toSplitId,
-                              compareBaseClassId: compareSelection?.classId,
-                              compareBaseResultId: compareSelection?.resultId,
-                              compareBaseRelayLegNumber:
-                                  compareSelection?.relayLegNumber,
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      Expanded(
-                        child: isBiathlonSplit
-                            ? BiathlonTable(
-                                rows: tableRows,
-                                searchQuery: searchQuery,
-                                sortKey: biathlonSortKey,
-                                onSortKeyChanged: (value) {
-                                  ref
-                                          .read(
-                                            biathlonSortKeyProvider.notifier,
-                                          )
-                                          .state =
-                                      value;
-                                },
-                                tableDensity: settings.tableDensity,
-                                affiliationView: affiliationView,
-                                onAffiliationViewToggle: () {
-                                  ref
-                                          .read(
-                                            resultAffiliationViewProvider
-                                                .notifier,
-                                          )
-                                          .state =
-                                      affiliationView ==
-                                          ResultAffiliationView.club
-                                      ? ResultAffiliationView.team
-                                      : ResultAffiliationView.club;
-                                },
-                                disabledResultId: baseRow?.result.id,
-                                onLoadMore: canLoadMore
-                                    ? loadMoreResults
-                                    : null,
-                                isLoadingMore: isLoadingMore,
-                                onAthleteTap: (row) {
-                                  _openAthlete(
-                                    context,
-                                    row,
-                                    compareSelection,
-                                    splitId: selectedResultSplitId,
-                                  );
-                                },
-                              )
-                            : ResultsTable(
-                                rows: tableRows,
-                                searchQuery: searchQuery,
-                                selectedSplitId: selectedResultSplitId,
+                        }
+                        context.go(
+                          resultsLocation(
+                            eventId: eventId,
+                            classId: classId,
+                            stageId: activeStage.id,
+                            relayLegNumber: activeRelayLeg,
+                            splitId: next?.toSplitId ?? selectedResultSplitId,
+                            splitRange: next,
+                            compareBaseClassId: compareSelection?.classId,
+                            compareBaseResultId: compareSelection?.resultId,
+                            compareBaseRelayLegNumber:
+                                compareSelection?.relayLegNumber,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    isBiathlonSplit
+                        ? BiathlonTable(
+                            rows: tableRows,
+                            searchQuery: searchQuery,
+                            sortKey: biathlonSortKey,
+                            onSortKeyChanged: (value) {
+                              ref.read(biathlonSortKeyProvider.notifier).state =
+                                  value;
+                            },
+                            tableDensity: settings.tableDensity,
+                            affiliationView: affiliationView,
+                            onAffiliationViewToggle: () {
+                              ref
+                                      .read(
+                                        resultAffiliationViewProvider.notifier,
+                                      )
+                                      .state =
+                                  affiliationView == ResultAffiliationView.club
+                                  ? ResultAffiliationView.team
+                                  : ResultAffiliationView.club;
+                            },
+                            disabledResultId: baseRow?.result.id,
+                            onLoadMore: canLoadMore ? loadMoreResults : null,
+                            isLoadingMore: isLoadingMore,
+                            pageScrollController: pageScrollController,
+                            stickyClassHeader: stickyClassHeader,
+                            onAthleteTap: (row) {
+                              _openAthlete(
+                                context,
+                                row,
+                                compareSelection,
+                                splitId: selectedResultSplitId,
                                 splitRange: activeSplitRange,
-                                sortMode: effectiveSortMode,
-                                onSortModeChanged: (value) {
-                                  ref
-                                          .read(
-                                            resultSortModeProvider(
-                                              eventId,
-                                            ).notifier,
-                                          )
-                                          .state =
-                                      value;
-                                },
-                                tableDensity: settings.tableDensity,
-                                affiliationView: affiliationView,
-                                onAffiliationViewToggle: () {
-                                  ref
-                                          .read(
-                                            resultAffiliationViewProvider
-                                                .notifier,
-                                          )
-                                          .state =
-                                      affiliationView ==
-                                          ResultAffiliationView.club
-                                      ? ResultAffiliationView.team
-                                      : ResultAffiliationView.club;
-                                },
-                                disabledResultId: baseRow?.result.id,
-                                onLoadMore: canLoadMore
-                                    ? loadMoreResults
-                                    : null,
-                                isLoadingMore: isLoadingMore,
-                                onAthleteTap: (row) {
-                                  _openAthlete(
-                                    context,
-                                    row,
-                                    compareSelection,
-                                    splitId: selectedResultSplitId,
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-          ),
+                              );
+                            },
+                          )
+                        : ResultsTable(
+                            rows: tableRows,
+                            searchQuery: searchQuery,
+                            selectedSplitId: selectedResultSplitId,
+                            splitRange: activeSplitRange,
+                            sortMode: effectiveSortMode,
+                            onSortModeChanged: (value) {
+                              ref
+                                      .read(
+                                        resultSortModeProvider(
+                                          eventId,
+                                        ).notifier,
+                                      )
+                                      .state =
+                                  value;
+                            },
+                            tableDensity: settings.tableDensity,
+                            affiliationView: affiliationView,
+                            onAffiliationViewToggle: () {
+                              ref
+                                      .read(
+                                        resultAffiliationViewProvider.notifier,
+                                      )
+                                      .state =
+                                  affiliationView == ResultAffiliationView.club
+                                  ? ResultAffiliationView.team
+                                  : ResultAffiliationView.club;
+                            },
+                            disabledResultId: baseRow?.result.id,
+                            onLoadMore: canLoadMore ? loadMoreResults : null,
+                            isLoadingMore: isLoadingMore,
+                            pageScrollController: pageScrollController,
+                            stickyClassHeader: stickyClassHeader,
+                            onAthleteTap: (row) {
+                              _openAthlete(
+                                context,
+                                row,
+                                compareSelection,
+                                splitId: selectedResultSplitId,
+                                splitRange: activeSplitRange,
+                              );
+                            },
+                          ),
+                    const SizedBox(height: 10),
+                    _InfoCard(
+                      event: event,
+                      raceClass: primaryViewClass,
+                      resultCount:
+                          activeRelayLeg == null && activeClass.resultCount > 0
+                          ? activeClass.resultCount
+                          : tableRows.length,
+                    ),
+                  ],
+                );
+              },
+            );
+          },
         ),
       ],
     );
@@ -904,6 +1070,7 @@ class _ResultsArea extends ConsumerWidget {
     ResultTableRow row,
     _CompareSelection? compareSelection, {
     required String? splitId,
+    required SplitRangeSelection? splitRange,
   }) {
     if (compareSelection == null) {
       context.go(
@@ -914,6 +1081,7 @@ class _ResultsArea extends ConsumerWidget {
           stageId: activeStage.id,
           relayLegNumber: row.result.relayLegNumber,
           splitId: splitId,
+          splitRange: splitRange,
         ),
       );
       return;
@@ -926,6 +1094,7 @@ class _ResultsArea extends ConsumerWidget {
         stageId: activeStage.id,
         relayLegNumber: compareSelection.relayLegNumber,
         splitId: splitId,
+        splitRange: splitRange,
         compareWithResultId: row.result.detailResultId,
         compareWithRelayLegNumber: row.result.relayLegNumber,
       ),
@@ -972,13 +1141,7 @@ class _ResultsArea extends ConsumerWidget {
     if (requested == null || activeSplitId == null || splitOptions.isEmpty) {
       return null;
     }
-    final requestedExists = splitOptions.any(
-      (split) => split.id == requested.toSplitId,
-    );
-    final normalizedRequest = requestedExists
-        ? requested
-        : requested.copyWith(toSplitId: activeSplitId);
-    return _normalizeSplitRange(normalizedRequest, splitOptions);
+    return _normalizeSplitRange(requested, splitOptions);
   }
 
   SplitRangeSelection? _initialSplitRange(
@@ -1015,9 +1178,8 @@ class _ResultsArea extends ConsumerWidget {
           .where((split) => requestedIds.contains(split.id))
           .map((split) => split.id)
           .toList();
-      final focusedId = includedSplitIds.isEmpty
-          ? splitOptions[toIndex].id
-          : includedSplitIds.last;
+      if (includedSplitIds.isEmpty) return null;
+      final focusedId = includedSplitIds.last;
       return SplitRangeSelection(
         fromSplitId: range.fromSplitId,
         toSplitId: focusedId,
@@ -1027,15 +1189,10 @@ class _ResultsArea extends ConsumerWidget {
     }
 
     final requestedFromId = range.fromSplitId;
-    var fromIndex = requestedFromId == null
+    final fromIndex = requestedFromId == null
         ? -1
         : splitOptions.indexWhere((split) => split.id == requestedFromId);
-    if (fromIndex >= toIndex) {
-      fromIndex = toIndex - 1;
-    }
-    if (fromIndex < -1) {
-      fromIndex = -1;
-    }
+    if (fromIndex < -1 || fromIndex >= toIndex) return null;
 
     final includedSplitIds = splitOptions
         .skip(fromIndex + 1)
@@ -1052,6 +1209,7 @@ class _ResultsArea extends ConsumerWidget {
 
   ResultDistributionData? _distributionData({
     required List<ResultTableRow> tableRows,
+    required String analysisClassId,
     required bool isBiathlonSplit,
     required String? activeSplitId,
     required SplitRangeSelection? splitRange,
@@ -1059,7 +1217,11 @@ class _ResultsArea extends ConsumerWidget {
     required String biathlonSortKey,
   }) {
     if (isBiathlonSplit) {
-      return _biathlonDistributionData(tableRows, biathlonSortKey);
+      return _biathlonDistributionData(
+        tableRows,
+        biathlonSortKey,
+        analysisClassId: analysisClassId,
+      );
     }
 
     final valueLabel = _resultValueLabel(
@@ -1105,13 +1267,15 @@ class _ResultsArea extends ConsumerWidget {
         sortMode: sortMode,
         valueLabel: valueLabel,
       ),
+      splitAnalysis: _splitAnalysisData(tableRows, analysisClassId),
     );
   }
 
   ResultDistributionData _biathlonDistributionData(
     List<ResultTableRow> tableRows,
-    String preferredSortKey,
-  ) {
+    String preferredSortKey, {
+    required String analysisClassId,
+  }) {
     final metrics = _biathlonMetrics(tableRows);
     final selected = metrics.firstWhere(
       (metric) => metric.key == preferredSortKey,
@@ -1129,6 +1293,18 @@ class _ResultsArea extends ConsumerWidget {
           .where((value) => selected.isTime ? value > 0 : value >= 0)
           .firstOrNull,
       regression: _biathlonRegressionData(tableRows, selected),
+      splitAnalysis: _splitAnalysisData(tableRows, analysisClassId),
+    );
+  }
+
+  ResultSplitAnalysisData? _splitAnalysisData(
+    List<ResultTableRow> tableRows,
+    String analysisClassId,
+  ) {
+    return buildResultSplitAnalysis(
+      tableRows
+          .where((row) => row.classId == analysisClassId)
+          .map((row) => row.result),
     );
   }
 
@@ -1576,6 +1752,7 @@ class _ResultsArea extends ConsumerWidget {
     }
     return _distributionData(
       tableRows: tableRows,
+      analysisClassId: primaryClass.id,
       isBiathlonSplit: isBiathlonSplit,
       activeSplitId: activeSplitId,
       splitRange: splitRange,
@@ -1822,6 +1999,131 @@ bool _isCurrentAthlete(RaceResult result, String? linkedAthleteId) {
       athleteId == currentAthleteId;
 }
 
+/// Builds the split analysis for one result group. Each split uses its own leg
+/// time, while the final rank is calculated from the group's finish times.
+ResultSplitAnalysisData? buildResultSplitAnalysis(
+  Iterable<RaceResult> results,
+) {
+  final finished = results.where((result) {
+    final totalMs = result.totalMs;
+    return result.isFinished && totalMs != null && totalMs > 0;
+  }).toList();
+  if (finished.length < 2) return null;
+
+  final finishTimes = {
+    for (final result in finished) result.id: result.totalMs!,
+  };
+  final finishRanks = _ranksByTime(finishTimes);
+  final splitDefinitions = <String, SplitValue>{};
+
+  for (final result in finished) {
+    for (final split in result.splitValues.values) {
+      if (_isExcludedFromSplitAnalysis(split)) continue;
+      final legMs = effectiveSplitLegMs(result, split.id);
+      if (legMs == null || legMs <= 0) continue;
+      splitDefinitions.putIfAbsent(split.id, () => split);
+    }
+  }
+
+  final points = <ResultSplitAnalysisPoint>[];
+  for (final split in splitDefinitions.values) {
+    final splitTimes = <String, int>{
+      for (final result in finished)
+        if (effectiveSplitLegMs(result, split.id) case final legMs?
+            when legMs > 0)
+          result.id: legMs,
+    };
+    if (splitTimes.length < 2) continue;
+
+    final splitRanks = _ranksByTime(splitTimes);
+    final timeSamples = <(int, int)>[];
+    final rankSamples = <(int, int)>[];
+    for (final entry in splitTimes.entries) {
+      final finishTime = finishTimes[entry.key];
+      final finishRank = finishRanks[entry.key];
+      final splitRank = splitRanks[entry.key];
+      if (finishTime == null || finishRank == null || splitRank == null) {
+        continue;
+      }
+      timeSamples.add((entry.value, finishTime));
+      rankSamples.add((splitRank, finishRank));
+    }
+
+    final timeCorrelation = _pearsonCorrelation(timeSamples);
+    final rankCorrelation = _pearsonCorrelation(rankSamples);
+    if (timeCorrelation == null || rankCorrelation == null) continue;
+    points.add(
+      ResultSplitAnalysisPoint(
+        splitId: split.id,
+        label: split.label,
+        sort: split.sort,
+        timeCorrelation: timeCorrelation.abs(),
+        rankCorrelation: rankCorrelation.abs(),
+        sampleSize: timeSamples.length,
+      ),
+    );
+  }
+
+  points.sort((left, right) {
+    final bySort = left.sort.compareTo(right.sort);
+    return bySort != 0 ? bySort : left.label.compareTo(right.label);
+  });
+  return points.length < 2 ? null : ResultSplitAnalysisData(points: points);
+}
+
+bool _isExcludedFromSplitAnalysis(SplitValue split) {
+  final kind = split.kind.trim().toLowerCase();
+  return split.id == _biathlonSplitId ||
+      split.id == relayLegFinishSplitId ||
+      kind == 'analysis' ||
+      kind == 'finish';
+}
+
+Map<String, int> _ranksByTime(Map<String, int> times) {
+  final entries = times.entries.toList()
+    ..sort((left, right) {
+      final byTime = left.value.compareTo(right.value);
+      return byTime != 0 ? byTime : left.key.compareTo(right.key);
+    });
+  final ranks = <String, int>{};
+  int? previousTime;
+  var previousRank = 0;
+  for (var index = 0; index < entries.length; index++) {
+    final entry = entries[index];
+    final rank = previousTime == entry.value ? previousRank : index + 1;
+    ranks[entry.key] = rank;
+    previousTime = entry.value;
+    previousRank = rank;
+  }
+  return ranks;
+}
+
+double? _pearsonCorrelation(List<(int, int)> samples) {
+  if (samples.length < 2) return null;
+  var sumX = 0.0;
+  var sumY = 0.0;
+  var sumXX = 0.0;
+  var sumYY = 0.0;
+  var sumXY = 0.0;
+  for (final sample in samples) {
+    final x = sample.$1.toDouble();
+    final y = sample.$2.toDouble();
+    sumX += x;
+    sumY += y;
+    sumXX += x * x;
+    sumYY += y * y;
+    sumXY += x * y;
+  }
+  final count = samples.length.toDouble();
+  final xVariance = count * sumXX - sumX * sumX;
+  final yVariance = count * sumYY - sumY * sumY;
+  if (xVariance <= 0 || yVariance <= 0) return null;
+  final correlation =
+      (count * sumXY - sumX * sumY) / math.sqrt(xVariance * yVariance);
+  if (!correlation.isFinite) return null;
+  return correlation.clamp(-1.0, 1.0).toDouble();
+}
+
 class _DistributionMetric {
   const _DistributionMetric({
     required this.key,
@@ -1973,8 +2275,8 @@ ResultClass _relayLegClass(ResultClass source, int legNumber, int resultCount) {
   );
 }
 
-class _ClassSidebar extends ConsumerWidget {
-  const _ClassSidebar({
+class _MobileClassMenu extends StatelessWidget {
+  const _MobileClassMenu({
     required this.eventId,
     required this.classes,
     required this.selectedClassId,
@@ -1989,6 +2291,91 @@ class _ClassSidebar extends ConsumerWidget {
   final ValueChanged<String?> onChanged;
 
   @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      key: const Key('mobile-class-menu-button'),
+      tooltip: 'Vis klasser',
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 32, height: 36),
+      onPressed: () => _open(context),
+      icon: const Icon(Icons.chevron_right),
+    );
+  }
+
+  Future<void> _open(BuildContext context) {
+    return showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Lukk klasser',
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (dialogContext, _, _) {
+        final width = MediaQuery.sizeOf(dialogContext).width * 0.7;
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            key: const Key('mobile-class-panel'),
+            width: width,
+            height: MediaQuery.sizeOf(dialogContext).height,
+            child: SafeArea(
+              child: Material(
+                type: MaterialType.transparency,
+                child: _ClassSidebar(
+                  eventId: eventId,
+                  classes: classes,
+                  selectedClassId: selectedClassId,
+                  activeSplitDefs: activeSplitDefs,
+                  collapsed: false,
+                  showCollapseToggle: false,
+                  onCollapseChanged: (_) {},
+                  onChanged: (value) {
+                    Navigator.of(dialogContext).pop();
+                    onChanged(value);
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(-1, 0),
+            end: Offset.zero,
+          ).animate(animation),
+          child: child,
+        );
+      },
+    );
+  }
+}
+
+class _ClassSidebar extends ConsumerWidget {
+  const _ClassSidebar({
+    required this.eventId,
+    required this.classes,
+    required this.selectedClassId,
+    required this.activeSplitDefs,
+    required this.collapsed,
+    this.showCollapseToggle = true,
+    this.fillAvailableHeight = true,
+    required this.onCollapseChanged,
+    required this.onChanged,
+  });
+
+  final String eventId;
+  final List<ResultClass> classes;
+  final String selectedClassId;
+  final AsyncValue<List<SplitDef>> activeSplitDefs;
+  final bool collapsed;
+  final bool showCollapseToggle;
+  final bool fillAvailableHeight;
+  final ValueChanged<bool> onCollapseChanged;
+  final ValueChanged<String?> onChanged;
+
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final palette = context.palette;
@@ -1999,6 +2386,27 @@ class _ClassSidebar extends ConsumerWidget {
     final activeSignature = activeSplitDefData == null
         ? null
         : _splitSignature(activeSplitDefData);
+    final classList = ListView.separated(
+      shrinkWrap: !fillAvailableHeight,
+      physics: fillAvailableHeight
+          ? null
+          : const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      itemCount: sortedClasses.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 6),
+      itemBuilder: (context, index) {
+        final raceClass = sortedClasses[index];
+        final selected = raceClass.id == selectedClassId;
+        return _ClassTile(
+          eventId: eventId,
+          raceClass: raceClass,
+          selected: selected,
+          activeSignature: activeSignature,
+          comparisonClassIds: comparisonClassIds,
+          onTap: () => onChanged(raceClass.id),
+        );
+      },
+    );
     return Container(
       decoration: BoxDecoration(
         color: palette.panelAlt,
@@ -2009,49 +2417,53 @@ class _ClassSidebar extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.all(10),
+            child: Row(
               children: [
-                Text(
-                  disciplineLabel ?? l10n.classes,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                if (disciplineLabel != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    l10n.classes,
-                    style: TextStyle(
-                      color: palette.mutedText,
-                      fontWeight: FontWeight.w600,
+                if (!collapsed)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          disciplineLabel ?? l10n.classes,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        if (disciplineLabel != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            l10n.classes,
+                            style: TextStyle(
+                              color: palette.mutedText,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                ],
+                if (showCollapseToggle)
+                  IconButton(
+                    key: const Key('classes-collapse-toggle'),
+                    constraints: BoxConstraints(
+                      minWidth: collapsed ? 42 : 48,
+                      minHeight: 48,
+                    ),
+                    padding: EdgeInsets.zero,
+                    tooltip: collapsed ? 'Vis klasser' : 'Minimer klasser',
+                    onPressed: () => onCollapseChanged(!collapsed),
+                    icon: Icon(
+                      collapsed ? Icons.chevron_right : Icons.chevron_left,
+                    ),
+                  ),
               ],
             ),
           ),
-          Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              itemCount: sortedClasses.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 6),
-              itemBuilder: (context, index) {
-                final raceClass = sortedClasses[index];
-                final selected = raceClass.id == selectedClassId;
-                return _ClassTile(
-                  eventId: eventId,
-                  raceClass: raceClass,
-                  selected: selected,
-                  activeSignature: activeSignature,
-                  comparisonClassIds: comparisonClassIds,
-                  onTap: () => onChanged(raceClass.id),
-                );
-              },
-            ),
-          ),
+          if (!collapsed)
+            if (fillAvailableHeight) Expanded(child: classList) else classList,
         ],
       ),
     );
@@ -2162,7 +2574,7 @@ class _ClassTile extends ConsumerWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                '${raceClass.resultCount}',
+                '${raceClass.athleteCount}',
                 style: TextStyle(
                   color: selected ? palette.primary : palette.mutedText,
                   fontWeight: FontWeight.w900,
@@ -2209,42 +2621,82 @@ class _ResultTitle extends StatelessWidget {
     required this.event,
     required this.raceClass,
     required this.stage,
+    this.leading,
   });
 
   final ResultEvent? event;
   final ResultClass raceClass;
   final CompetitionStage stage;
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Column(
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    final subtitle = [
+      raceClass.name,
+      stage.name,
+    ].where((value) => value.trim().isNotEmpty).join(' · ');
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          raceClass.name,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            height: 1.1,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          [
-            event?.name,
-            stage.name,
-          ].whereType<String>().where((value) => value.isNotEmpty).join(' · '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: palette.mutedText,
-            fontWeight: FontWeight.w600,
+        if (leading != null) ...[leading!, SizedBox(width: compact ? 2 : 6)],
+        Expanded(
+          child: Text(
+            subtitle.isEmpty ? event?.name ?? raceClass.name : subtitle,
+            key: const Key('result-body-heading'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: compact ? 20 : 26,
+              fontWeight: FontWeight.w800,
+              height: 1.1,
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _StickyResultClassHeader extends StatelessWidget {
+  const _StickyResultClassHeader({
+    required this.raceClass,
+    required this.stage,
+    required this.leading,
+  });
+
+  final ResultClass raceClass;
+  final CompetitionStage stage;
+  final Widget? leading;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = [
+      raceClass.name,
+      stage.name,
+    ].where((value) => value.trim().isNotEmpty).join(' · ');
+    return ColoredBox(
+      color: context.palette.panel,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            if (leading != null) ...[leading!, const SizedBox(width: 6)],
+            Expanded(
+              child: Text(
+                label,
+                key: const Key('sticky-result-class-label'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2275,9 +2727,7 @@ class _ResultSearchField extends StatelessWidget {
 
 class _SplitAndInfoRow extends StatelessWidget {
   const _SplitAndInfoRow({
-    required this.event,
-    required this.raceClass,
-    required this.resultCount,
+    required this.sticky,
     required this.splitOptions,
     required this.rangeSplitOptions,
     required this.selectedSplitId,
@@ -2293,9 +2743,7 @@ class _SplitAndInfoRow extends StatelessWidget {
     required this.onIncludedSplitsChanged,
   });
 
-  final ResultEvent? event;
-  final ResultClass raceClass;
-  final int resultCount;
+  final bool sticky;
   final List<SplitOption> splitOptions;
   final List<SplitOption> rangeSplitOptions;
   final String? selectedSplitId;
@@ -2314,11 +2762,6 @@ class _SplitAndInfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final infoCard = _InfoCard(
-          event: event,
-          raceClass: raceClass,
-          resultCount: resultCount,
-        );
         final splitSelector = SplitSelector(
           splitOptions: splitRange == null ? splitOptions : rangeSplitOptions,
           selectedSplitId: selectedSplitId,
@@ -2338,7 +2781,19 @@ class _SplitAndInfoRow extends StatelessWidget {
           loadData: loadFullDistributionData,
           loadingLabel: AppLocalizations.of(context).loadingResults,
           errorTitle: AppLocalizations.of(context).couldNotReadResults,
+          onSplitSelected: (splitId) => onSplitChanged(splitId),
         );
+
+        if (sticky) {
+          return Row(
+            key: const Key('sticky-split-controls'),
+            children: [
+              Expanded(child: splitSelector),
+              const SizedBox(width: 10),
+              distributionButton,
+            ],
+          );
+        }
 
         if (constraints.maxWidth < 700) {
           return Column(
@@ -2353,8 +2808,6 @@ class _SplitAndInfoRow extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               searchField,
-              const SizedBox(height: 10),
-              infoCard,
             ],
           );
         }
@@ -2378,8 +2831,6 @@ class _SplitAndInfoRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 12),
-            SizedBox(width: 260, child: infoCard),
           ],
         );
       },
@@ -2403,6 +2854,7 @@ class _InfoCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final palette = context.palette;
     return Container(
+      key: const Key('results-info-card'),
       constraints: const BoxConstraints(minHeight: 56),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(

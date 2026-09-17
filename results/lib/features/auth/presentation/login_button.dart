@@ -8,6 +8,13 @@ class LoginButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    if (MediaQuery.sizeOf(context).width < 480) {
+      return IconButton.filled(
+        tooltip: l10n.login,
+        onPressed: () => context.go('/login'),
+        icon: const Icon(Icons.login),
+      );
+    }
     return FilledButton.icon(
       onPressed: () => context.go('/login'),
       icon: const Icon(Icons.login),

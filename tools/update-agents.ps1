@@ -14,8 +14,15 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 function Get-RepoFiles {
   param([string]$RelativePath)
 
-  return @(& git -C $repoRoot ls-files -- $RelativePath | ForEach-Object {
-      Join-Path $repoRoot $_
+  $root = Join-Path $repoRoot $RelativePath
+  if (-not (Test-Path -LiteralPath $root)) {
+    return @()
+  }
+
+  return @(Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
+      $_.FullName -notmatch "[\\/](?:\.git|\.dart_tool|build|node_modules|\.firebase)[\\/]"
+    } | ForEach-Object {
+      $_.FullName
     })
 }
 

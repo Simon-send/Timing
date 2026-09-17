@@ -1,0 +1,8 @@
+# Keep text files stable across macOS, Windows, and CI.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending normalized.
+*.png binary
+*.ico binary
+*.zip binary
+*.docx binary

@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/firebase/firestore_mappers.dart';
+import '../../../core/firebase/switch_latest.dart';
 import '../../results/domain/race_result.dart';
+import '../domain/athlete_link_state.dart';
 import '../domain/athlete_profile.dart';
 
 abstract class AthleteProfileRepository {
+  Stream<AthleteLinkState> watchAthleteLinkState(String uid);
+
   Stream<String?> watchLinkedAthleteId(String uid);
 
   Future<void> linkAthlete({
@@ -13,6 +19,8 @@ abstract class AthleteProfileRepository {
   });
 
   Future<void> clearLinkedAthlete(String uid);
+
+  Future<void> completeAthleteLinkOnboarding(String uid);
 
   Future<List<AthleteProfile>> searchAthletesByFullName(String fullName);
 
@@ -33,18 +41,26 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
   final FirebaseFirestore _firestore;
 
   @override
-  Stream<String?> watchLinkedAthleteId(String uid) async* {
+  Stream<AthleteLinkState> watchAthleteLinkState(String uid) async* {
     try {
       await for (final snapshot in _profileDoc(uid).snapshots()) {
-        yield asNonEmptyString(snapshot.data()?['athleteId']);
+        yield AthleteLinkState.fromMap(snapshot.data());
       }
     } on FirebaseException catch (error) {
       if (_isRecoverableProfileReadError(error)) {
-        yield null;
+        yield const AthleteLinkState(
+          athleteId: null,
+          onboardingCompleted: false,
+        );
         return;
       }
       rethrow;
     }
+  }
+
+  @override
+  Stream<String?> watchLinkedAthleteId(String uid) {
+    return watchAthleteLinkState(uid).map((state) => state.athleteId);
   }
 
   @override
@@ -55,6 +71,7 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
     return _profileDoc(uid).set({
       'athleteId': athlete.athleteId,
       'athleteName': athlete.displayName,
+      'athleteLinkOnboardingCompleted': true,
       'updatedAt': FieldValue.serverTimestamp(),
       'linkedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -62,7 +79,21 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
 
   @override
   Future<void> clearLinkedAthlete(String uid) {
-    return _profileDoc(uid).delete();
+    return _profileDoc(uid).set({
+      'athleteId': FieldValue.delete(),
+      'athleteName': FieldValue.delete(),
+      'linkedAt': FieldValue.delete(),
+      'athleteLinkOnboardingCompleted': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> completeAthleteLinkOnboarding(String uid) {
+    return _profileDoc(uid).set({
+      'athleteLinkOnboardingCompleted': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   @override
@@ -100,30 +131,101 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
 
   @override
   Stream<List<AthleteRace>> watchAthleteRaces(String athleteId) {
-    return _firestore
-        .collectionGroup('results')
-        .where('athleteId', isEqualTo: athleteId)
-        .snapshots()
-        .asyncMap((snapshot) async {
-          final participantCounts = await _participantCountsFor(snapshot.docs);
-          final races =
-              snapshot.docs
-                  .map(
-                    (doc) => _athleteRaceFromDoc(
-                      doc,
-                      participantCount:
-                          participantCounts[doc
-                              .reference
-                              .parent
-                              .parent
-                              ?.path] ??
-                          0,
-                    ),
-                  )
-                  .toList()
-                ..sort(_compareRacesDesc);
-          return races;
-        });
+    return switchLatest(
+      _firestore.collection('athletes').doc(athleteId).snapshots(),
+      (snapshot) {
+        final data = snapshot.data();
+        if (data == null) return Stream.value(const <AthleteRace>[]);
+        return _watchIndexedAthleteRaces(
+          athleteId,
+          AthleteProfile.fromMap(snapshot.id, data),
+        );
+      },
+    );
+  }
+
+  Stream<List<AthleteRace>> _watchIndexedAthleteRaces(
+    String athleteId,
+    AthleteProfile profile,
+  ) async* {
+    final stageIdsByEvent = <String, List<String>>{};
+    await Future.wait(
+      profile.events.map((event) async {
+        final snapshot = await _firestore
+            .collection('events')
+            .doc(event.eventId)
+            .collection('stages')
+            .get();
+        stageIdsByEvent[event.eventId] = snapshot.docs
+            .map((doc) => doc.id)
+            .toList();
+      }),
+    );
+
+    final paths = buildAthleteRaceResultCollectionPaths(
+      profile: profile,
+      stageIdsByEvent: stageIdsByEvent,
+    );
+    if (paths.isEmpty) {
+      yield const <AthleteRace>[];
+      return;
+    }
+
+    final queries = paths.map(
+      (path) =>
+          _firestore.collection(path).where('athleteId', isEqualTo: athleteId),
+    );
+    await for (final docs in _combineResultQueries(queries.toList())) {
+      final participantCounts = await _participantCountsFor(docs);
+      final races =
+          docs
+              .map(
+                (doc) => _athleteRaceFromDoc(
+                  doc,
+                  participantCount:
+                      participantCounts[doc.reference.parent.parent?.path] ?? 0,
+                ),
+              )
+              .toList()
+            ..sort(_compareRacesDesc);
+      yield races;
+    }
+  }
+
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+  _combineResultQueries(List<Query<Map<String, dynamic>>> queries) {
+    late StreamController<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+    controller;
+    final latest = List<QuerySnapshot<Map<String, dynamic>>?>.filled(
+      queries.length,
+      null,
+    );
+    final subscriptions =
+        <StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>[];
+
+    controller =
+        StreamController<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+          onListen: () {
+            for (var index = 0; index < queries.length; index++) {
+              subscriptions.add(
+                queries[index].snapshots().listen((snapshot) {
+                  latest[index] = snapshot;
+                  if (latest.every((value) => value != null)) {
+                    controller.add([
+                      for (final value in latest) ...value!.docs,
+                    ]);
+                  }
+                }, onError: controller.addError),
+              );
+            }
+          },
+          onCancel: () async {
+            await Future.wait(
+              subscriptions.map((subscription) => subscription.cancel()),
+            );
+          },
+        );
+    return controller.stream;
   }
 
   Future<Map<String, int>> _participantCountsFor(
@@ -185,6 +287,26 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
     final snapshot = await _firestore.collection('clubs').doc(clubId).get();
     return asNonEmptyString(snapshot.data()?['name']);
   }
+}
+
+List<String> buildAthleteRaceResultCollectionPaths({
+  required AthleteProfile profile,
+  required Map<String, List<String>> stageIdsByEvent,
+}) {
+  final paths = <String>{};
+  for (final event in profile.events) {
+    if (event.eventId.isEmpty || event.classId.isEmpty) continue;
+
+    paths.add('events/${event.eventId}/classes/${event.classId}/results');
+    for (final stageId in stageIdsByEvent[event.eventId] ?? const <String>[]) {
+      if (stageId.isEmpty) continue;
+      paths.add(
+        'events/${event.eventId}/stages/$stageId/classes/'
+        '${event.classId}/results',
+      );
+    }
+  }
+  return paths.toList()..sort();
 }
 
 String? normalizeAthleteName(String value) {

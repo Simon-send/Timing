@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../features/athlete/presentation/athlete_detail_page.dart';
 import '../features/auth/presentation/auth_pages.dart';
 import '../features/events/presentation/events_page.dart';
+import '../features/profile/presentation/athlete_link_onboarding_page.dart';
 import '../features/profile/presentation/me_page.dart';
 import '../features/results/presentation/result_locations.dart';
 import '../features/results/presentation/results_page.dart';
@@ -17,12 +18,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/forgot-password',
         builder: (context, state) => ForgotPasswordPage(
-          initialEmail: state.uri.queryParameters['email'] ?? '',
+          initialEmail: state.extra is String ? state.extra! as String : '',
         ),
       ),
       GoRoute(
         path: '/register',
         builder: (context, state) => const RegisterPage(),
+      ),
+      GoRoute(
+        path: '/connect-athlete',
+        builder: (context, state) => const AthleteLinkOnboardingPage(),
       ),
       GoRoute(path: '/me', builder: (context, state) => const MePage()),
       GoRoute(
@@ -39,6 +44,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 selectedClassId:
                     state.uri.queryParameters[resultClassQueryParameter],
                 selectedSplitId: resultSplitQueryValue(
+                  state.uri.queryParameters,
+                ),
+                selectedSplitRange: resultSplitRangeQueryValue(
                   state.uri.queryParameters,
                 ),
                 selectedRelayLegNumber: int.tryParse(
@@ -67,6 +75,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     stageId:
                         state.uri.queryParameters[resultStageQueryParameter],
                     selectedSplitId: resultSplitQueryValue(
+                      state.uri.queryParameters,
+                    ),
+                    selectedSplitRange: resultSplitRangeQueryValue(
                       state.uri.queryParameters,
                     ),
                     relayLegNumber: int.tryParse(

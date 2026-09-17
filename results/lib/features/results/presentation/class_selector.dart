@@ -32,7 +32,7 @@ class ClassSelector extends StatelessWidget {
           DropdownMenuItem(
             value: raceClass.id,
             child: Text(
-              '${raceClass.name} (${raceClass.resultCount})',
+              '${raceClass.name} (${raceClass.athleteCount})',
               overflow: TextOverflow.ellipsis,
             ),
           ),
