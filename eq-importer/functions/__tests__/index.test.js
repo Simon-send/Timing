@@ -28,7 +28,9 @@ jest.mock("@google-cloud/tasks", () => ({
   })),
 }));
 
-jest.mock("firebase-admin", () => {
+jest.mock("firebase-admin/app", () => ({initializeApp: jest.fn()}));
+
+jest.mock("firebase-admin/firestore", () => {
   const DELETE_FIELD = {__fieldValueDelete: true};
 
   const isDeleteField = function(value) {
@@ -147,17 +149,15 @@ jest.mock("firebase-admin", () => {
   };
 
   return {
-    initializeApp: jest.fn(),
-    firestore: Object.assign(() => {
+    getFirestore: () => {
       mockState = createFirestoreState();
       return mockState.db;
-    }, {
-      FieldValue: {
-        serverTimestamp: jest.fn(() => "SERVER_TIMESTAMP"),
-        arrayUnion: jest.fn((...values) => values),
-        delete: jest.fn(() => DELETE_FIELD),
-      },
-    }),
+    },
+    FieldValue: {
+      serverTimestamp: jest.fn(() => "SERVER_TIMESTAMP"),
+      arrayUnion: jest.fn((...values) => values),
+      delete: jest.fn(() => DELETE_FIELD),
+    },
   };
 });
 

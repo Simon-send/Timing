@@ -36,11 +36,21 @@ Produksjonsdeploy, import og IAM-endringer krever egne oppdrag.
 Jobbene har tidsgrenser. Eldre, overlappende kjøringer av samme PR avbrytes.
 Actions er låst til full commit-ID, ikke flyttbare versjonstagger.
 
-Flyten forutsetter at importøren har `firebase-tools`,
-`@firebase/rules-unit-testing` og `test:rules`, at `firebase.test.json` finnes,
-og at regeltestene finnes. Den eldre GitHub-versjonen fra juli 2026 mangler
-deler av dette. Publiser de tilsiktede produktendringene separat; ikke fjern
-regelkontrollen eller svekk testene for å gjøre denne eldre versjonen grønn.
+Importøren inkluderer `firebase-tools`, `@firebase/rules-unit-testing`,
+`test:rules`, emulator-konfigurasjonen `firebase.test.json` og regeltester.
+`npm run verify:rules` velger også demo-prosjektet eksplisitt ved lokal kjøring.
+Vanlige importørtester og regeltester er separate, slik at en enhetstestkjøring
+ikke trenger en emulator. Manglende emulator avvises før regeltestene starter.
+
+Produksjonsavhengighetene er oppdatert, og Firebase Admin brukes via modulære
+entry points som støttes av SDK v14 på Node 22. En regresjonstest laster
+importøren med det virkelige SDK-et, slik at mocks ikke skjuler fjernede API-er.
+Låsefilen oppdaterer også sårbare underavhengigheter. Et avgrenset override for
+`gaxios@6.7.1` velger `uuid` v11 med CommonJS-støtte; en regresjonstest kjører
+SDK-ets multipart-klient uten nettverk og kontrollerer UUID-grensen og kroppen.
+Override-et kan fjernes når den aktuelle oppstrømsavhengigheten er oppdatert.
+De øvrige lokale produktendringene publiseres separat. Ikke fjern kontroller
+eller svekk testene for å gjøre en kjøring grønn.
 
 ## Beskyttelse av main
 
