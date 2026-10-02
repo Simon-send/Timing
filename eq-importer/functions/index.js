@@ -1,6 +1,7 @@
 const functions = require("firebase-functions");
 const { onInit } = require("firebase-functions/v2/core");
-const admin = require("firebase-admin");
+const {initializeApp} = require("firebase-admin/app");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const axios = require("axios");
 
 let appInitialized = false;
@@ -8,7 +9,7 @@ let db = null;
 
 function ensureInitialized() {
   if (appInitialized) return;
-  admin.initializeApp();
+  initializeApp();
   appInitialized = true;
 }
 
@@ -18,7 +19,7 @@ onInit(() => {
 
 function getDb() {
   ensureInitialized();
-  if (!db) db = admin.firestore();
+  if (!db) db = getFirestore();
   return db;
 }
 
@@ -993,8 +994,8 @@ function upsertEntityWrite(writeMap, id, ref, doc, additions) {
   const existing = writeMap.get(id);
   const data = existing ? existing.data : {};
   Object.assign(data, doc, {
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
 
   if (additions && additions.athlete) {
@@ -1013,10 +1014,10 @@ function upsertEntityWrite(writeMap, id, ref, doc, additions) {
 function prepareEntityWrite(write) {
   const data = Object.assign({}, write.data);
   if (Array.isArray(data.athletes) && data.athletes.length > 0) {
-    data.athletes = admin.firestore.FieldValue.arrayUnion(...data.athletes);
+    data.athletes = FieldValue.arrayUnion(...data.athletes);
   }
   if (Array.isArray(data.events) && data.events.length > 0) {
-    data.events = admin.firestore.FieldValue.arrayUnion(...data.events);
+    data.events = FieldValue.arrayUnion(...data.events);
   }
   return {
     ref: write.ref,
@@ -1131,7 +1132,7 @@ function addAthleteEventResultWrite(athleteWritesById, result, context) {
     athleteWritesById.set(athleteId, {
       ref: getDb().collection("athletes").doc(athleteId),
       data: {
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         events: [eventEntry],
       },
     });
@@ -1139,7 +1140,7 @@ function addAthleteEventResultWrite(athleteWritesById, result, context) {
   }
 
   appendUniqueEntityList(existing.data, "events", eventEntry, "eventId");
-  existing.data.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+  existing.data.updatedAt = FieldValue.serverTimestamp();
 }
 
 function buildResultIdentityFields(participant, clubId, athleteId, schoolId, organizationId, teamId, lagId) {
@@ -1380,7 +1381,7 @@ function buildResultClassDoc(args) {
     team: isTeam ? {members, legs: relayLegs} : null,
     timingPoints: args.derived.rawPasses,
     analysis: biathlon ? {biathlon: Object.assign({version: 1}, biathlon)} : null,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
   return sanitizeForFirestore(document) || {};
 }
@@ -2648,7 +2649,7 @@ function buildEventDoc(event, eventId, participants) {
     },
     resultProfile: eventProfile.profile,
     resultProfileSource: eventProfile.determinedBy,
-    source: admin.firestore.FieldValue.delete(),
+    source: FieldValue.delete(),
   };
 }
 
@@ -2709,7 +2710,7 @@ function buildStageDoc(event, eventId, etappeUid, profileOverride) {
     resultProfileSource: classification.determinedBy,
     isRelay: isRelayStage(event, stage),
     isBiathlon: isBiathlonEvent(event),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }) || {};
 }
 
@@ -2765,7 +2766,7 @@ function buildClassStructureDoc(args) {
     participantCount: args.participantCount || 0,
     hasResults: resultIds.length > 0,
     hasTimingData: resultIds.length > 0,
-    results: admin.firestore.FieldValue.delete(),
+    results: FieldValue.delete(),
     timingSummary: {
       stationsFetched: args.stationsFetched,
       timeItemsFetched: args.timeItemsFetched,
@@ -2804,7 +2805,7 @@ async function importEqTimingFromUrls(params) {
   // 3) skriv event
   await eventDocRef.set(
     sanitizeForFirestore(Object.assign({}, buildEventDoc(event, eventId, participants), {
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })) || {},
     { merge: true }
   );
@@ -2812,7 +2813,7 @@ async function importEqTimingFromUrls(params) {
   // 4) skriv class meta
   await classDocRef.set(
     sanitizeForFirestore(Object.assign({}, buildClassDoc(event, classId, null), {
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })) || {},
     { merge: true }
   );
@@ -2852,7 +2853,7 @@ async function importEqTimingFromUrls(params) {
         event && event.Etapper ? event.Etapper[String(etappeUid)] : null,
       ),
       isBiathlon: isBiathlonEvent(event),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })) || {},
     {merge: true},
   );
@@ -3185,7 +3186,7 @@ async function importEqTimingFromUrls(params) {
     {
       stageId: String(etappeUid),
       resultProfile: classification.profile,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     },
   )) || {};
   await stageClassDocRef.set(stageClassSummary, { merge: true });
@@ -3300,7 +3301,7 @@ async function importWholeEvent(params) {
   const eventDocRef = getDb().collection("events").doc(String(eventId));
   await eventDocRef.set(
     sanitizeForFirestore(Object.assign({}, buildEventDoc(event, eventId, participants), {
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })) || {},
     { merge: true }
   );
@@ -3502,8 +3503,8 @@ exports.startImportEvent = functions.https.onRequest(async (req, res) => {
       eventId,
       classCount,
       status: "queued",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
       nextClassIndex: 0,
       done: false,
       errors: [],
@@ -3559,8 +3560,8 @@ exports.runImportEventChunk = functions.https.onRequest({
     await jobRef.set(
       {
         status: "running",
-        lastError: admin.firestore.FieldValue.delete(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastError: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
@@ -3581,12 +3582,12 @@ exports.runImportEventChunk = functions.https.onRequest({
 
     await jobRef.set(
       {
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         nextClassIndex: chunkResult.nextClassIndex,
         done: chunkResult.done,
         lastResult: chunkResult,
         classResults,
-        lastError: admin.firestore.FieldValue.delete(),
+        lastError: FieldValue.delete(),
         status: chunkResult.done ? "done" : "running",
       },
       { merge: true }
@@ -3604,7 +3605,7 @@ exports.runImportEventChunk = functions.https.onRequest({
         await getDb().collection("importJobs").doc(jobId).set({
           status: "error",
           lastError: e?.message || String(e),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
       } catch (statusError) {
         console.error("Failed to persist import job error", statusError);
