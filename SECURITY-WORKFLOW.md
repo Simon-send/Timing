@@ -45,8 +45,9 @@ ikke trenger en emulator. Manglende emulator avvises før regeltestene starter.
 Produksjonsavhengighetene er oppdatert, og Firebase Admin brukes via modulære
 entry points som støttes av SDK v14 på Node 22. En regresjonstest laster
 importøren med det virkelige SDK-et, slik at mocks ikke skjuler fjernede API-er.
-Låsefilen oppdaterer også sårbare underavhengigheter. Et avgrenset override for
-`gaxios@6.7.1` velger `uuid` v11 med CommonJS-støtte; en regresjonstest kjører
+Låsefilen oppdaterer også sårbare underavhengigheter og er laget og testet med
+Node 22 og npm 10, som i CI. Et avgrenset override for `gaxios` sin
+UUID-avhengighet velger `uuid` v11 med CommonJS-støtte. En regresjonstest kjører
 SDK-ets multipart-klient uten nettverk og kontrollerer UUID-grensen og kroppen.
 Override-et kan fjernes når den aktuelle oppstrømsavhengigheten er oppdatert.
 De øvrige lokale produktendringene publiseres separat. Ikke fjern kontroller
