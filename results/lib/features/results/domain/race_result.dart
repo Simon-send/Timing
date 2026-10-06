@@ -88,6 +88,27 @@ class SplitValue {
   final String kind;
   final int? legNumber;
   final int? roundNumber;
+
+  SplitValue withRanks({int? cumRank, int? legRank, int? cumRankCount}) {
+    return SplitValue(
+      id: id,
+      label: label,
+      sort: sort,
+      cumRank: cumRank,
+      legRank: legRank,
+      cumRankCount: cumRankCount,
+      cumMs: cumMs,
+      legMs: legMs,
+      cumText: cumText,
+      legText: legText,
+      status: status,
+      addition: addition,
+      additionParts: additionParts,
+      kind: kind,
+      legNumber: legNumber,
+      roundNumber: roundNumber,
+    );
+  }
 }
 
 typedef TimingPoint = SplitValue;
@@ -188,7 +209,9 @@ class RaceResult {
   });
 
   factory RaceResult.fromMap(String id, Map<String, dynamic> data) {
-    final analysisRoot = asStringMap(data['analysis']);
+    final analysisRoot = asStringMap(
+      data['analysis'] ?? data['analysisSummary'],
+    );
     final biathlonRoot = asStringMap(analysisRoot['biathlon']);
     final analysis = biathlonRoot.isNotEmpty
         ? asStringMap(biathlonRoot['metrics'])
@@ -196,6 +219,9 @@ class RaceResult {
     final shootingData = biathlonRoot.isNotEmpty
         ? asStringMap(biathlonRoot['passes'])
         : _readShootingMap(data);
+    final biathlonLaps = biathlonRoot.isNotEmpty
+        ? asStringMap(biathlonRoot['laps'])
+        : const <String, dynamic>{};
     final entrantData = asStringMap(data['entrant']);
     final teamData = asStringMap(data['team']);
     final splitMaps = _readSplitMaps(data);
@@ -312,7 +338,7 @@ class RaceResult {
       relayMembers: relayMembers,
       relayLegBiathlon: relayLegBiathlon,
       biathlon: hasBiathlon
-          ? BiathlonAnalysis.fromMaps(analysis, shootingData)
+          ? BiathlonAnalysis.fromMaps(analysis, shootingData, biathlonLaps)
           : null,
     );
   }
@@ -440,6 +466,7 @@ List<RelayLegResult> effectiveRelayLegs(RaceResult result) {
   }.toList()..sort();
   final legs = <RelayLegResult>[];
   int? previousCumulativeMs = 0;
+  var previousLegNumber = 0;
 
   for (final legNumber in legNumbers) {
     final points =
@@ -458,12 +485,16 @@ List<RelayLegResult> effectiveRelayLegs(RaceResult result) {
     }).lastOrNull;
     final endpoint = preferred ?? points.lastOrNull;
     final cumulativeMs = endpoint?.cumMs;
-    final previousMs = previousCumulativeMs;
+    // A numeric gap cannot supply the immediately preceding exchange.
+    final previousMs = previousLegNumber == legNumber - 1
+        ? previousCumulativeMs
+        : null;
     final timeMs =
         cumulativeMs != null && previousMs != null && cumulativeMs >= previousMs
         ? cumulativeMs - previousMs
         : null;
     previousCumulativeMs = cumulativeMs;
+    previousLegNumber = legNumber;
     legs.add(
       RelayLegResult(
         legNumber: legNumber,
@@ -527,12 +558,12 @@ RaceResult? relayLegRaceResult(RaceResult teamResult, int legNumber) {
       legPoints.map(_shootingIndexForPoint).whereType<int>().toSet().toList()
         ..sort();
 
-  final previousCumulativeMs = legs
-      .where((leg) => leg.legNumber < legNumber && leg.cumulativeMs != null)
-      .lastOrNull
-      ?.cumulativeMs;
-  final hasEarlierLeg = legs.any((leg) => leg.legNumber < legNumber);
-  final startMs = previousCumulativeMs ?? (hasEarlierLeg ? null : 0);
+  final startMs = legNumber == 1
+      ? 0
+      : legs
+            .where((leg) => leg.legNumber == legNumber - 1)
+            .firstOrNull
+            ?.cumulativeMs;
   final rebasedSplits = <String, SplitValue>{};
 
   for (final point in legPoints) {
@@ -764,6 +795,7 @@ class ShootingPass {
     required this.misses,
     required this.position,
     this.penaltyMs,
+    this.rangeRank,
   });
 
   factory ShootingPass.fromMap(String fallbackKey, Map<String, dynamic> data) {
@@ -783,6 +815,7 @@ class ShootingPass {
           asInt(data['penalty']),
       position: asNonEmptyString(data['position']) ?? '',
       penaltyMs: asInt(data['penaltyMs']) ?? asInt(data['penaltyTimeMs']),
+      rangeRank: asInt(data['rangeRank']),
     );
   }
 
@@ -791,8 +824,43 @@ class ShootingPass {
   final int? misses;
   final String position;
   final int? penaltyMs;
+  final int? rangeRank;
 
   bool get hasData => rangeMs != null || misses != null || penaltyMs != null;
+}
+
+class BiathlonLap {
+  const BiathlonLap({
+    required this.index,
+    required this.skiMs,
+    required this.startCumMs,
+    required this.endCumMs,
+    required this.startCode,
+    required this.endCode,
+    required this.beforeShooting,
+  });
+
+  factory BiathlonLap.fromMap(String fallbackKey, Map<String, dynamic> data) {
+    return BiathlonLap(
+      index: asInt(data['index']) ?? _indexFromLapKey(fallbackKey) ?? 0,
+      skiMs: asInt(data['skiMs']) ?? asInt(data['skiTimeMs']),
+      startCumMs: asInt(data['startCumMs']),
+      endCumMs: asInt(data['endCumMs']),
+      startCode: asNonEmptyString(data['startCode']),
+      endCode: asNonEmptyString(data['endCode']),
+      beforeShooting: asInt(data['beforeShooting']),
+    );
+  }
+
+  final int index;
+  final int? skiMs;
+  final int? startCumMs;
+  final int? endCumMs;
+  final String? startCode;
+  final String? endCode;
+  final int? beforeShooting;
+
+  bool get hasData => skiMs != null;
 }
 
 class BiathlonAnalysis {
@@ -807,6 +875,7 @@ class BiathlonAnalysis {
     required this.shootingRank,
     required this.penaltyRank,
     required this.passes,
+    this.laps = const [],
   });
 
   const BiathlonAnalysis.empty()
@@ -819,12 +888,14 @@ class BiathlonAnalysis {
       netSkiRank = null,
       shootingRank = null,
       penaltyRank = null,
-      passes = const [];
+      passes = const [],
+      laps = const [];
 
   factory BiathlonAnalysis.fromMaps(
     Map<String, dynamic> analysis,
-    Map<String, dynamic> shooting,
-  ) {
+    Map<String, dynamic> shooting, [
+    Map<String, dynamic> laps = const {},
+  ]) {
     final passes =
         shooting.entries
             .map((entry) {
@@ -836,17 +907,30 @@ class BiathlonAnalysis {
             .where((pass) => pass.index > 0 && pass.hasData)
             .toList()
           ..sort((a, b) => a.index - b.index);
+    final parsedLaps =
+        laps.entries
+            .map((entry) {
+              final data = asStringMap(entry.value);
+              if (data.isEmpty) return null;
+              return BiathlonLap.fromMap(entry.key, data);
+            })
+            .whereType<BiathlonLap>()
+            .where((lap) => lap.index > 0 && lap.hasData)
+            .toList()
+          ..sort((a, b) => a.index - b.index);
     final missesTotal =
         asInt(analysis['missesTotal']) ??
         asInt(analysis['penaltiesTotal']) ??
         _sumPassMisses(passes);
     final netSkiTimeMs = asInt(analysis['netSkiTimeMs']);
     final penaltyTimeMs = asInt(analysis['penaltyTimeMs']);
+    final skiTimeMs =
+        asInt(analysis['skiTimeMs']) ??
+        _sumCompleteLapSkiTime(parsedLaps) ??
+        _deriveSkiTimeMs(netSkiTimeMs, penaltyTimeMs);
 
     return BiathlonAnalysis(
-      skiTimeMs:
-          asInt(analysis['skiTimeMs']) ??
-          _deriveSkiTimeMs(netSkiTimeMs, penaltyTimeMs),
+      skiTimeMs: skiTimeMs,
       netSkiTimeMs: netSkiTimeMs,
       shootingTimeMs:
           asInt(analysis['shootingTimeMs']) ?? asInt(analysis['rangeTimeMs']),
@@ -860,6 +944,7 @@ class BiathlonAnalysis {
           asInt(analysis['shootingRank']),
       penaltyRank: asInt(analysis['penaltyRank']),
       passes: passes,
+      laps: parsedLaps,
     );
   }
 
@@ -873,6 +958,7 @@ class BiathlonAnalysis {
   final int? shootingRank;
   final int? penaltyRank;
   final List<ShootingPass> passes;
+  final List<BiathlonLap> laps;
 
   bool get hasData {
     return skiTimeMs != null ||
@@ -880,7 +966,8 @@ class BiathlonAnalysis {
         shootingTimeMs != null ||
         penaltyTimeMs != null ||
         missesTotal != null ||
-        passes.isNotEmpty;
+        passes.isNotEmpty ||
+        laps.isNotEmpty;
   }
 
   ShootingPass? passAt(int index) {
@@ -889,6 +976,18 @@ class BiathlonAnalysis {
     }
     return null;
   }
+
+  BiathlonLap? lapAt(int index) {
+    for (final lap in laps) {
+      if (lap.index == index) return lap;
+    }
+    return null;
+  }
+}
+
+int? _indexFromLapKey(String value) {
+  final match = RegExp(r'(\d+)$').firstMatch(value);
+  return match == null ? null : int.tryParse(match.group(1)!);
 }
 
 int? _deriveSkiTimeMs(int? netSkiTimeMs, int? penaltyTimeMs) {
@@ -896,6 +995,11 @@ int? _deriveSkiTimeMs(int? netSkiTimeMs, int? penaltyTimeMs) {
   if (penaltyTimeMs == null) return netSkiTimeMs;
   final skiTimeMs = netSkiTimeMs - penaltyTimeMs;
   return skiTimeMs < 0 ? 0 : skiTimeMs;
+}
+
+int? _sumCompleteLapSkiTime(List<BiathlonLap> laps) {
+  if (laps.isEmpty || laps.any((lap) => lap.skiMs == null)) return null;
+  return laps.fold(0, (sum, lap) => sum! + lap.skiMs!);
 }
 
 int? _asNestedInt(Object? value) {

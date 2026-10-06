@@ -1,5 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:results/app/app_theme.dart';
 import 'package:results/features/results/domain/result_class.dart';
+import 'package:results/features/results/presentation/class_selector.dart';
+import 'package:results/l10n/app_localizations.dart';
 
 void main() {
   test('reads imported etappe metadata', () {
@@ -109,5 +113,33 @@ void main() {
     ];
 
     expect(initialResultClass(classes).id, 'legacy-large');
+  });
+
+  testWidgets('shows the highest athlete count for a class', (tester) async {
+    const raceClass = ResultClass(
+      id: 'class-1',
+      name: 'J17',
+      resultCount: 4,
+      participantCount: 12,
+      etappeUid: 100,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(AppThemeVariant.nordicDark),
+        locale: const Locale('nb'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: ClassSelector(
+            classes: const [raceClass],
+            selectedClassId: raceClass.id,
+            onChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('J17 (12)'), findsOneWidget);
   });
 }

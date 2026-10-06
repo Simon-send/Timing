@@ -10,15 +10,12 @@ jest.mock("axios", () => ({
   get: (...args) => mockAxiosGet(...args),
 }));
 
-jest.mock("firebase-functions", () => ({
-  runWith: () => ({
-    https: {
-      onRequest: (...args) => args[args.length - 1],
-    },
-  }),
-  https: {
-    onRequest: (...args) => args[args.length - 1],
-  },
+jest.mock("firebase-functions/v2/https", () => ({
+  onRequest: jest.fn((...args) => args[args.length - 1]),
+}));
+
+jest.mock("firebase-functions/v2/scheduler", () => ({
+  onSchedule: jest.fn((options, handler) => handler),
 }));
 
 jest.mock("@google-cloud/tasks", () => ({
@@ -51,14 +48,20 @@ jest.mock("firebase-admin", () => {
         }
       }
 
-      const previous = docs.get(path) || {};
-      const next = options && options.merge ?
-        Object.assign({}, previous, data) :
-        Object.assign({}, data);
-
-      for (const [key, value] of Object.entries(next)) {
-        if (isDeleteField(value)) delete next[key];
-      }
+      const mergeMaps = (previous, update) => {
+        const next = {...previous};
+        for (const [key, value] of Object.entries(update || {})) {
+          if (isDeleteField(value)) {
+            delete next[key];
+          } else if (value && typeof value === "object" && !Array.isArray(value)) {
+            next[key] = mergeMaps(next[key] && typeof next[key] === "object" ? next[key] : {}, value);
+          } else {
+            next[key] = value;
+          }
+        }
+        return next;
+      };
+      const next = mergeMaps(options && options.merge ? docs.get(path) || {} : {}, data);
 
       docs.set(path, next);
       writes.push({path, data: next, options: options || null});
@@ -82,7 +85,7 @@ jest.mock("firebase-admin", () => {
         }),
         get: jest.fn(() => Promise.resolve(
           docs.has(path) ?
-            {exists: true, data: () => docs.get(path)} :
+            {exists: true, ref: makeDocRef(path), data: () => docs.get(path)} :
             {exists: false},
         )),
       };
@@ -91,6 +94,31 @@ jest.mock("firebase-admin", () => {
     const makeCollectionRef = function(path) {
       return {
         path,
+        orderBy: function(field) {
+          const options = {offset: 0, limit: Infinity};
+          const query = {
+            offset: (value) => {
+ options.offset = value; return query;
+},
+            limit: (value) => {
+ options.limit = value; return query;
+},
+            get: async () => {
+              const result = await makeCollectionRef(path).get();
+              const selected = result.docs.sort((a, b) => a.data()[field] - b.data()[field])
+                .slice(options.offset, options.offset + options.limit);
+              return {docs: selected, size: selected.length};
+            },
+          };
+          return query;
+        },
+        where: function(field, operator, values) {
+          if (operator !== "in") throw new Error("Unsupported mock query");
+          return {get: async () => {
+            const result = await makeCollectionRef(path).get();
+            return {docs: result.docs.filter((doc) => values.includes(doc.data()[field]))};
+          }};
+        },
         doc: function(id) {
           const docId = id || "auto-" + (++autoId);
           return makeDocRef(path + "/" + docId);
@@ -117,6 +145,18 @@ jest.mock("firebase-admin", () => {
       docs,
       writes,
       db: {
+        getAll: async function(...refs) {
+          return Promise.all(refs.map((ref) => ref.get()));
+        },
+        runTransaction: async function(updateFunction) {
+          return updateFunction({
+            get: (ref) => ref.get(),
+            delete: (ref) => applyDelete(ref.path),
+            set: (ref, data, options) => {
+              applySet(ref.path, data, options);
+            },
+          });
+        },
         collection: function(name) {
           return makeCollectionRef(name);
         },
@@ -801,6 +841,181 @@ const buildResultsOnlySubclassFixtures = function() {
 };
 
 describe("eq importer helpers", () => {
+  test("display ordering obeys equality, pair and triple laws", () => {
+    const compare = loadModule()._test.compareResultDisplayOrder;
+    const rows = [
+      {name: "A", rank: 1, totalMs: 200},
+      {name: "B", rank: 2, totalMs: 100},
+      {name: "C", totalMs: 150},
+      {name: "D", rank: 1}, {name: "E"},
+      {name: "A", rank: 1, totalMs: 200},
+      {name: "F", rank: 0, totalMs: 0},
+      {name: "Z", entrant: {name: "Å"}, rank: 1, totalMs: 200},
+      {name: "DSQ", status: "DSQ", totalMs: 1},
+      {name: "DNF", status: "DNF", totalMs: 1},
+      {name: "DNS", status: "DNS"},
+    ];
+    for (const a of rows) {
+      expect(compare(a, a)).toBe(0);
+      for (const b of rows) {
+        expect(Math.sign(compare(a, b)) + Math.sign(compare(b, a))).toBe(0);
+        for (const c of rows) {
+          if (compare(a, b) <= 0 && compare(b, c) <= 0) {
+            expect(compare(a, c)).toBeLessThanOrEqual(0);
+          }
+        }
+      }
+    }
+    for (const order of [[0, 1, 2], [0, 2, 1], [1, 0, 2],
+      [1, 2, 0], [2, 0, 1], [2, 1, 0]]) {
+      expect(order.map((i) => rows[i]).sort(compare)).toEqual(rows.slice(0, 3));
+    }
+    expect(compare(rows[0], rows[7])).toBeLessThan(0);
+  });
+
+  test("display order for equal ranks and times uses display names", () => {
+    const mod = loadModule();
+    const ada = {name: "Z", entrant: {name: "Ada"}, rank: 1, totalMs: 200};
+    const bert = {name: "A", entrant: {name: "Bert"}, rank: 1, totalMs: 200};
+    mod._test.addDisplayOrder([bert, ada]);
+    expect(ada.displayOrder).toBe(0);
+    expect(bert.displayOrder).toBe(1);
+  });
+
+  test("identical result values use stable document IDs without publishing them", () => {
+    const mod = loadModule();
+    const first = {name: "Ada", rank: 1, totalMs: 200};
+    const second = {name: "Ada", rank: 1, totalMs: 200};
+    const identities = new Map([[first, "101"], [second, "102"]]);
+    mod._test.addDisplayOrder([second, first], identities);
+    expect(first.displayOrder).toBe(0);
+    expect(second.displayOrder).toBe(1);
+    expect(first.id).toBeUndefined();
+    expect(second.id).toBeUndefined();
+  });
+
+  test.each(["bad/run", {}, [], "", "r".repeat(129)])(
+    "resumeRunId is rejected before any I/O: %j", async (resumeRunId) => {
+      const mod = loadModule();
+      const res = makeResponse();
+      await mod.startImportEvent({method: "POST", body: {eventId: 80088, resumeRunId}}, res);
+      expect(res.statusCode).toBe(400);
+      expect(mockAxiosGet).not.toHaveBeenCalled();
+      expect(mockCreateTask).not.toHaveBeenCalled();
+      expect(mockState).toBeNull();
+    },
+  );
+
+  test("expired initialization is blocked, without a task or event stub", async () => {
+    const mod = loadModule();
+    const db = mod._test.getDb();
+    const jobRef = db.collection("importJobs").doc("event-80088");
+    await jobRef.set({runId: "run", eventId: 80088, status: "initializing",
+      initialized: false, initializationExpiresAtMs: 0});
+    await mod.repairImportDispatches();
+    expect(mockState.docs.get(jobRef.path)).toMatchObject({status: "blocked",
+      initialized: false, lastError: "IMPORT_INITIALIZATION_EXPIRED"});
+    expect(mockCreateTask).not.toHaveBeenCalled();
+    expect(mockState.docs.has("events/80088")).toBe(false);
+    await jobRef.set({runId: "active", eventId: 80088, status: "initializing",
+      initializationExpiresAtMs: Date.now() + 300000});
+    await mod.repairImportDispatches();
+    expect(mockState.docs.get(jobRef.path).status).toBe("initializing");
+  });
+
+  test.each(["blocked", "expired", "replacement"])(
+    "late initialization cannot revive a %s reservation", async (scenario) => {
+      const mod = loadModule();
+      const db = mod._test.getDb();
+      const original = db.runTransaction;
+      let transactions = 0;
+      db.runTransaction = async (callback) => {
+        transactions++;
+        if (transactions === 2) {
+          const job = mockState.docs.get("importJobs/event-80088");
+          if (scenario === "blocked") job.status = "blocked";
+          else if (scenario === "expired") job.initializationExpiresAtMs = 0;
+          else Object.assign(job, {runId: "new-run", status: "queued"});
+        }
+        return original(callback);
+      };
+      const fixtures = buildDuplicateClassAcrossDistancesFixtures();
+      mockAxiosGet.mockImplementation(async (url) => ({data:
+        url.includes("/Event/") ? fixtures.event : fixtures.participants}));
+      const res = makeResponse();
+      await mod.startImportEvent({method: "POST", body: {eventId: 80088}}, res);
+      expect(res.statusCode).toBe(409);
+      expect(mockCreateTask).not.toHaveBeenCalled();
+      const job = mockState.docs.get("importJobs/event-80088");
+      expect(job.initialized).not.toBe(true);
+      expect(job.pendingDispatch).toBeUndefined();
+      expect(job.status).toBe(scenario === "blocked" ? "blocked" :
+        scenario === "replacement" ? "queued" : "error");
+    },
+  );
+
+  test("incomplete initialization cannot resume even with a complete manifest", async () => {
+    const mod = loadModule();
+    const jobRef = mod._test.getDb().collection("importJobs").doc("event-80088");
+    await jobRef.set({eventId: 80088, runId: "run", manifestVersion: 1,
+      status: "blocked", initialized: false, targetCount: 1});
+    await jobRef.collection("runs").doc("run").collection("targets").doc("target").set({
+      status: "queued", ordinal: 0, stageId: 7001, classId: 5001,
+    });
+    const fixtures = buildDuplicateClassAcrossDistancesFixtures();
+    mockAxiosGet.mockImplementation(async (url) => ({data:
+      url.includes("/Event/") ? fixtures.event : fixtures.participants}));
+    const res = makeResponse();
+    await mod.startImportEvent({method: "POST", body: {eventId: 80088, resumeRunId: "run"}}, res);
+    expect(res.statusCode).toBe(409);
+    expect(mockCreateTask).not.toHaveBeenCalled();
+    expect(mockState.docs.get(jobRef.path).runId).toBe("run");
+  });
+
+  test.each([0, 1])("partial initialization manifest with %i stored targets ends pagination", async (count) => {
+    const mod = loadModule();
+    const ref = mod._test.getDb().collection("importJobs").doc("event-80088");
+    await ref.set({runId: "run", manifestVersion: 1, targetCount: 2,
+      status: "blocked", initialized: false});
+    if (count) {
+await ref.collection("runs").doc("run").collection("targets").doc("target")
+      .set({ordinal: 0, status: "queued"});
+}
+    const res = makeResponse();
+    await mod.getImportStatus({method: "GET", query: {
+      jobId: "event-80088", includeTargets: "true", offset: "0",
+    }}, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.targets).toHaveLength(count);
+    expect(res.body.nextOffset).toBeNull();
+  });
+
+  test("reimport removes raw IDs while preserving public identity and document ID", async () => {
+    const mod = loadModule();
+    const path = "events/80088/stages/330315/classes/1224375/results/101";
+    await mod._test.getDb().collection("events").doc("80088")
+      .collection("stages").doc("330315").collection("classes").doc("1224375")
+      .collection("results").doc("101").set({
+        participantUid: 101, etappeDeltakerUid: 9001, totalMs: 120000,
+        entrant: {participantUid: 101, name: "Old name", customPublicField: "keep"},
+      });
+    const fixtures = buildImportFixtures();
+    mockAxiosGet.mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants})
+      .mockResolvedValueOnce({data: fixtures.stationOneTimes})
+      .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+    await mod._import({eventId: 80088, classId: 1224375,
+      eventUrl: "https://example.test/event", participantsUrl: "https://example.test/participants",
+      timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375"});
+    const result = mockState.docs.get(path);
+    expect(result.participantUid).toBeUndefined();
+    expect(result.etappeDeltakerUid).toBeUndefined();
+    expect(result.entrant.participantUid).toBeUndefined();
+    expect(result.entrant).toMatchObject({name: "Ada Lovelace", athleteId: "athlete:1001",
+      customPublicField: "keep"});
+    expect(result.totalMs).toBe(120000);
+  });
+
   test("sanitizeForFirestore removes empty values but preserves zero and false", () => {
     const mod = loadModule();
     expect(mod._test.sanitizeForFirestore({
@@ -818,6 +1033,18 @@ describe("eq importer helpers", () => {
     });
   });
 
+  test("result content hashes ignore timestamps and ordering is deterministic", () => {
+    const mod = loadModule();
+    const first = {name: "B", totalMs: 2000, rank: 2};
+    const second = {name: "A", totalMs: 1000, rank: 1};
+    mod._test.addDisplayOrder([first, second]);
+
+    expect(first.displayOrder).toBe(1);
+    expect(second.displayOrder).toBe(0);
+    expect(mod._test.resultContentHash({name: "Ada", updatedAt: {value: 1}}))
+      .toBe(mod._test.resultContentHash({updatedAt: {value: 2}, name: "Ada"}));
+  });
+
   test("classifyResultProfile uses EQ discipline facts", () => {
     const mod = loadModule();
     expect(mod._test.classifyResultProfile(
@@ -830,6 +1057,19 @@ describe("eq importer helpers", () => {
     ).profile).toBe("relay");
     expect(mod._test.classifyResultProfile(
       {Gren: {Kode: "BT"}},
+      {Type: "mass"},
+    ).profile).toBe("biathlon");
+    expect(mod._test.classifyResultProfile(
+      {Gren: {Navn: "Skiskyting"}},
+      {Type: "mass"},
+    ).profile).toBe("biathlon");
+    expect(mod._test.classifyResultProfile(
+      {
+        Gren: {Kode: ""},
+        Stasjoner: {
+          "1": {StasjonsOppsett: {"2": {Navn: "INS1"}}},
+        },
+      },
       {Type: "mass"},
     ).profile).toBe("biathlon");
   });
@@ -1100,16 +1340,8 @@ describe("eq importer helpers", () => {
     });
     expect(athleteDoc).toEqual({
       athleteId: "athlete:1001",
-      source: {
-        provider: "eqtiming",
-        participantUid: 101,
-        athleteUid: 1001,
-      },
       displayName: "Ada Lovelace",
       normalizedName: "ada lovelace",
-      gender: "F",
-      birthYear: 1815,
-      age: 17,
       country: null,
       region: null,
       primaryClubId: "club:42",
@@ -1191,6 +1423,102 @@ describe("eq importer helpers", () => {
         contestantCount: 1,
       },
     ]);
+  });
+
+  test("chooses the stage with the highest class athlete count", () => {
+    const mod = loadModule();
+    const event = {
+      Etapper: {
+        "100": {Nivaa: 1, Klasser: {"42": {}}},
+        "200": {Nivaa: 2, Klasser: {"42": {}}},
+        "300": {Nivaa: 3, Klasser: {"42": {}}},
+      },
+    };
+
+    const highest = mod._test.choosePrimaryStageSummary(event, 42, [
+      {stageId: "100", data: {participantCount: 4, resultCount: 20}},
+      {stageId: "200", data: {participantCount: 9, resultCount: 9}},
+      {stageId: "300", data: {participantCount: 0, resultCount: 8}},
+    ]);
+    const tie = mod._test.choosePrimaryStageSummary(event, 42, [
+      {stageId: "100", data: {participantCount: 0, resultCount: 8}},
+      {stageId: "200", data: {participantCount: 0, resultCount: 8}},
+    ]);
+
+    expect(highest.stageId).toBe("200");
+    expect(tie.stageId).toBe("100");
+    expect(mod._test.classStageAthleteCount({
+      participantCount: 0,
+      resultCount: 8,
+    })).toBe(8);
+  });
+
+  test("keeps the highest class summary when stages are imported in reverse order", async () => {
+    const mod = loadModule();
+    const event = {
+      Etapper: {
+        "100": {Nivaa: 1, Klasser: {"42": {}}},
+        "200": {Nivaa: 2, Klasser: {"42": {}}},
+      },
+    };
+    const eventRef = mod._test.getDb().collection("events").doc("event");
+    const highRef = eventRef
+      .collection("stages")
+      .doc("200")
+      .collection("classes")
+      .doc("42");
+    const lowRef = eventRef
+      .collection("stages")
+      .doc("100")
+      .collection("classes")
+      .doc("42");
+
+    await highRef.set({
+      classId: 42,
+      stageId: "200",
+      participantCount: 10,
+      resultCount: 10,
+    });
+    await mod._test.refreshClassRootSummary(eventRef, event, 42);
+    await lowRef.set({
+      classId: 42,
+      stageId: "100",
+      participantCount: 4,
+      resultCount: 40,
+    });
+    await mod._test.refreshClassRootSummary(eventRef, event, 42);
+
+    expect(mockState.docs.get("events/event/classes/42")).toMatchObject({
+      participantCount: 10,
+      resultCount: 10,
+      primaryStageId: "200",
+    });
+  });
+
+  test("different classes in the same event can have different primary stages", async () => {
+    const mod = loadModule();
+    const event = {Etapper: {
+      "100": {Nivaa: 1, Klasser: {"42": {}, "43": {}}},
+      "200": {Nivaa: 2, Klasser: {"42": {}, "43": {}}},
+    }};
+    const eventRef = mod._test.getDb().collection("events").doc("event");
+    for (const [stageId, classId, count] of [
+      ["100", "42", 12], ["200", "42", 4],
+      ["100", "43", 3], ["200", "43", 20],
+    ]) {
+      await eventRef.collection("stages").doc(stageId)
+        .collection("classes").doc(classId).set({
+          stageId, participantCount: count, resultCount: count,
+        });
+    }
+    await mod._test.refreshClassRootSummary(eventRef, event, 42);
+    await mod._test.refreshClassRootSummary(eventRef, event, 43);
+    expect(mockState.docs.get("events/event/classes/42")).toMatchObject({
+      primaryStageId: "100", participantCount: 12, resultCount: 12,
+    });
+    expect(mockState.docs.get("events/event/classes/43")).toMatchObject({
+      primaryStageId: "200", participantCount: 20, resultCount: 20,
+    });
   });
 
   test("getImportableClassIds includes result classes from event even without contestants", () => {
@@ -1285,6 +1613,26 @@ describe("eq importer helpers", () => {
         endCode: "Maal",
       },
     });
+    const publicSummary = mod._test.buildPublicAnalysisSummary({
+      biathlon: {
+        version: 1,
+        metrics: derived.analysis,
+        passes: derived.shooting,
+        laps: derived.laps,
+      },
+    });
+    expect(publicSummary.biathlon.metrics).toMatchObject({
+      skiTimeMs: 335000,
+      netSkiTimeMs: 335000,
+      shootingTimeMs: 65000,
+    });
+    expect(publicSummary.biathlon.metrics.hitsTotal).toBeUndefined();
+    expect(publicSummary.biathlon.passes.shoot1.hits).toBeUndefined();
+    expect(publicSummary.biathlon.laps.lap2).toMatchObject({
+      skiMs: 120000,
+      startCode: "UTS1",
+      endCode: "INS2",
+    });
     expect(derived.rawPasses.some((pass) => pass.addition === "1+1")).toBe(true);
     expect(derived.rawPasses).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -1321,11 +1669,13 @@ describe("eq importer helpers", () => {
     }, 350000);
 
     expect(withPenalty.analysis.netSkiTimeMs).toBe(370000);
-    expect(withPenalty.analysis.skiTimeMs).toBe(290000);
+    // Ski time is measured from US to the next INS. The 70 seconds between
+    // S1 and US1 are a penalty loop and must not be subtracted again.
+    expect(withPenalty.analysis.skiTimeMs).toBe(300000);
     expect(withPenalty.analysis.penaltyTimeMs).toBe(80000);
     expect(withPenalty.shooting.shoot1.penaltyMs).toBe(70000);
     expect(withoutPenalty.analysis.netSkiTimeMs).toBe(320000);
-    expect(withoutPenalty.analysis.skiTimeMs).toBe(320000);
+    expect(withoutPenalty.analysis.skiTimeMs).toBe(280000);
     expect(withoutPenalty.analysis.penaltyTimeMs).toBe(0);
 
     const ranked = [withPenalty, withoutPenalty].map((derived) => ({
@@ -1335,12 +1685,96 @@ describe("eq importer helpers", () => {
     mod._test.addMetricRanks(ranked, "netSkiTimeMs", "netSkiRank");
     mod._test.addMetricRanks(ranked, "penaltyTimeMs", "penaltyRank");
 
-    expect(withPenalty.analysis.skiRank).toBe(1);
-    expect(withoutPenalty.analysis.skiRank).toBe(2);
+    expect(withPenalty.analysis.skiRank).toBe(2);
+    expect(withoutPenalty.analysis.skiRank).toBe(1);
     expect(withoutPenalty.analysis.netSkiRank).toBe(1);
     expect(withPenalty.analysis.netSkiRank).toBe(2);
     expect(withoutPenalty.analysis.penaltyRank).toBe(1);
     expect(withPenalty.analysis.penaltyRank).toBe(2);
+  });
+
+  test("ski ranks include only finished results and keep tied ranks", () => {
+    const mod = loadModule();
+    const results = [
+      {status: "TIME", analysis: {skiTimeMs: 100000}},
+      {status: "TIME", analysis: {skiTimeMs: 100000}},
+      {status: "TIME", analysis: {skiTimeMs: 200000}},
+      {status: "DNF", analysis: {skiTimeMs: 50000}},
+      {status: "TIME", analysis: {skiTimeMs: null}},
+    ];
+
+    mod._test.addMetricRanks(results, "skiTimeMs", "skiRank", {
+      positiveOnly: true,
+    });
+
+    expect(results.map((result) => result.analysis.skiRank)).toEqual([
+      1,
+      1,
+      3,
+      null,
+      null,
+    ]);
+  });
+
+  test("ranks each shooting pass across finished results", () => {
+    const mod = loadModule();
+    const results = [
+      {
+        status: "TIME",
+        analysis: {biathlon: {passes: {
+          shoot1: {rangeMs: 30000},
+          shoot2: {rangeMs: 40000},
+        }}},
+      },
+      {
+        status: "TIME",
+        analysis: {biathlon: {passes: {
+          shoot1: {rangeMs: 30000},
+          shoot2: {rangeMs: 50000},
+        }}},
+      },
+      {
+        status: "TIME",
+        analysis: {biathlon: {passes: {
+          shoot1: {rangeMs: 45000},
+        }}},
+      },
+      {
+        status: "DNF",
+        analysis: {biathlon: {passes: {shoot1: {rangeMs: 10000}}}},
+      },
+    ];
+
+    mod._test.addShootingPassRanks(results);
+
+    expect(results[0].analysis.biathlon.passes.shoot1.rangeRank).toBe(1);
+    expect(results[1].analysis.biathlon.passes.shoot1.rangeRank).toBe(1);
+    expect(results[2].analysis.biathlon.passes.shoot1.rangeRank).toBe(3);
+    expect(results[3].analysis.biathlon.passes.shoot1.rangeRank).toBeNull();
+    expect(results[0].analysis.biathlon.passes.shoot2.rangeRank).toBe(1);
+    expect(results[1].analysis.biathlon.passes.shoot2.rangeRank).toBe(2);
+  });
+
+  test("buildDerivedResultMetrics measures ski time from US to INS", () => {
+    const mod = loadModule();
+    const derived = mod._test.buildDerivedResultMetrics({
+      "ins1": {code: "INS1", cumMs: 304000},
+      "uts1": {code: "UTS1", cumMs: 368000, addition: "0"},
+      "us1": {code: "US1", cumMs: 379300, addition: "1"},
+      "ins2": {code: "INS2", cumMs: 803900, addition: "1"},
+      "uts2": {code: "UTS2", cumMs: 858900, addition: "1+1"},
+      "us2": {code: "US2", cumMs: 868900, addition: "1+1"},
+      "finish": {code: "Mål", cumMs: 1272900, addition: "1+1"},
+    }, 1272900);
+
+    expect(derived.analysis.skiTimeMs).toBe(1132600);
+    expect(derived.analysis.netSkiTimeMs).toBe(1153900);
+    expect(derived.analysis.penaltyTimeMs).toBe(21300);
+    expect(derived.laps).toMatchObject({
+      lap1: {startCode: "start", endCode: "INS1", skiMs: 304000},
+      lap2: {startCode: "US1", endCode: "INS2", skiMs: 424600},
+      lap3: {startCode: "US2", endCode: "Mål", skiMs: 404000},
+    });
   });
 
   test("buildRelayLegBiathlon separates repeated shooting codes by leg", () => {
@@ -1393,6 +1827,75 @@ describe("eq importer helpers", () => {
 });
 
 describe("eq importer core import", () => {
+  test("large profiles publish versioned bounded sections and clean stale ones", async () => {
+    const mod = loadModule();
+    mod._test.getDb();
+    const classRef = mockState.db.collection("events").doc("large")
+      .collection("stages").doc("1").collection("classes").doc("1");
+    const profile = {schemaVersion: 1, kind: "biathlon-all",
+      finishersCount: 1, cohortCount: 1,
+      metrics: {finishTimeMs: {mean: 1000, count: 1}},
+      timingPoints: {}, shootingPasses: {}, laps: {}};
+    for (let i = 0; i < 5500; i++) {
+      profile.timingPoints[String(i)] = {
+        code: `S${i}`, label: `Split ${i} ${"x".repeat(50)}`, sort: i,
+        values: {cumMs: {mean: 1000 + i, count: 1}},
+      };
+    }
+    const top = {...profile, kind: "biathlon-top-half"};
+    await mod._test.publishBiathlonAggregates(classRef,
+      {all: profile, topHalf: top}, false);
+    const rootPath = `${classRef.path}/aggregateProfiles/biathlon-all`;
+    const root = mockState.docs.get(rootPath);
+    expect(root.sections.timingPoints.length).toBeGreaterThan(1);
+    expect(root.timingPoints).toEqual({});
+    for (const id of root.sections.timingPoints) {
+      const section = mockState.docs.get(`${rootPath}/sections/${id}`);
+      expect(Buffer.byteLength(JSON.stringify(section))).toBeLessThan(400000);
+    }
+    const smaller = {...profile, timingPoints: {one: profile.timingPoints["1"]}};
+    await mod._test.publishBiathlonAggregates(classRef,
+      {all: smaller, topHalf: {...smaller, kind: "biathlon-top-half"}}, false);
+    expect(mockState.docs.get(rootPath).timingPoints)
+      .toEqual({one: profile.timingPoints["1"]});
+    expect(mockState.docs.get(rootPath).sections).toBeUndefined();
+    expect([...mockState.docs.keys()].some((path) =>
+      path.startsWith(`${rootPath}/sections/`))).toBe(false);
+    await mod._test.publishBiathlonAggregates(classRef, null, false);
+    expect(mockState.docs.has(rootPath)).toBe(false);
+    expect([...mockState.docs.keys()].some((path) =>
+      path.startsWith(`${rootPath}/sections/`))).toBe(false);
+  });
+
+  test("reimport removes biathlon profiles when a class is no longer biathlon", async () => {
+    const mod = loadModule();
+    const fixtures = buildImportFixtures();
+    const args = {eventId: 80088, classId: 1224375,
+      eventUrl: "https://example.test/event",
+      participantsUrl: "https://example.test/participants",
+      timesUrlBase:
+        "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375"};
+    mockAxiosGet.mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants})
+      .mockResolvedValueOnce({data: fixtures.stationOneTimes})
+      .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+    await mod._import(args);
+    const classPath = "events/80088/stages/330315/classes/1224375";
+    expect(mockState.docs.has(`${classPath}/aggregateProfiles/biathlon-all`))
+      .toBe(true);
+    fixtures.event.Gren = {Kode: "RUN", Navn: "Løping"};
+    mockAxiosGet.mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants})
+      .mockResolvedValueOnce({data: fixtures.stationOneTimes})
+      .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+    await mod._import(args);
+    expect(mockState.docs.has(`${classPath}/aggregateProfiles/biathlon-all`))
+      .toBe(false);
+    expect(mockState.docs.has(`${classPath}/aggregateProfiles/biathlon-top-half`))
+      .toBe(false);
+    expect(mockState.docs.get(classPath).biathlonTopHalf).toBeUndefined();
+  });
+
   test("importEqTimingFromUrls writes splitDefs and results", async () => {
     const mod = loadModule();
     const fixtures = buildImportFixtures();
@@ -1414,6 +1917,21 @@ describe("eq importer core import", () => {
     expect(result.ok).toBe(true);
     expect(result.importedSplitDefs).toBe(2);
     expect(result.importedResults).toBe(1);
+    const aggregateBase =
+      "events/80088/stages/330315/classes/1224375/aggregateProfiles";
+    const allProfile = mockState.docs.get(`${aggregateBase}/biathlon-all`);
+    const topProfile = mockState.docs.get(`${aggregateBase}/biathlon-top-half`);
+    expect(allProfile).toMatchObject({schemaVersion: 1,
+      kind: "biathlon-all", finishersCount: 1, cohortCount: 1});
+    expect(topProfile).toMatchObject({schemaVersion: 1,
+      kind: "biathlon-top-half", finishersCount: 1, cohortCount: 1});
+    expect(mockState.docs.get(
+      "events/80088/stages/330315/classes/1224375")
+        .biathlonTopHalf).toEqual({version: 1,
+      finishersCount: 1, cohortCount: 1,
+      metrics: expect.objectContaining({
+        finishTimeMs: {mean: 120000, count: 1},
+      })});
     expect(mockState.docs.get("clubs/club:90001")).toMatchObject({
       clubId: "club:90001",
       name: "Oslo Skiklubb",
@@ -1460,7 +1978,6 @@ describe("eq importer core import", () => {
       schoolIds: ["school:3001"],
       primaryTeamId: "team:4001",
       teamIds: ["team:4001"],
-      birthYear: 1815,
       events: [
         {
           eventId: 80088,
@@ -1468,8 +1985,6 @@ describe("eq importer core import", () => {
           classId: 1224375,
           className: "K17",
           rank: 1,
-          skiRank: 1,
-          netSkiRank: 1,
         },
       ],
     });
@@ -1506,7 +2021,6 @@ describe("eq importer core import", () => {
 
     const resultDoc = mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101");
     expect(resultDoc).toMatchObject({
-      participantUid: 101,
       athleteId: "athlete:1001",
       clubId: "club:90001",
       clubName: "Oslo Skiklubb",
@@ -1516,16 +2030,34 @@ describe("eq importer core import", () => {
       teamName: "Team Oslo",
       name: "Ada Lovelace",
       className: "K17",
-      arrangementUid: 80088,
-      athleteSourceUid: 1001,
-      etappeDeltakerUid: 9001,
       rank: 1,
       totalMs: 120000,
       totalText: "2:00.0",
     });
-    expect(resultDoc.analysis).toEqual(expect.any(Object));
-    expect(resultDoc.analysis.biathlon.metrics.hitsTotal).toBeUndefined();
-    expect(resultDoc.analysis.biathlon.passes.shoot1.hits).toBeUndefined();
+    expect(resultDoc.participantUid).toBeUndefined();
+    expect(resultDoc.etappeDeltakerUid).toBeUndefined();
+    expect(resultDoc.entrant.participantUid).toBeUndefined();
+    expect(resultDoc.entrant.name).toBe("Ada Lovelace");
+    expect(resultDoc.registration).toBeUndefined();
+    expect(resultDoc.birthYear).toBeUndefined();
+    expect(resultDoc.age).toBeUndefined();
+    expect(resultDoc.timingIds).toBeUndefined();
+    expect(resultDoc.analysis).toBeUndefined();
+    expect(resultDoc.analysisSummary).toEqual(expect.any(Object));
+    expect(resultDoc.analysisSummary.biathlon.metrics).toMatchObject({
+      skiTimeMs: 120000,
+      netSkiTimeMs: 120000,
+    });
+    expect(resultDoc.analysisSummary.biathlon.laps.lap1).toMatchObject({
+      skiMs: 120000,
+      startCode: "start",
+      endCode: "Maal",
+    });
+    const privateAnalysisDoc = mockState.docs.get(
+      "events/80088/stages/330315/classes/1224375/results/101/privateAnalysis/current",
+    );
+    expect(privateAnalysisDoc.analysis.biathlon.metrics.hitsTotal).toBeUndefined();
+    expect(privateAnalysisDoc.analysis.biathlon.passes.shoot1.hits).toBeUndefined();
     expect(resultDoc.shooting).toBeUndefined();
     expect(resultDoc.athlete).toBeUndefined();
     expect(resultDoc.participant).toBeUndefined();
@@ -1546,6 +2078,24 @@ describe("eq importer core import", () => {
         cumRank: 1,
       }),
     ]));
+
+    mockAxiosGet
+      .mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants})
+      .mockResolvedValueOnce({data: fixtures.stationOneTimes})
+      .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+    const unchanged = await mod._import({
+      eventId: 80088,
+      classId: 1224375,
+      eventUrl: "https://example.test/event",
+      participantsUrl: "https://example.test/participants",
+      timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375",
+    });
+    expect(unchanged).toMatchObject({
+      changedResults: 0,
+      changedClubs: 0,
+      changedAthletes: 0,
+    });
   });
 
   test("importEqTimingFromUrls writes legRank on each raw pass", async () => {
@@ -1664,31 +2214,56 @@ describe("eq importer core import", () => {
     ]));
   });
 
-  test("importEqTimingFromUrls tolerates null station payloads from EQ Timing", async () => {
+  test("raw pass ranks exclude DNS, DNF and zero times without removing results", () => {
+    const mod = loadModule();
+    const results = [
+      {status: "DNS", timingPoints: [{setupUid: 1, cumMs: 0, legMs: 0}]},
+      {status: "DNF", timingPoints: [{setupUid: 1, cumMs: 1, legMs: 1}]},
+      {status: "TIME", timingPoints: [{setupUid: 1, cumMs: 0, legMs: 0}]},
+      {status: "TIME", timingPoints: [{setupUid: 1, cumMs: 2000, legMs: 500}]},
+      {status: "TIME", timingPoints: [{setupUid: 1, cumMs: 2000, legMs: 500}]},
+      {status: "TIME", timingPoints: [{setupUid: 1, cumMs: 3000, legMs: 700}]},
+    ];
+
+    mod._test.addRawPassRanks(results);
+
+    for (const result of results.slice(0, 3)) {
+      expect(result.timingPoints[0]).toMatchObject({
+        cumRank: null,
+        cumRankCount: null,
+        legRank: null,
+        legRankCount: null,
+      });
+    }
+    expect(results[3].timingPoints[0]).toMatchObject({
+      cumRank: 1, cumRankCount: 3, legRank: 1, legRankCount: 3,
+    });
+    expect(results[4].timingPoints[0]).toMatchObject({
+      cumRank: 1, cumRankCount: 3, legRank: 1, legRankCount: 3,
+    });
+    expect(results[5].timingPoints[0]).toMatchObject({
+      cumRank: 3, cumRankCount: 3, legRank: 3, legRankCount: 3,
+    });
+    expect(results).toHaveLength(6);
+  });
+
+  test("importEqTimingFromUrls rejects null station payloads instead of reporting success", async () => {
     const mod = loadModule();
     const fixtures = buildImportFixtures();
 
     mockAxiosGet
       .mockResolvedValueOnce({data: fixtures.event})
       .mockResolvedValueOnce({data: fixtures.participants})
-      .mockResolvedValueOnce({data: null})
-      .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+      .mockResolvedValueOnce({data: null});
 
-    const result = await mod._import({
+    await expect(mod._import({
       eventId: 80088,
       classId: 1224375,
       eventUrl: "https://example.test/event",
       participantsUrl: "https://example.test/participants",
       timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375",
-    });
-
-    expect(result.ok).toBe(true);
-    expect(result.normalizedCount).toBe(1);
-    expect(mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101")).toMatchObject({
-      participantUid: 101,
-      totalMs: 120000,
-      totalText: "2:00.0",
-    });
+    })).rejects.toThrow("INVALID_TIMING_RESPONSE");
+    expect(mockState.docs.has("events/80088/stages/330315/classes/1224375/results/101")).toBe(false);
   });
 
   test("importEqTimingFromUrls keeps participant metadata without writing participant docs", async () => {
@@ -1806,7 +2381,6 @@ describe("eq importer core import", () => {
       }),
     });
     expect(mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101")).toMatchObject({
-      participantUid: 101,
       totalMs: 120000,
       totalText: "2:00.0",
       timingPoints: expect.arrayContaining([
@@ -1900,10 +2474,11 @@ describe("eq importer core import", () => {
     });
 
     expect(mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101")).toMatchObject({
-      participantUid: 101,
       totalMs: 120000,
       timingPoints: expect.arrayContaining([expect.objectContaining({cumMs: 120000})]),
     });
+    const preservedAggregate = mockState.docs.get(
+      "events/80088/stages/330315/classes/1224375/aggregateProfiles/biathlon-all");
 
     mockAxiosGet
       .mockResolvedValueOnce({data: fixtures.event})
@@ -1920,6 +2495,9 @@ describe("eq importer core import", () => {
     });
 
     expect(result.importedResults).toBe(0);
+    expect(mockState.docs.get(
+      "events/80088/stages/330315/classes/1224375/aggregateProfiles/biathlon-all"))
+        .toEqual(preservedAggregate);
     expect(result.staleResultCleanup).toMatchObject({
       deleted: 0,
       scanned: 1,
@@ -1930,7 +2508,6 @@ describe("eq importer core import", () => {
     });
     expect(mockState.docs.get("events/80088/classes/1224375").results).toBeUndefined();
     expect(mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101")).toMatchObject({
-      participantUid: 101,
       totalMs: 120000,
       timingPoints: expect.arrayContaining([expect.objectContaining({cumMs: 120000})]),
     });
@@ -1976,7 +2553,6 @@ describe("eq importer core import", () => {
     expect(mockState.docs.has("events/80088/classes/1224375/participants/101")).toBe(false);
     const unmappedResultDoc = mockState.docs.get("events/80088/stages/330315/classes/1224375/results/9901");
     expect(unmappedResultDoc).toMatchObject({
-      etappeDeltakerUid: unmappedEdUid,
       hasTimingData: true,
       totalMs: 120000,
       timingPoints: expect.arrayContaining([
@@ -1998,12 +2574,8 @@ describe("eq importer core import", () => {
     mockAxiosGet
       .mockResolvedValueOnce({data: fixtures.event})
       .mockResolvedValueOnce({data: fixtures.participants})
-      .mockResolvedValueOnce({data: fixtures.event})
-      .mockResolvedValueOnce({data: fixtures.participants})
       .mockResolvedValueOnce({data: fixtures.shortStationOneTimes})
       .mockResolvedValueOnce({data: fixtures.shortStationTwoTimes})
-      .mockResolvedValueOnce({data: fixtures.event})
-      .mockResolvedValueOnce({data: fixtures.participants})
       .mockResolvedValueOnce({data: fixtures.longStationOneTimes})
       .mockResolvedValueOnce({data: fixtures.longStationTwoTimes});
 
@@ -2041,6 +2613,12 @@ describe("eq importer core import", () => {
       lagId: "lagname:vestland lag",
       timingPoints: expect.arrayContaining([expect.objectContaining({code: "Lang-Maal"})]),
     });
+    expect(mockState.docs.get(
+      "events/80088/stages/330315/classes/1224375/aggregateProfiles/biathlon-all")
+        .metrics.finishTimeMs).toEqual({mean: 120000, count: 1});
+    expect(mockState.docs.get(
+      "events/80088/stages/330419/classes/1224376/aggregateProfiles/biathlon-all")
+        .metrics.finishTimeMs).toEqual({mean: 210000, count: 1});
     expect(mockState.docs.get("clubs/club:90001")).toMatchObject({
       clubId: "club:90001",
     });
@@ -2073,11 +2651,7 @@ describe("eq importer core import", () => {
     mockAxiosGet
       .mockResolvedValueOnce({data: fixtures.event})
       .mockResolvedValueOnce({data: fixtures.participants})
-      .mockResolvedValueOnce({data: fixtures.event})
-      .mockResolvedValueOnce({data: fixtures.participants})
       .mockResolvedValueOnce({data: fixtures.womenStationOneTimes})
-      .mockResolvedValueOnce({data: fixtures.event})
-      .mockResolvedValueOnce({data: fixtures.participants})
       .mockResolvedValueOnce({data: fixtures.womenStationOneTimes})
       .mockResolvedValueOnce({data: fixtures.womenStationTwoTimes});
 
@@ -2108,7 +2682,6 @@ describe("eq importer core import", () => {
       primaryStageId: "7001",
     });
     expect(mockState.docs.get("events/80088/stages/7002/classes/5001/results/501")).toMatchObject({
-      participantUid: 501,
       totalMs: 140000,
       timingPoints: expect.arrayContaining([
         expect.objectContaining({code: "Kvinner-Maal", cumMs: 140000}),
@@ -2124,12 +2697,8 @@ describe("eq importer core import", () => {
     mockAxiosGet
       .mockResolvedValueOnce({data: fixtures.event})
       .mockResolvedValueOnce({data: fixtures.participants})
-      .mockResolvedValueOnce({data: fixtures.event})
-      .mockResolvedValueOnce({data: fixtures.participants})
       .mockResolvedValueOnce({data: fixtures.seniorStationOneTimes})
       .mockResolvedValueOnce({data: fixtures.seniorStationTwoTimes})
-      .mockResolvedValueOnce({data: fixtures.event})
-      .mockResolvedValueOnce({data: fixtures.participants})
       .mockResolvedValueOnce({data: fixtures.u23StationOneTimes})
       .mockResolvedValueOnce({data: fixtures.u23StationTwoTimes});
 
@@ -2158,7 +2727,6 @@ describe("eq importer core import", () => {
       etappeUID: 314477,
     });
     expect(mockState.docs.get("events/74689/stages/314477/classes/1146503/results/9801")).toMatchObject({
-      etappeDeltakerUid: 9801,
       totalMs: 660000,
       timingPoints: expect.arrayContaining([
         expect.objectContaining({code: "Maal", cumMs: 660000}),
@@ -2241,6 +2809,11 @@ describe("eq importer core import", () => {
       expect.objectContaining({legNumber: 1, name: "Ada Lovelace"}),
       expect.objectContaining({legNumber: 2, name: "Grace Hopper"}),
     ]);
+    expect(resultDoc.team.members).toEqual(
+        expect.not.arrayContaining([
+          expect.objectContaining({athleteSourceUid: expect.anything()}),
+        ]),
+    );
     expect(resultDoc.timingPoints).toEqual(expect.arrayContaining([
       expect.objectContaining({legNumber: 1}),
       expect.objectContaining({legNumber: 2}),
@@ -2292,7 +2865,11 @@ describe("eq importer core import", () => {
     });
     expect(resultDoc.team.members).toHaveLength(2);
     expect(resultDoc.team.legs).toHaveLength(2);
-    expect(resultDoc.analysis.biathlon).toEqual(expect.any(Object));
+    expect(resultDoc.analysis).toBeUndefined();
+    expect(resultDoc.analysisSummary.biathlon).toEqual(expect.any(Object));
+    expect(mockState.docs.get(
+      "events/80088/stages/330315/classes/1224375/results/101/privateAnalysis/current",
+    ).analysis.biathlon).toEqual(expect.any(Object));
     expect(resultDoc.timingPoints).toEqual(expect.arrayContaining([
       expect.objectContaining({code: "IS1", kind: "rangeApproach", legNumber: 1}),
       expect.objectContaining({code: "Maal", kind: "finish", legNumber: 2}),
@@ -2301,12 +2878,70 @@ describe("eq importer core import", () => {
 });
 
 describe("eq importer http handlers", () => {
+  test("verified import keeps a published athlete without inventing a time or DNS", async () => {
+    const mod = loadModule();
+    const fixtures = buildImportFixtures();
+    mockAxiosGet.mockImplementation(async (url) => ({data: {
+      Items: url.includes("justTimeData=false") ? [{
+        EtappeDeltakerUID: 9001, Deltaker: fixtures.participants["101"],
+      }] : [],
+    }}));
+    const result = await mod._import({
+      eventId: 80088, classId: 1224375, event: fixtures.event,
+      participants: fixtures.participants, verifyCoverage: true,
+      timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375",
+    });
+    expect(result.importedResults).toBe(1);
+    const stored = mockState.docs.get("events/80088/stages/330315/classes/1224375/results/101");
+    expect(stored.totalMs).toBeUndefined();
+    expect(stored.status).not.toBe("DNS");
+    expect(stored.registration).toBeUndefined();
+    expect(mockState.docs.get("events/80088/stages/330315/classes/1224375").hasTimingData).toBe(false);
+  });
+
+  test("unresolved published identities fail their target but allow the next stage", async () => {
+    const mod = loadModule();
+    const fixtures = buildDuplicateClassAcrossDistancesFixtures();
+    mockAxiosGet.mockImplementation(async (url) => {
+      if (url.includes("/Event/")) return {data: fixtures.event};
+      if (url.includes("/Contestants/")) return {data: fixtures.participants};
+      if (url.includes("/7001/") && url.includes("justTimeData=false")) {
+        return {data: {Items: [{EtappeDeltakerUID: 1}]}};
+      }
+      return {data: {Items: []}};
+    });
+    const started = makeResponse();
+    await mod.startImportEvent({method: "POST", body: {eventId: 80088}}, started);
+    const {jobId, runId} = started.body;
+    for (const classIndex of [0, 1]) {
+      const res = makeResponse();
+      await mod.runImportEventChunk({method: "POST", body: {
+        jobId, runId, eventId: 80088, classIndex, classCount: 1,
+      }}, res);
+      expect(res.statusCode).toBe(200);
+    }
+    expect(mockState.docs.get(`importJobs/${jobId}`)).toMatchObject({
+      status: "partial", done: false, allTargetsAttempted: true,
+      failedTargetCount: 1, completedTargetCount: 1,
+    });
+  });
+
+  test("worker deploy grants invocation only to its Cloud Tasks identity", () => {
+    const mod = loadModule();
+    const {onRequest} = require("firebase-functions/v2/https");
+    const registration = onRequest.mock.calls.find((args) =>
+      args[args.length - 1] === mod.runImportEventChunk);
+    expect(registration[0].invoker).toEqual([
+      process.env.TASKS_SERVICE_ACCOUNT_EMAIL ||
+        `import-tasks@${process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT}.iam.gserviceaccount.com`,
+    ]);
+  });
   test("importFromEqTimingUrls rejects non-POST requests", async () => {
     const mod = loadModule();
     const req = {method: "GET"};
     const res = makeResponse();
 
-    await mod.importFromEqTimingUrls(req, res);
+    await mod._test.importFromEqTimingUrlsHandler(req, res);
 
     expect(res.status).toHaveBeenCalledWith(405);
     expect(res.send).toHaveBeenCalledWith("Use POST");
@@ -2329,6 +2964,7 @@ describe("eq importer http handlers", () => {
   test("getImportStatus returns 404 for unknown jobs", async () => {
     const mod = loadModule();
     const req = {
+      method: "GET",
       query: {
         jobId: "missing-job",
       },
@@ -2339,6 +2975,47 @@ describe("eq importer http handlers", () => {
 
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({error: "Job not found"});
+  });
+
+  test("getImportStatus rejects non-GET requests", async () => {
+    const mod = loadModule();
+    const req = {method: "POST", query: {jobId: "missing-job"}};
+    const res = makeResponse();
+
+    await mod.getImportStatus(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(405);
+    expect(res.send).toHaveBeenCalledWith("Use GET");
+  });
+
+  test("runImportEventChunk rejects a payload that does not match the job", async () => {
+    const mod = loadModule();
+    await mod._test.getDb().collection("importJobs").doc("event-80088").set({
+      jobId: "event-80088",
+      eventId: 80088,
+      classCount: 1,
+      status: "queued",
+      nextClassIndex: 0,
+      done: false,
+    });
+    const req = {
+      method: "POST",
+      body: {
+        jobId: "event-80088",
+        eventId: 80089,
+        classIndex: 0,
+        classCount: 1,
+      },
+    };
+    const res = makeResponse();
+
+    await mod.runImportEventChunk(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(409);
+    expect(res.json).toHaveBeenCalledWith({
+      error: "Chunk does not match the import job",
+    });
+    expect(mockState.docs.get("importJobs/event-80088").status).toBe("queued");
   });
 
   test("runImportEventChunk clears stale lastError after a successful retry", async () => {
@@ -2370,6 +3047,9 @@ describe("eq importer http handlers", () => {
     mockAxiosGet
       .mockResolvedValueOnce({data: fixtures.event})
       .mockResolvedValueOnce({data: fixtures.participants})
+      .mockResolvedValueOnce({data: {Items: fixtures.stationTwoTimes.Items.map((row) => ({
+        ...row, Deltaker: fixtures.participants["101"],
+      })), TotalItems: 1}})
       .mockResolvedValueOnce({data: fixtures.stationOneTimes})
       .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
 
@@ -2377,6 +3057,7 @@ describe("eq importer http handlers", () => {
       method: "POST",
       body: {
         jobId,
+        runId: startRes.body.runId,
         eventId: 80088,
         classIndex: 0,
         classCount: 1,
@@ -2398,6 +3079,146 @@ describe("eq importer http handlers", () => {
     expect(mockState.docs.get("importJobs/" + jobId).lastError).toBeUndefined();
   });
 
+  test("runImportEventChunk queues the next chunk after a partial import", async () => {
+    const mod = loadModule();
+    const fixtures = buildDuplicateClassAcrossDistancesFixtures();
+    mockAxiosGet.mockImplementation(async (url) => {
+      if (url.includes("/Event/")) return {data: fixtures.event};
+      if (url.includes("/Contestants/")) return {data: fixtures.participants};
+      return {data: {Items: []}};
+    });
+    await mod._test.getDb().collection("importJobs").doc("event-80088").set({
+      jobId: "event-80088",
+      eventId: 80088,
+      classCount: 1,
+      status: "queued",
+      nextClassIndex: 0,
+      done: false,
+    });
+
+    const res = makeResponse();
+    await mod.runImportEventChunk({
+      method: "POST",
+      body: {jobId: "event-80088", eventId: 80088, classIndex: 0, classCount: 1},
+    }, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ok: true}));
+    expect(mockState.docs.get("importJobs/event-80088")).toMatchObject({
+      status: "queued",
+      done: false,
+      nextClassIndex: 1,
+    });
+    expect(mockCreateTask).toHaveBeenCalledTimes(1);
+  });
+
+  test("runImportEventChunk recovers a stuck running job at its next chunk", async () => {
+    const mod = loadModule();
+    const fixtures = buildDuplicateClassAcrossDistancesFixtures();
+    mockAxiosGet.mockImplementation(async (url) => {
+      if (url.includes("/Event/")) return {data: fixtures.event};
+      if (url.includes("/Contestants/")) return {data: fixtures.participants};
+      return {data: {Items: []}};
+    });
+    await mod._test.getDb().collection("importJobs").doc("event-80088").set({
+      jobId: "event-80088",
+      eventId: 80088,
+      classCount: 1,
+      status: "running",
+      nextClassIndex: 1,
+      done: false,
+    });
+
+    const res = makeResponse();
+    await mod.runImportEventChunk({
+      method: "POST",
+      body: {jobId: "event-80088", eventId: 80088, classIndex: 1, classCount: 1},
+    }, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ok: true}));
+    expect(mockState.docs.get("importJobs/event-80088")).toMatchObject({
+      status: "done",
+      done: true,
+      nextClassIndex: 2,
+    });
+  });
+
+  test("two chunks preserve separate reports for the same class in two stages", async () => {
+    const mod = loadModule();
+    const fixtures = buildDuplicateClassAcrossDistancesFixtures();
+    mockAxiosGet.mockImplementation(async (url) => {
+      if (url.includes("/Event/")) return {data: fixtures.event};
+      if (url.includes("/Contestants/")) return {data: fixtures.participants};
+      return {data: {Items: []}};
+    });
+    const started = makeResponse();
+    await mod.startImportEvent({method: "POST", body: {eventId: 80088}}, started);
+    const {jobId, runId} = started.body;
+    for (const classIndex of [0, 1]) {
+      const res = makeResponse();
+      await mod.runImportEventChunk({method: "POST",
+        body: {jobId, runId, eventId: 80088, classCount: 1, classIndex}}, res);
+      expect(res.statusCode).toBe(200);
+      expect(res.body.ok).toBe(true);
+    }
+    const job = mockState.docs.get(`importJobs/${jobId}`);
+    expect(job.status).toBe("done");
+    expect(job.completedTargetCount).toBe(2);
+    for (const key of ["7001_5001", "7002_5001"]) {
+      expect(mockState.docs.get(`importJobs/${jobId}/runs/${runId}/targets/${key}`).status).toBe("done");
+    }
+    expect(job.leaseOwner).toBeUndefined();
+  });
+
+  test("worker acknowledges an old run without fetching or writing results", async () => {
+    const mod = loadModule();
+    await mod._test.getDb().collection("importJobs").doc("event-80088").set({
+      eventId: 80088, classCount: 1, nextClassIndex: 0,
+      status: "queued", runId: "new-run",
+    });
+    const writesBefore = mockState.writes.length;
+    const res = makeResponse();
+    await mod.runImportEventChunk({method: "POST", body: {
+      jobId: "event-80088", eventId: 80088, classCount: 1,
+      classIndex: 0, runId: "old-run",
+    }}, res);
+    expect(res.body.skipped).toBe(true);
+    expect(mockState.writes).toHaveLength(writesBefore);
+    expect(mockAxiosGet).not.toHaveBeenCalled();
+    expect(mockCreateTask).not.toHaveBeenCalled();
+  });
+
+  test("failed queue delivery preserves progress and retry dispatches without reimport", async () => {
+    const mod = loadModule();
+    const fixtures = buildDuplicateClassAcrossDistancesFixtures();
+    mockAxiosGet.mockImplementation(async (url) => {
+      if (url.includes("/Event/")) return {data: fixtures.event};
+      if (url.includes("/Contestants/")) return {data: fixtures.participants};
+      return {data: {Items: []}};
+    });
+    const started = makeResponse();
+    await mod.startImportEvent({method: "POST", body: {eventId: 80088}}, started);
+    const {jobId, runId} = started.body;
+    mockCreateTask.mockRejectedValueOnce(Object.assign(new Error("Unavailable"), {code: 14}));
+    const request = {method: "POST", body: {
+      jobId, runId, eventId: 80088, classIndex: 0, classCount: 1,
+    }};
+    const failed = makeResponse();
+    await mod.runImportEventChunk(request, failed);
+    expect(failed.statusCode).toBe(500);
+    expect(mockState.docs.get(`importJobs/${jobId}`)).toMatchObject({
+      status: "queued", nextClassIndex: 1,
+      pendingDispatch: {runId, classIndex: 1},
+    });
+    const callsBefore = mockAxiosGet.mock.calls.length;
+    const retry = makeResponse();
+    await mod.runImportEventChunk(request, retry);
+    expect(retry.statusCode).toBe(200);
+    expect(mockAxiosGet).toHaveBeenCalledTimes(callsBefore);
+    expect(mockState.docs.get(`importJobs/${jobId}`).pendingDispatch).toBeUndefined();
+    const lastTwo = mockCreateTask.mock.calls.slice(-2);
+    expect(lastTwo[0][0].task.name).toBe(lastTwo[1][0].task.name);
+  });
+
   test("startImportEvent enqueues a job and returns queued response", async () => {
     const mod = loadModule();
     const fixtures = buildDuplicateClassAcrossDistancesFixtures();
@@ -2416,6 +3237,20 @@ describe("eq importer http handlers", () => {
     await mod.startImportEvent(req, res);
 
     expect(mockCreateTask).toHaveBeenCalledTimes(1);
+    expect(mockQueuePath).toHaveBeenCalledWith(
+      process.env.GCLOUD_PROJECT,
+      "europe-west1",
+      "imports",
+    );
+    expect(mockCreateTask).toHaveBeenCalledWith(expect.objectContaining({
+      task: expect.objectContaining({
+        httpRequest: expect.objectContaining({
+          oidcToken: expect.objectContaining({
+            audience: expect.stringContaining("europe-west1"),
+          }),
+        }),
+      }),
+    }));
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       ok: true,
       eventId: 80088,
@@ -2425,18 +3260,32 @@ describe("eq importer http handlers", () => {
     const jobId = res.json.mock.calls[0][0].jobId;
     expect(mockState.docs.get("importJobs/" + jobId)).toMatchObject({
       eventId: 80088,
-      classOverview: [
-        expect.objectContaining({
-          etappeUid: 7001,
-          classId: 5001,
-          contestantCount: 0,
-        }),
-        expect.objectContaining({
-          etappeUid: 7002,
-          classId: 5001,
-          contestantCount: 1,
-        }),
-      ],
+      manifestVersion: 1,
+      targetCount: 2,
+    });
+
+    mockAxiosGet
+      .mockResolvedValueOnce({data: fixtures.event})
+      .mockResolvedValueOnce({data: fixtures.participants});
+    const duplicateRes = makeResponse();
+    await mod.startImportEvent(req, duplicateRes);
+    expect(duplicateRes.statusCode).toBe(409);
+    expect(mockCreateTask).toHaveBeenCalledTimes(1);
+  });
+
+  test("summarizes participant count and valid age range for event filters", () => {
+    const mod = loadModule();
+    const summary = mod._test.buildEventParticipantSummary({
+      "1": {UID: 1, Alder: 42},
+      "2": {UID: 2, Alder: "12"},
+      "3": {UID: 3, Alder: 121},
+      "4": {UID: 4, Alder: null},
+    });
+
+    expect(summary).toEqual({
+      participantCount: 4,
+      ageFrom: 12,
+      ageTo: 42,
     });
   });
 

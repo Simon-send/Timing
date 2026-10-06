@@ -19,14 +19,15 @@ import 'athlete_stage_results_panel.dart';
 import 'athlete_summary_panel.dart';
 import 'result_detail_extensions.dart';
 
-typedef _RelayRankResultsRequest = ({
+typedef _FullClassResultsRequest = ({
   String eventId,
   String classId,
   String? stageId,
 });
 
-final _relayRankResultsProvider = FutureProvider.autoDispose
-    .family<List<RaceResult>, _RelayRankResultsRequest>((ref, request) {
+final _fullClassResultsProvider = FutureProvider.autoDispose
+    .family<List<RaceResult>, _FullClassResultsRequest>((ref, request) {
+      ref.watch(appDataRefreshProvider);
       final repository = ref.watch(resultsRepositoryProvider);
       final stageId = request.stageId;
       if (stageId == null) {
@@ -47,6 +48,7 @@ class AthleteDetailPage extends ConsumerStatefulWidget {
     required this.resultId,
     this.stageId,
     this.selectedSplitId,
+    this.selectedSplitRange,
     this.relayLegNumber,
     this.compareWithResultId,
     this.compareWithRelayLegNumber,
@@ -57,6 +59,7 @@ class AthleteDetailPage extends ConsumerStatefulWidget {
   final String resultId;
   final String? stageId;
   final String? selectedSplitId;
+  final SplitRangeSelection? selectedSplitRange;
   final int? relayLegNumber;
   final String? compareWithResultId;
   final int? compareWithRelayLegNumber;
@@ -129,6 +132,7 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
             stageId: widget.stageId,
             relayLegNumber: widget.relayLegNumber,
             splitId: widget.selectedSplitId,
+            splitRange: widget.selectedSplitRange,
           ),
         ),
         icon: const Icon(Icons.arrow_back),
@@ -138,7 +142,11 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         loading: () =>
             ShellPanel(child: LoadingState(label: l10n.loadingResults)),
         error: (error, _) => ShellPanel(
-          child: ErrorState(title: l10n.couldNotReadResults, error: error),
+          child: ErrorState(
+            title: l10n.couldNotReadResults,
+            error: error,
+            onRetry: () => refreshAppData(ref),
+          ),
         ),
         data: (rawResult) {
           if (rawResult == null) {
@@ -157,6 +165,7 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
               child: ErrorState(
                 title: l10n.couldNotReadResults,
                 error: splitDefs.error!,
+                onRetry: () => refreshAppData(ref),
               ),
             );
           }
@@ -181,20 +190,23 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
               widget.relayLegNumber == null &&
               (rawResult.entrant?.kind == ResultEntrantKind.team ||
                   rawResult.relayMembers.isNotEmpty);
-          final relayRankResults = isRelayTeamDetail
-              ? ref
-                    .watch(
-                      _relayRankResultsProvider((
-                        eventId: widget.eventId,
-                        classId: widget.classId,
-                        stageId: widget.stageId,
-                      )),
-                    )
-                    .asData
-                    ?.value
-              : null;
+          final fullClassResults = ref.watch(
+            _fullClassResultsProvider((
+              eventId: widget.eventId,
+              classId: widget.classId,
+              stageId: widget.stageId,
+            )),
+          );
+          final fullDisplayedClassResults = widget.relayLegNumber == null
+              ? fullClassResults.asData?.value
+              : fullClassResults.asData?.value == null
+              ? null
+              : relayLegRaceResults(
+                  fullClassResults.asData!.value,
+                  widget.relayLegNumber!,
+                );
           final extensionClassResults = isRelayTeamDetail
-              ? relayRankResults ?? const <RaceResult>[]
+              ? fullDisplayedClassResults ?? const <RaceResult>[]
               : displayedClassResults ?? const <RaceResult>[];
           final detailSplitDefs = widget.relayLegNumber == null
               ? splitDefs.asData?.value ?? const <SplitDef>[]
@@ -283,13 +295,29 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
                 );
               }
 
-              final splits = AthleteSplitsPanel(
-                result: result,
-                classResults: displayedClassResults ?? const <RaceResult>[],
-                publicSplitIds: publicSplitIds,
-                splitDefs: detailSplitDefs,
-                onSplitSelected: _openResultsSplit,
-              );
+              final splits =
+                  fullClassResults.hasError &&
+                      fullClassResults.asData?.value == null
+                  ? ErrorState(
+                      title: l10n.couldNotReadResults,
+                      error: fullClassResults.error!,
+                      onRetry: () => ref.invalidate(
+                        _fullClassResultsProvider((
+                          eventId: widget.eventId,
+                          classId: widget.classId,
+                          stageId: widget.stageId,
+                        )),
+                      ),
+                    )
+                  : fullDisplayedClassResults == null
+                  ? LoadingState(label: l10n.loadingResults)
+                  : AthleteSplitsPanel(
+                      result: result,
+                      classResults: fullDisplayedClassResults,
+                      publicSplitIds: publicSplitIds,
+                      splitDefs: detailSplitDefs,
+                      onSplitSelected: _openResultsSplit,
+                    );
               final details = Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -387,6 +415,7 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         child: ErrorState(
           title: 'Kunne ikke lese utovere',
           error: classResults.error!,
+          onRetry: () => refreshAppData(ref),
         ),
       );
     }
@@ -444,6 +473,7 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         stageId: widget.stageId,
         relayLegNumber: widget.relayLegNumber,
         splitId: widget.selectedSplitId,
+        splitRange: widget.selectedSplitRange,
         compareBaseClassId: widget.classId,
         compareBaseResultId: widget.resultId,
         compareBaseRelayLegNumber: widget.relayLegNumber,
@@ -460,12 +490,12 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
         stageId: widget.stageId,
         relayLegNumber: widget.relayLegNumber,
         splitId: widget.selectedSplitId,
+        splitRange: widget.selectedSplitRange,
       ),
     );
   }
 
   void _openResultsSplit(String splitId) {
-    ref.read(splitRangeSelectionProvider.notifier).state = null;
     ref
         .read(settingsControllerProvider.notifier)
         .setDefaultClass(widget.classId);

@@ -611,6 +611,7 @@ _SplitGraphData? _buildSplitGraph({
     for (final split in splitOptions)
       if (rows.any(
         (row) =>
+            row.result.isFinished &&
             effectiveSplitLegMs(row.result, split.id) != null &&
             row.result.splitValues[split.id]?.cumMs != null,
       ))
@@ -635,6 +636,7 @@ _SplitGraphData? _buildSplitGraph({
   );
   final series = <_SplitSeries>[];
   for (final row in rows) {
+    if (!row.result.isFinished) continue;
     final split = row.result.splitValues[selectedGraphSplitId];
     final legMs = effectiveSplitLegMs(row.result, selectedGraphSplitId);
     final cumMs = split?.cumMs;
@@ -684,6 +686,7 @@ Map<ResultTableRow, int> _ranksByTime(
 ) {
   final timedRows = <({ResultTableRow row, int time})>[];
   for (final row in rows) {
+    if (!row.result.isFinished) continue;
     final time = timeFor(row);
     if (time != null && time > 0) timedRows.add((row: row, time: time));
   }

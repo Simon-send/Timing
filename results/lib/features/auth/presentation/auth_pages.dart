@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,12 +16,16 @@ class LoginPage extends ConsumerStatefulWidget {
 }
 
 class _LoginPageState extends ConsumerState<LoginPage> {
+  static const _googleRedirectPendingPreference =
+      'google_sign_in_redirect_pending';
+
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   var _obscurePassword = true;
   var _isBusy = false;
   String? _error;
+  bool _redirectErrorDismissed = false;
 
   @override
   void dispose() {
@@ -31,6 +36,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final redirect = ref.watch(googleRedirectProvider);
+    final errorMessage =
+        _error ??
+        (!_redirectErrorDismissed && redirect.hasError
+            ? authErrorMessage(redirect.error!)
+            : null);
     return _AuthScaffold(
       title: 'Logg inn',
       subtitle: 'Logg inn med e-post og passord.',
@@ -72,8 +83,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 child: const Text('Glemt passord?'),
               ),
             ),
-            if (_error != null) ...[
-              _AuthNotice(text: _error!, danger: true),
+            if (errorMessage != null) ...[
+              _AuthNotice(text: errorMessage, danger: true),
               const SizedBox(height: 12),
             ],
             FilledButton.icon(
@@ -111,14 +122,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   void _openForgotPassword() {
-    final uri = Uri(
-      path: '/forgot-password',
-      queryParameters: {'email': _emailController.text.trim()},
-    );
-    context.go(uri.toString());
+    context.go('/forgot-password', extra: _emailController.text.trim());
   }
 
   Future<void> _signInWithEmail() async {
+    if (_isBusy) return;
+    _redirectErrorDismissed = true;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     await _run(
       () => ref
@@ -130,11 +139,34 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
-  Future<void> _signInWithGoogle() {
-    return _run(() => ref.read(authRepositoryProvider).signInWithGoogle());
+  Future<void> _signInWithGoogle() async {
+    if (_isBusy) return;
+    _redirectErrorDismissed = true;
+    setState(() {
+      _isBusy = true;
+      _error = null;
+    });
+    final preferences = ref.read(sharedPreferencesProvider);
+    try {
+      if (googleSignInMethodFor(defaultTargetPlatform) ==
+          GoogleSignInMethod.redirect) {
+        await preferences.setBool(_googleRedirectPendingPreference, true);
+      }
+      final outcome = await ref.read(authRepositoryProvider).signInWithGoogle();
+      if (outcome == GoogleSignInOutcome.signedIn) {
+        await preferences.remove(_googleRedirectPendingPreference);
+        if (mounted) context.go('/events');
+      }
+    } catch (error) {
+      await preferences.remove(_googleRedirectPendingPreference);
+      if (mounted) setState(() => _error = authErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
   }
 
   Future<void> _run(Future<void> Function() action) async {
+    if (_isBusy) return;
     setState(() {
       _isBusy = true;
       _error = null;
@@ -227,6 +259,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
   }
 
   Future<void> _sendResetEmail() async {
+    if (_isBusy) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() {
       _isBusy = true;
@@ -371,6 +404,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   }
 
   Future<void> _createAccount() async {
+    if (_isBusy) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() {
       _isBusy = true;
@@ -438,69 +472,76 @@ class _AuthScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     return Scaffold(
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned(
-              top: 12,
-              left: 12,
-              child: IconButton.outlined(
-                tooltip: 'Tilbake til resultater',
-                onPressed: () => context.go('/events'),
-                icon: const Icon(Icons.close),
+      backgroundColor: palette.background,
+      body: ColoredBox(
+        color: palette.background,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned(
+                top: 12,
+                left: 12,
+                child: IconButton.outlined(
+                  tooltip: 'Tilbake til resultater',
+                  onPressed: () => context.go('/events'),
+                  icon: const Icon(Icons.close),
+                ),
               ),
-            ),
-            Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Align(
-                            child: Container(
-                              width: 52,
-                              height: 52,
-                              decoration: BoxDecoration(
-                                color: palette.primary,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.person_outline,
-                                color: palette.logoForeground,
+              Center(
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + keyboardInset),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 440),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Align(
+                              child: Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  color: palette.primary,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.person_outline,
+                                  color: palette.logoForeground,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 18),
-                          Text(
-                            title,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
+                            const SizedBox(height: 18),
+                            Text(
+                              title,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            subtitle,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: palette.mutedText),
-                          ),
-                          const SizedBox(height: 24),
-                          child,
-                        ],
+                            const SizedBox(height: 6),
+                            Text(
+                              subtitle,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: palette.mutedText),
+                            ),
+                            const SizedBox(height: 24),
+                            child,
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -545,6 +586,17 @@ class _AuthNotice extends StatelessWidget {
 }
 
 String authErrorMessage(Object error) {
+  if (error is FirebaseException) {
+    // Never log credentials, email addresses, exception messages or tokens.
+    debugPrint('auth: ${error.plugin}/${error.code}');
+    if (error.plugin == 'firebase_app_check' ||
+        error.code == 'recaptcha-error') {
+      return 'Sikkerhetskontrollen kunne ikke fullføres. Prøv igjen.';
+    }
+  }
+  if (error is AuthWebEnvironmentException) {
+    return 'Google-innlogging krever at nettsiden åpnes via http:// eller https://, ikke som en lokal fil.';
+  }
   if (error is EmailNotVerifiedException) {
     return 'E-postadressen er ikke bekreftet. Åpne bekreftelseslenken vi sendte før du logger inn.';
   }
@@ -560,6 +612,18 @@ String authErrorMessage(Object error) {
       'too-many-requests' => 'For mange forsøk. Vent litt før du prøver igjen.',
       'network-request-failed' =>
         'Kunne ikke koble til. Kontroller internettforbindelsen.',
+      'popup-blocked' =>
+        'Nettleseren blokkerte innloggingsvinduet. Tillat popup for dette nettstedet og prøv igjen.',
+      'invalid-app-credential' ||
+      'missing-app-credential' ||
+      'app-check-token-invalid' =>
+        'Sikkerhetskontrollen kunne ikke fullføres. Prøv igjen.',
+      'popup-closed-by-user' || 'redirect-cancelled-by-user' =>
+        'Google-innlogging ble avbrutt. Du kan prøve igjen.',
+      'unauthorized-domain' =>
+        'Dette domenet er ikke godkjent for Google-innlogging ennå.',
+      'web-storage-unsupported' =>
+        'Nettleseren blokkerer lokal lagring. Tillat nettsteddata og prøv igjen.',
       'operation-not-allowed' =>
         'E-postinnlogging er ikke aktivert i Firebase ennå.',
       _ => 'Noe gikk galt. Prøv igjen.',

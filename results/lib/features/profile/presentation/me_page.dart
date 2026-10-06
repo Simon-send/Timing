@@ -9,6 +9,7 @@ import '../../../core/widgets/app_shell.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/loading_state.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../auth/presentation/account_menu.dart';
 import '../../auth/presentation/login_button.dart';
 import '../../events/domain/result_event.dart';
@@ -16,6 +17,7 @@ import '../../results/presentation/result_locations.dart';
 import '../../settings/presentation/settings_menu.dart';
 import '../data/athlete_profile_repository.dart';
 import '../domain/athlete_profile.dart';
+import 'biathlon_comparison_panel.dart';
 import 'race_pacing_profile_panel.dart';
 import 'result_history_panel.dart';
 
@@ -40,7 +42,11 @@ class MePage extends ConsumerWidget {
         loading: () =>
             const ShellPanel(child: LoadingState(label: 'Sjekker innlogging')),
         error: (error, _) => ShellPanel(
-          child: ErrorState(title: 'Kunne ikke lese konto', error: error),
+          child: ErrorState(
+            title: 'Kunne ikke lese konto',
+            error: error,
+            onRetry: () => refreshAppData(ref),
+          ),
         ),
         data: (user) {
           if (user == null) {
@@ -69,11 +75,12 @@ class _LoggedInMeContent extends ConsumerWidget {
         child: ErrorState(
           title: 'Kunne ikke lese utøverkobling',
           error: athleteProfileErrorMessage(error),
+          onRetry: () => refreshAppData(ref),
         ),
       ),
       data: (athleteId) {
         if (athleteId == null) {
-          return ShellPanel(child: _AthleteConnectPanel(uid: user.uid));
+          return ShellPanel(child: AthleteConnectPanel(uid: user.uid));
         }
 
         final profile = ref.watch(athleteProfileProvider(athleteId));
@@ -85,6 +92,7 @@ class _LoggedInMeContent extends ConsumerWidget {
             child: ErrorState(
               title: 'Kunne ikke lese utøver',
               error: athleteProfileErrorMessage(error),
+              onRetry: () => refreshAppData(ref),
             ),
           ),
           data: (profile) {
@@ -99,7 +107,7 @@ class _LoggedInMeContent extends ConsumerWidget {
                           'Koblingen peker på $athleteId, men utøveren finnes ikke i databasen.',
                     ),
                     const SizedBox(height: 18),
-                    _AthleteConnectPanel(uid: user.uid),
+                    AthleteConnectPanel(uid: user.uid),
                   ],
                 ),
               );
@@ -212,6 +220,7 @@ class _LinkedAthleteContent extends ConsumerWidget {
                 child: ErrorState(
                   title: 'Kunne ikke lese løp',
                   error: athleteProfileErrorMessage(error),
+                  onRetry: () => refreshAppData(ref),
                 ),
               ),
             ),
@@ -240,6 +249,17 @@ class _LinkedAthleteContent extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 14),
+                  if (races.any(
+                    (race) => race.isCompletedIndividualBiathlonRace,
+                  )) ...[
+                    ShellPanel(
+                      child: BiathlonComparisonPanel(
+                        races: races,
+                        events: events,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
                   ShellPanel(child: RacePacingProfilePanel(races: races)),
                   const SizedBox(height: 14),
                 ],
@@ -265,7 +285,7 @@ class _LinkedAthleteContent extends ConsumerWidget {
         title: const Text('Koble til utøver'),
         content: SizedBox(
           width: 520,
-          child: _AthleteConnectPanel(
+          child: AthleteConnectPanel(
             uid: user.uid,
             showTitle: false,
             onLinked: () => Navigator.of(dialogContext).pop(),
@@ -637,29 +657,42 @@ class _RaceFact extends StatelessWidget {
   }
 }
 
-class _AthleteConnectPanel extends ConsumerStatefulWidget {
-  const _AthleteConnectPanel({
+class AthleteConnectPanel extends ConsumerStatefulWidget {
+  const AthleteConnectPanel({
+    super.key,
     required this.uid,
+    this.initialName = '',
     this.showTitle = true,
+    this.allowSkip = false,
     this.onLinked,
+    this.onSkipped,
   });
 
   final String uid;
+  final String initialName;
   final bool showTitle;
+  final bool allowSkip;
   final VoidCallback? onLinked;
+  final VoidCallback? onSkipped;
 
   @override
-  ConsumerState<_AthleteConnectPanel> createState() =>
+  ConsumerState<AthleteConnectPanel> createState() =>
       _AthleteConnectPanelState();
 }
 
-class _AthleteConnectPanelState extends ConsumerState<_AthleteConnectPanel> {
-  final _nameController = TextEditingController();
+class _AthleteConnectPanelState extends ConsumerState<AthleteConnectPanel> {
+  late final TextEditingController _nameController;
   var _isSearching = false;
   var _hasSearched = false;
   String? _error;
   String? _linkingAthleteId;
   List<AthleteProfile> _matches = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+  }
 
   @override
   void dispose() {
@@ -670,18 +703,19 @@ class _AthleteConnectPanelState extends ConsumerState<_AthleteConnectPanel> {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final l10n = AppLocalizations.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.showTitle) ...[
-          const Text(
-            'Koble til utøver',
+          Text(
+            l10n.connectAthlete,
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 6),
           Text(
-            'Søk på fullt navn for å koble kontoen din til riktig athlete ID.',
+            l10n.connectAthleteDescription,
             style: TextStyle(color: palette.mutedText),
           ),
           const SizedBox(height: 16),
@@ -689,9 +723,9 @@ class _AthleteConnectPanelState extends ConsumerState<_AthleteConnectPanel> {
         TextField(
           controller: _nameController,
           textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
-            labelText: 'Fullt navn',
-            prefixIcon: Icon(Icons.search),
+          decoration: InputDecoration(
+            labelText: l10n.fullName,
+            prefixIcon: const Icon(Icons.search),
           ),
           onSubmitted: (_) => _search(),
         ),
@@ -701,7 +735,7 @@ class _AthleteConnectPanelState extends ConsumerState<_AthleteConnectPanel> {
           child: FilledButton.icon(
             onPressed: _isSearching ? null : _search,
             icon: const Icon(Icons.search),
-            label: const Text('Søk'),
+            label: Text(l10n.findAthlete),
           ),
         ),
         if (_isSearching) ...[
@@ -714,10 +748,7 @@ class _AthleteConnectPanelState extends ConsumerState<_AthleteConnectPanel> {
         ],
         if (_hasSearched && !_isSearching && _matches.isEmpty) ...[
           const SizedBox(height: 14),
-          const _InlineNotice(
-            icon: Icons.search_off,
-            text: 'Fant ingen utøver med dette fulle navnet.',
-          ),
+          _InlineNotice(icon: Icons.search_off, text: l10n.noAthleteMatches),
         ],
         if (_matches.isNotEmpty) ...[
           const SizedBox(height: 14),
@@ -730,6 +761,15 @@ class _AthleteConnectPanelState extends ConsumerState<_AthleteConnectPanel> {
             ),
           ],
         ],
+        if (widget.allowSkip) ...[
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: _isSearching || _linkingAthleteId != null
+                ? null
+                : _skipForNow,
+            child: Text(l10n.notNow),
+          ),
+        ],
       ],
     );
   }
@@ -738,7 +778,7 @@ class _AthleteConnectPanelState extends ConsumerState<_AthleteConnectPanel> {
     final query = _nameController.text.trim();
     if (query.isEmpty) {
       setState(() {
-        _error = 'Skriv inn fullt navn først.';
+        _error = AppLocalizations.of(context).enterFullName;
         _matches = const [];
         _hasSearched = false;
       });
@@ -786,7 +826,11 @@ class _AthleteConnectPanelState extends ConsumerState<_AthleteConnectPanel> {
           .linkAthlete(uid: widget.uid, athlete: athlete);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${athlete.displayName} er koblet til kontoen')),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).athleteLinked(athlete.displayName),
+          ),
+        ),
       );
       widget.onLinked?.call();
     } catch (error) {
@@ -796,6 +840,25 @@ class _AthleteConnectPanelState extends ConsumerState<_AthleteConnectPanel> {
       if (mounted) {
         setState(() => _linkingAthleteId = null);
       }
+    }
+  }
+
+  Future<void> _skipForNow() async {
+    setState(() {
+      _isSearching = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(athleteProfileRepositoryProvider)
+          .completeAthleteLinkOnboarding(widget.uid);
+      if (!mounted) return;
+      widget.onSkipped?.call();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = athleteProfileErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => _isSearching = false);
     }
   }
 }
@@ -857,7 +920,7 @@ class _AthleteMatchTile extends StatelessWidget {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Koble til'),
+                : Text(AppLocalizations.of(context).connectAthlete),
           ),
         ],
       ),

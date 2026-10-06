@@ -1,7 +1,50 @@
-const functions = require("firebase-functions");
-const { onInit } = require("firebase-functions/v2/core");
+const {onRequest} = require("firebase-functions/v2/https");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
+const firestoreModule = require("firebase-admin/firestore");
 const axios = require("axios");
+const crypto = require("node:crypto");
+const {normalizeParticipants, timingPage, sourceError} = require("./import-source");
+const {LEASE_MS, claimDecision, ownsLease} = require("./import-job-state");
+const {execution, assertWriteLease, assertExecutionBudget} = require("./import-execution");
+const {cachedSource} = require("./import-source-cache");
+const {recoveryDecision, INITIALIZATION_TIMEOUT_MS,
+  canFinalizeInitialization} = require("./import-recovery");
+const {verifyChunk} = require("./import-completeness");
+const {buildBiathlonAggregates, compatibilityTopHalf} =
+  require("./biathlon-aggregate");
+
+const FUNCTION_REGION = "europe-west1";
+const PROJECT_ID = process.env.GCLOUD_PROJECT ||
+  process.env.GCP_PROJECT ||
+  (process.env.NODE_ENV === "test" ? undefined : "time-plotting");
+const RUNTIME_SERVICE_ACCOUNT = process.env.FUNCTIONS_RUNTIME_SERVICE_ACCOUNT ||
+  `eq-import-runtime@${PROJECT_ID}.iam.gserviceaccount.com`;
+const TASKS_SERVICE_ACCOUNT = process.env.TASKS_SERVICE_ACCOUNT_EMAIL ||
+  `import-tasks@${PROJECT_ID}.iam.gserviceaccount.com`;
+const MAX_EXTERNAL_RESPONSE_BYTES = 12 * 1024 * 1024;
+const MAX_STATION_PAGES = 100;
+const MAX_STATION_ITEMS = 100000;
+const FieldValue = admin.firestore && admin.firestore.FieldValue ||
+  firestoreModule.FieldValue;
+
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
+function sendHandlerError(res, error, context) {
+  if (error instanceof HttpError) {
+    res.status(error.status).json({error: error.message});
+    return;
+  }
+
+  console.error(context, error && error.stack || error && error.message || String(error));
+  res.status(500).json({error: "Internal server error"});
+}
 
 let appInitialized = false;
 let db = null;
@@ -12,13 +55,12 @@ function ensureInitialized() {
   appInitialized = true;
 }
 
-onInit(() => {
-  ensureInitialized();
-});
-
 function getDb() {
   ensureInitialized();
-  if (!db) db = admin.firestore();
+  if (!db) {
+    db = typeof admin.firestore === "function" ?
+      admin.firestore() : firestoreModule.getFirestore();
+  }
   return db;
 }
 
@@ -53,13 +95,46 @@ function resultProfileOverrides() {
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch (error) {
-    console.warn("Ignoring invalid RESULT_PROFILE_OVERRIDES JSON", error);
+    console.warn(
+      "Ignoring invalid RESULT_PROFILE_OVERRIDES JSON",
+      error && error.message || String(error),
+    );
     return {};
   }
 }
 
 function isBiathlonEvent(event) {
-  return String(event && event.Gren && event.Gren.Kode || "").toUpperCase() === "BT";
+  const sport = event && event.Gren ? event.Gren : {};
+  const discipline = event && event.Disiplin ? event.Disiplin : {};
+  const parent = sport.Parent && typeof sport.Parent === "object" ? sport.Parent : {};
+  const identifiers = [
+    sport.Kode,
+    sport.Code,
+    sport.Navn,
+    sport.Name,
+    parent.Kode,
+    parent.Code,
+    parent.Navn,
+    parent.Name,
+    discipline.Navn,
+    discipline.Name,
+  ].filter((value) => value != null).map((value) => String(value).trim().toLowerCase());
+  if (identifiers.some((value) =>
+    value === "bt" || value === "bia" || value.includes("skiskyt") || value.includes("biathlon"))) {
+    return true;
+  }
+
+  return Object.values(event && event.Stasjoner || {}).some((station) => {
+    if (!station || typeof station !== "object") return false;
+    if (station.ErSkyting === true || station.IsShooting === true) return true;
+    const setups = station.StasjonsOppsett || station.stationSetups || {};
+    return Object.values(setups).some((setup) => {
+      if (!setup || typeof setup !== "object") return false;
+      if (setup.ErSkyting === true || setup.IsShooting === true) return true;
+      const code = String(firstDefined(setup.Navn, setup.Name, setup.Kode, setup.Code, "")).trim();
+      return /^(?:INS|UTS)0*\d+$/i.test(code);
+    });
+  });
 }
 
 function isRelayStage(event, etappe) {
@@ -78,13 +153,12 @@ function classifyResultProfile(event, etappe, explicitOverride) {
   if (explicitOverride) {
     return {profile: explicitOverride, determinedBy: "override"};
   }
-  const sportCode = String(event && event.Gren && event.Gren.Kode || "").toUpperCase();
   const discipline = event && event.Disiplin ? event.Disiplin : {};
   const disciplineCode = String(discipline.Kode || "").toUpperCase();
   const disciplineName = String(discipline.Navn || "").toLowerCase();
   const stageType = String(etappe && etappe.Type || "").toLowerCase();
 
-  if (sportCode === "BT") return {profile: "biathlon", determinedBy: "eq"};
+  if (isBiathlonEvent(event)) return {profile: "biathlon", determinedBy: "eq"};
   if (isRelayStage(event, etappe)) {
     return {profile: "relay", determinedBy: "eq"};
   }
@@ -108,34 +182,80 @@ function profileForStage(event, eventId, etappeUid, explicitOverride) {
  * Fetch JSON with browser-like headers.
  */
 async function fetchJson(url) {
-  const r = await axios.get(url, {
+  return cachedSource(url, fetchJsonUncached, batchSetDocs);
+}
+
+async function fetchJsonUncached(url) {
+  const parsedUrl = new URL(url);
+  if (process.env.NODE_ENV !== "test" &&
+    (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "live.eqtiming.com" ||
+    !parsedUrl.pathname.startsWith("/api/"))) {
+    throw new Error("EQ Timing URL is not allowed");
+  }
+
+  const r = await axios.get(parsedUrl.toString(), {
     headers: {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
       "Accept": "application/json,text/plain,*/*",
       "Referer": "https://live.eqtiming.com/",
     },
     timeout: 30000,
+    maxContentLength: MAX_EXTERNAL_RESPONSE_BYTES,
+    maxBodyLength: MAX_EXTERNAL_RESPONSE_BYTES,
     validateStatus: (s) => s >= 200 && s < 400,
   });
+  let responseBytes = 0;
+  try {
+    responseBytes = Buffer.byteLength(JSON.stringify(r.data));
+  } catch (error) {
+    throw new Error("EQ Timing returned an unreadable response");
+  }
+  if (responseBytes > MAX_EXTERNAL_RESPONSE_BYTES) {
+    throw new Error("EQ Timing response is too large");
+  }
+  if (/^\/api\/Contestants\/\d+\/?$/.test(parsedUrl.pathname) &&
+    !parsedUrl.searchParams.has("passes")) {
+    return normalizeParticipants(r.data);
+  }
   return r.data;
 }
-async function fetchAllForStation(baseUrl, stationUid) {
+async function fetchAllForStation(baseUrl, stationUid, includeParticipants = false) {
   const pageSize = 1000;
   let startAt = 1;
   let all = [];
+  let pageCount = 0;
+  const seenPages = new Set();
+  let expectedTotal = null;
 
   while (true) {
-    const url = withStation(baseUrl, stationUid, startAt, pageSize);
+    pageCount++;
+    if (pageCount > MAX_STATION_PAGES) {
+      throw new Error("EQ Timing returned too many pages");
+    }
+    const pageUrl = new URL(withStation(baseUrl, stationUid, startAt, pageSize));
+    if (includeParticipants) pageUrl.searchParams.set("justTimeData", "false");
+    const url = pageUrl.toString();
     const data = await fetchJson(url);
 
-    const itemsRaw = data && typeof data === "object" ?
-      firstDefined(data.Items, data.items, []) :
-      [];
-    const items = Array.isArray(itemsRaw) ? itemsRaw : Object.values(itemsRaw);
+    const {items, total} = timingPage(data);
+    if (total != null) {
+      if (expectedTotal != null && expectedTotal !== total) {
+        throw sourceError("TIMING_TOTAL_CHANGED");
+      }
+      expectedTotal = total;
+    }
+    if (items.length) {
+      const fingerprint = crypto.createHash("sha256").update(JSON.stringify(items)).digest("hex");
+      if (seenPages.has(fingerprint)) throw sourceError("REPEATED_TIMING_PAGE");
+      seenPages.add(fingerprint);
+    }
 
     if (!items || items.length === 0) break;
 
     all = all.concat(items);
+    if (all.length > MAX_STATION_ITEMS) {
+      throw new Error("EQ Timing returned too many timing rows");
+    }
 
     // hvis færre enn pageSize, ferdig
     if (items.length < pageSize) break;
@@ -143,6 +263,9 @@ async function fetchAllForStation(baseUrl, stationUid) {
     startAt += pageSize;
   }
 
+  if (expectedTotal != null && all.length !== expectedTotal) {
+    throw sourceError("INCOMPLETE_TIMING_RESPONSE");
+  }
   return all;
 }
 
@@ -226,7 +349,7 @@ async function fetchParticipantPassTimeItems(eventId, classId, etappeUid) {
     return {
       items: [],
       url,
-      error: e && e.message ? e.message : String(e),
+      error: "EQ Timing request failed",
     };
   }
 }
@@ -246,6 +369,35 @@ function withStation(baseUrl, stationUid, startAt, count) {
   return u.toString();
 }
 async function batchSetDocs(docWrites) {
+  if (execution.getStore()) {
+    const context = execution.getStore();
+    for (let index = 0; index < docWrites.length;) {
+      const chunk = [];
+      let bytes = 0;
+      while (index < docWrites.length && chunk.length < 50) {
+        const size = Buffer.byteLength(JSON.stringify(docWrites[index].data));
+        if (size > 800000) throw sourceError("RESULT_DOCUMENT_TOO_LARGE");
+        if (chunk.length && bytes + size > 4 * 1024 * 1024) break;
+        bytes += size;
+        chunk.push(docWrites[index++]);
+      }
+      const receiptKey = crypto.createHash("sha256").update(JSON.stringify(
+        chunk.map((write) => ({path: write.ref.path, data: write.data})),
+      )).digest("hex");
+      const receiptRef = context.runId ? context.jobRef.collection("runs")
+        .doc(context.runId).collection("writeReceipts").doc(receiptKey) : null;
+      if (receiptRef && (await receiptRef.get()).exists) continue;
+      assertExecutionBudget();
+      await getDb().runTransaction(async (transaction) => {
+        await assertWriteLease(transaction);
+        for (const write of chunk) {
+          transaction.set(write.ref, sanitizeForFirestore(write.data) || {}, {merge: true});
+        }
+        if (receiptRef) transaction.set(receiptRef, {complete: true});
+      });
+    }
+    return;
+  }
   const MAX = 50;
   const dbClient = getDb();
   let batch = dbClient.batch();
@@ -264,6 +416,16 @@ async function batchSetDocs(docWrites) {
 }
 
 async function batchDeleteDocs(docRefs) {
+  if (execution.getStore()) {
+    for (let index = 0; index < docRefs.length; index += 100) {
+      assertExecutionBudget();
+      await getDb().runTransaction(async (transaction) => {
+        await assertWriteLease(transaction);
+        for (const ref of docRefs.slice(index, index + 100)) transaction.delete(ref);
+      });
+    }
+    return;
+  }
   const MAX = 100;
   const dbClient = getDb();
   let batch = dbClient.batch();
@@ -279,6 +441,85 @@ async function batchDeleteDocs(docRefs) {
     }
   }
   if (count > 0) await batch.commit();
+}
+
+async function setImportDocument(ref, data, options) {
+  if (!execution.getStore()) return ref.set(data, options);
+  return getDb().runTransaction(async (transaction) => {
+    await assertWriteLease(transaction);
+    transaction.set(ref, data, options);
+  });
+}
+
+async function publishBiathlonAggregates(classRef, aggregates, preserveOld) {
+  if (preserveOld) return;
+  const collection = classRef.collection("aggregateProfiles");
+  const profiles = aggregates ? [aggregates.all, aggregates.topHalf] : [];
+  const publications = [];
+  for (const profile of profiles) {
+    const root = collection.doc(profile.kind);
+    const serialized = Buffer.byteLength(JSON.stringify(profile));
+    if (serialized <= 600000) {
+      publications.push({root, data: profile, sections: []});
+      continue;
+    }
+    const data = {...profile, timingPoints: {}, shootingPasses: {}, laps: {},
+      sections: {}};
+    const sections = [];
+    for (const field of ["timingPoints", "shootingPasses", "laps"]) {
+      let part = {};
+      let partBytes = 2;
+      let ordinal = 0;
+      const flush = () => {
+        if (!Object.keys(part).length) return;
+        const hash = crypto.createHash("sha256")
+          .update(stableJson(part)).digest("hex").slice(0, 20);
+        const id = `${field}-${ordinal++}-${hash}`;
+        sections.push({ref: root.collection("sections").doc(id),
+          data: {schemaVersion: 1, field, entries: part}});
+        if (!data.sections[field]) data.sections[field] = [];
+        data.sections[field].push(id);
+        part = {};
+        partBytes = 2;
+      };
+      for (const [key, entry] of Object.entries(profile[field])
+        .sort(([left], [right]) => left.localeCompare(right))) {
+        const entryBytes = Buffer.byteLength(JSON.stringify(key)) +
+          Buffer.byteLength(JSON.stringify(entry)) + 2;
+        if (entryBytes > 300000) {
+          throw sourceError("AGGREGATE_SECTION_TOO_LARGE");
+        }
+        if (partBytes + entryBytes > 300000) flush();
+        part[key] = entry;
+        partBytes += entryBytes;
+      }
+      flush();
+    }
+    if (Buffer.byteLength(JSON.stringify(data)) > 800000) {
+      throw sourceError("AGGREGATE_PROFILE_TOO_LARGE");
+    }
+    publications.push({root, data, sections});
+  }
+  for (const publication of publications) {
+    await batchSetDocs(publication.sections);
+  }
+  await getDb().runTransaction(async (transaction) => {
+    await assertWriteLease(transaction);
+    for (const kind of ["biathlon-all", "biathlon-top-half"]) {
+      const publication = publications.find((entry) => entry.root.id === kind);
+      if (publication) transaction.set(publication.root, publication.data);
+      else transaction.delete(collection.doc(kind));
+    }
+    transaction.set(classRef, {biathlonTopHalf: aggregates ?
+      compatibilityTopHalf(aggregates.topHalf) : FieldValue.delete()},
+    {merge: true});
+  });
+  for (const kind of ["biathlon-all", "biathlon-top-half"]) {
+    const publication = publications.find((entry) => entry.root.id === kind);
+    await deleteDocsNotInSet(collection.doc(kind).collection("sections"),
+      new Set(publication ? publication.sections.map((entry) =>
+        entry.ref.id) : []));
+  }
 }
 
 function isEmptyResultDoc(data) {
@@ -297,16 +538,18 @@ async function deleteStaleEmptyResults(resultsRef, currentResultDocIds) {
   const refsToDelete = [];
   const keptDocIds = [];
   const deletedDocIds = [];
+  const existingContentHashes = {};
   let kept = 0;
 
   for (const doc of snap.docs || []) {
+    const data = typeof doc.data === "function" ? doc.data() : {};
     if (currentResultDocIds.has(doc.id)) {
+      existingContentHashes[doc.id] = data && data.contentHash;
       kept++;
       keptDocIds.push(doc.id);
       continue;
     }
 
-    const data = typeof doc.data === "function" ? doc.data() : {};
     if (isEmptyResultDoc(data)) {
       refsToDelete.push(doc.ref);
       deletedDocIds.push(doc.id);
@@ -322,6 +565,7 @@ async function deleteStaleEmptyResults(resultsRef, currentResultDocIds) {
     deletedDocIds,
     kept,
     keptDocIds,
+    existingContentHashes,
     scanned: (snap.docs || []).length,
   };
 }
@@ -909,21 +1153,11 @@ function buildAthleteDoc(participant, clubId, schoolId, organizationId, teamId, 
 
   const displayName = getParticipantDisplayName(participant);
   const normalizedName = normalizeSimpleName(displayName);
-  const utover = participant && participant.Utover ? participant.Utover : {};
-  const birthYear = getParticipantBirthYear(participant);
 
   return {
     athleteId,
-    source: {
-      provider: "eqtiming",
-      participantUid: participant.UID,
-      athleteUid: firstDefined(utover.UID, null),
-    },
     displayName,
     normalizedName,
-    gender: utover.Kjonn || null,
-    birthYear: birthYear != null ? birthYear : null,
-    age: participant.Alder !== undefined ? participant.Alder : null,
     country: getParticipantCountry(participant),
     region: getParticipantRegion(participant),
     primaryClubId: clubId || null,
@@ -957,9 +1191,6 @@ function buildEventListEntry(eventId, eventName) {
 
 function buildAthleteEventResultEntry(result, context) {
   if (!result || result.eventId == null) return null;
-  const analysis = result.analysis && result.analysis.biathlon ?
-    result.analysis.biathlon.metrics || {} :
-    result.analysis || {};
   return {
     eventId: Number(result.eventId),
     name: (context && context.eventName) || null,
@@ -967,11 +1198,6 @@ function buildAthleteEventResultEntry(result, context) {
     className: firstDefined(result.className, null),
     rank: firstDefined(result.rank, null),
     finishRank: firstDefined(result.finishRank, result.rank, null),
-    proneMisses: firstDefined(analysis.proneMisses, null),
-    standingMisses: firstDefined(analysis.standingMisses, null),
-    skiRank: firstDefined(analysis.skiRank, null),
-    netSkiRank: firstDefined(analysis.netSkiRank, analysis.skiRank, null),
-    shootRank: firstDefined(analysis.shootRank, null),
   };
 }
 
@@ -993,8 +1219,8 @@ function upsertEntityWrite(writeMap, id, ref, doc, additions) {
   const existing = writeMap.get(id);
   const data = existing ? existing.data : {};
   Object.assign(data, doc, {
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
 
   if (additions && additions.athlete) {
@@ -1013,15 +1239,38 @@ function upsertEntityWrite(writeMap, id, ref, doc, additions) {
 function prepareEntityWrite(write) {
   const data = Object.assign({}, write.data);
   if (Array.isArray(data.athletes) && data.athletes.length > 0) {
-    data.athletes = admin.firestore.FieldValue.arrayUnion(...data.athletes);
+    data.athletes = FieldValue.arrayUnion(...data.athletes);
   }
   if (Array.isArray(data.events) && data.events.length > 0) {
-    data.events = admin.firestore.FieldValue.arrayUnion(...data.events);
+    data.events = FieldValue.arrayUnion(...data.events);
   }
   return {
     ref: write.ref,
     data,
   };
+}
+
+async function filterChangedEntityWrites(writes, eventId) {
+  if (!writes.length) return [];
+  const snapshots = [];
+  const dbClient = getDb();
+  for (let start = 0; start < writes.length; start += 200) {
+    const refs = writes.slice(start, start + 200).map((write) => write.ref);
+    snapshots.push(...await dbClient.getAll(...refs));
+  }
+
+  const eventKey = String(eventId);
+  return writes.flatMap((write, index) => {
+    const contentHash = resultContentHash(write.data);
+    const existing = snapshots[index] && snapshots[index].exists ?
+      snapshots[index].data() : {};
+    const existingHashes = existing && existing.importContentHashes || {};
+    if (existingHashes[eventKey] === contentHash) return [];
+
+    const prepared = prepareEntityWrite(write);
+    prepared.data.importContentHashes = {[eventKey]: contentHash};
+    return [prepared];
+  });
 }
 
 function addParticipantEntityWrites(participant, clubWritesById, athleteWritesById, context) {
@@ -1115,6 +1364,12 @@ function addParticipantEntityWrites(participant, clubWritesById, athleteWritesBy
         athleteDoc,
         null,
       );
+      Object.assign(athleteWritesById.get(athleteId).data, {
+        source: FieldValue.delete(),
+        gender: FieldValue.delete(),
+        birthYear: FieldValue.delete(),
+        age: FieldValue.delete(),
+      });
     }
   }
 
@@ -1131,7 +1386,7 @@ function addAthleteEventResultWrite(athleteWritesById, result, context) {
     athleteWritesById.set(athleteId, {
       ref: getDb().collection("athletes").doc(athleteId),
       data: {
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         events: [eventEntry],
       },
     });
@@ -1139,7 +1394,7 @@ function addAthleteEventResultWrite(athleteWritesById, result, context) {
   }
 
   appendUniqueEntityList(existing.data, "events", eventEntry, "eventId");
-  existing.data.updatedAt = admin.firestore.FieldValue.serverTimestamp();
+  existing.data.updatedAt = FieldValue.serverTimestamp();
 }
 
 function buildResultIdentityFields(participant, clubId, athleteId, schoolId, organizationId, teamId, lagId) {
@@ -1264,26 +1519,12 @@ function buildSplitDefsForClass(setupMap) {
 function buildCompactResultIdentity(participantSummary, identityFields) {
   const base = participantSummary || {};
   return Object.assign({}, identityFields || {}, {
-    participantUid: firstDefined(base.participantUid, null),
-    arrangementUid: firstDefined(base.arrangementUid, null),
-    athleteSourceUid: firstDefined(base.athleteSourceUid, null),
     bib: firstDefined(base.bib, null),
     fullBib: firstDefined(base.fullBib, null),
     lane: firstDefined(base.lane, null),
-    gender: firstDefined(base.gender, null),
-    birthYear: firstDefined(base.birthYear, null),
-    age: firstDefined(base.age, null),
     country: firstDefined(base.country, null),
     region: firstDefined(base.region, null),
-    timingIds: firstDefined(base.timingIds, null),
     className: firstDefined(base.className, null),
-    registration: {
-      status: firstDefined(base.status, null),
-      registeredAt: firstDefined(base.registeredAt, null),
-      confirmedTime: firstDefined(base.confirmedTime, null),
-      eqmeNotInUse: firstDefined(base.eqmeNotInUse, null),
-      ignoreForTracking: firstDefined(base.ignoreForTracking, null),
-    },
   });
 }
 
@@ -1295,7 +1536,6 @@ function relayMembers(participant) {
     .map((member) => ({
       legNumber: toNumberOrNull(firstDefined(member.Sortering, member.Etappe, null)),
       athleteId: member.UtoverUID != null ? `athlete:${member.UtoverUID}` : null,
-      athleteSourceUid: firstDefined(member.UtoverUID, null),
       name: firstDefined(
         member.NavnFormatert,
         `${member.Fornavn || ""} ${member.Etternavn || ""}`.trim(),
@@ -1320,7 +1560,7 @@ function teamDisplayName(participant, fallback) {
   return formatted == null ? null : String(formatted).replace(/^\.\s*/, "").trim();
 }
 
-function withoutHitFields(analysis, shooting) {
+function withoutHitFields(analysis, shooting, laps) {
   const cleanAnalysis = Object.assign({}, analysis || {});
   delete cleanAnalysis.hitsTotal;
   delete cleanAnalysis.targetsTotal;
@@ -1331,7 +1571,11 @@ function withoutHitFields(analysis, shooting) {
     cleanShooting[key] = Object.assign({}, pass);
     delete cleanShooting[key].hits;
   }
-  return {metrics: cleanAnalysis, passes: cleanShooting};
+  return {
+    metrics: cleanAnalysis,
+    passes: cleanShooting,
+    laps: Object.assign({}, laps || {}),
+  };
 }
 
 function buildResultClassDoc(args) {
@@ -1346,7 +1590,7 @@ function buildResultClassDoc(args) {
     identity.name;
   const isBiathlon = args.isBiathlon || args.profile === "biathlon";
   const biathlon = isBiathlon ?
-    withoutHitFields(args.derived.analysis, args.derived.shooting) :
+    withoutHitFields(args.derived.analysis, args.derived.shooting, args.derived.laps) :
     null;
   const relayLegs = isTeam && isBiathlon ?
     buildRelayLegBiathlon(args.rawSplits) :
@@ -1357,7 +1601,6 @@ function buildResultClassDoc(args) {
     classId: args.classId,
     stageId: String(args.etappeUid),
     etappeUid: args.etappeUid,
-    etappeDeltakerUid: args.etappeDeltakerUid,
     hasTimingData: true,
     isRelay: isTeam,
     isBiathlon,
@@ -1367,7 +1610,6 @@ function buildResultClassDoc(args) {
     advanced: args.advanced === true,
     entrant: {
       kind: isTeam ? "team" : "athlete",
-      participantUid: identity.participantUid,
       athleteId: isTeam ? null : identity.athleteId,
       name: displayName,
       bib: firstDefined(identity.fullBib, identity.bib, null),
@@ -1380,7 +1622,7 @@ function buildResultClassDoc(args) {
     team: isTeam ? {members, legs: relayLegs} : null,
     timingPoints: args.derived.rawPasses,
     analysis: biathlon ? {biathlon: Object.assign({version: 1}, biathlon)} : null,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   });
   return sanitizeForFirestore(document) || {};
 }
@@ -1844,6 +2086,7 @@ function buildDerivedResultMetrics(splits, totalMs) {
 
   const laps = {};
   let lastSkiStartMs = 0;
+  let lastSkiStartCode = "start";
   let lapIndex = 1;
 
   for (const shootKey of shootKeys) {
@@ -1854,19 +2097,25 @@ function buildDerivedResultMetrics(splits, totalMs) {
         skiMs: lapEndMs - lastSkiStartMs,
         startCumMs: lastSkiStartMs,
         endCumMs: lapEndMs,
+        startCode: lastSkiStartCode,
         endCode: firstDefined(shot.codes.rangeIn, shot.codes.shooting, null),
         beforeShooting: shot.index,
       };
       lapIndex++;
     }
 
-    const nextSkiStartMs = firstDefined(
-      shot.outCumMs,
-      shot.shootingCumMs,
-      shot.rangeExitCumMs,
-      null,
-    );
-    if (typeof nextSkiStartMs === "number") lastSkiStartMs = nextSkiStartMs;
+    // US is the point after the shooting area and any penalty loop. Ski time
+    // is measured from US to the next INS, so prefer it over UTS/S when EQ
+    // exposes both kinds of passings.
+    const nextSkiStart = [
+      {cumMs: shot.rangeExitCumMs, code: shot.codes.rangeExit},
+      {cumMs: shot.outCumMs, code: shot.codes.rangeOut},
+      {cumMs: shot.shootingCumMs, code: shot.codes.shooting},
+    ].find((point) => typeof point.cumMs === "number");
+    if (nextSkiStart) {
+      lastSkiStartMs = nextSkiStart.cumMs;
+      lastSkiStartCode = firstDefined(nextSkiStart.code, "shooting");
+    }
   }
 
   const finishSplit = splitEntries.find((split) => split.kind === "finish" || split.isStop);
@@ -1878,17 +2127,16 @@ function buildDerivedResultMetrics(splits, totalMs) {
       skiMs: finishMs - lastSkiStartMs,
       startCumMs: lastSkiStartMs,
       endCumMs: finishMs,
+      startCode: lastSkiStartCode,
       endCode: finishSplit ? finishSplit.code : "finish",
       beforeShooting: null,
     };
   }
 
-  let netSkiTimeMs = null;
+  let skiTimeMs = null;
   const lapValues = Object.values(laps);
   if (lapValues.length > 0) {
-    netSkiTimeMs = lapValues.reduce((sum, lap) => sum + (typeof lap.skiMs === "number" ? lap.skiMs : 0), 0);
-  } else if (typeof totalMs === "number" && hasAnyRangeTime) {
-    netSkiTimeMs = totalMs - rangeTimeMs;
+    skiTimeMs = lapValues.reduce((sum, lap) => sum + (typeof lap.skiMs === "number" ? lap.skiMs : 0), 0);
   }
 
   const targetsTotal = shootingCount ? shootingCount * 5 : null;
@@ -1908,7 +2156,19 @@ function buildDerivedResultMetrics(splits, totalMs) {
   const totalPenaltyTimeMs = explicitPenaltyTimeMs > 0 ?
     (measuredPenaltyTimeMs || 0) + explicitPenaltyTimeMs :
     measuredPenaltyTimeMs;
-  const skiTimeMs = deriveSkiTimeMs(netSkiTimeMs, totalPenaltyTimeMs);
+  // netSkiTimeMs is the course time with shooting time removed. When EQ
+  // exposes UTS/S separately it still includes penalty loops; skiTimeMs is
+  // the more precise US-to-INS sum and therefore must not subtract penalty
+  // time a second time.
+  let netSkiTimeMs = null;
+  if (typeof totalMs === "number" && hasAnyRangeTime) {
+    netSkiTimeMs = Math.max(0, totalMs - rangeTimeMs);
+  } else if (typeof skiTimeMs === "number") {
+    netSkiTimeMs = skiTimeMs;
+  }
+  if (typeof skiTimeMs !== "number") {
+    skiTimeMs = deriveSkiTimeMs(netSkiTimeMs, totalPenaltyTimeMs);
+  }
 
   return {
     rawPasses: persistedSplitEntries,
@@ -2006,7 +2266,7 @@ function buildRelayLegBiathlon(splits) {
     }
 
     const derived = buildDerivedResultMetrics(localSplits, totalMs);
-    const biathlon = withoutHitFields(derived.analysis, derived.shooting);
+    const biathlon = withoutHitFields(derived.analysis, derived.shooting, derived.laps);
     legs.push({
       legNumber,
       totalMs,
@@ -2213,13 +2473,26 @@ function buildDerivedResultMetricsLegacy(splits, totalMs) {
   };
 }
 
-function addMetricRanks(results, field, rankField) {
+function addMetricRanks(results, field, rankField, options = {}) {
   const metricsOf = (result) => result.analysis && result.analysis.biathlon ?
     result.analysis.biathlon.metrics :
     result.analysis;
   const ranked = results
-    .filter((r) => metricsOf(r) && typeof metricsOf(r)[field] === "number")
+    .filter((r) => {
+      const metrics = metricsOf(r);
+      const value = metrics && metrics[field];
+      return metrics &&
+        !isNonFinishStatus(r.status) &&
+        typeof value === "number" &&
+        Number.isFinite(value) &&
+        (options.positiveOnly !== true || value > 0);
+    })
     .sort((a, b) => metricsOf(a)[field] - metricsOf(b)[field]);
+
+  for (const result of results) {
+    const metrics = metricsOf(result);
+    if (metrics) metrics[rankField] = null;
+  }
 
   let previousValue = null;
   let previousRank = null;
@@ -2234,11 +2507,78 @@ function addMetricRanks(results, field, rankField) {
   }
 }
 
+function addShootingPassRanks(results) {
+  const grouped = new Map();
+
+  for (const result of results) {
+    const addPasses = (passes, groupKey) => {
+      if (!passes || typeof passes !== "object") return;
+
+      for (const [fallbackKey, pass] of Object.entries(passes)) {
+        if (!pass || typeof pass !== "object") continue;
+        pass.rangeRank = null;
+        if (isNonFinishStatus(result.status)) continue;
+
+        const index = Number.isFinite(Number(pass.index)) ?
+          Number(pass.index) :
+          Number(String(fallbackKey).match(/(\d+)$/)?.[1]);
+        const rangeMs = pass.rangeMs;
+        if (!Number.isInteger(index) || index <= 0 ||
+          typeof rangeMs !== "number" || !Number.isFinite(rangeMs) || rangeMs <= 0) {
+          continue;
+        }
+
+        const key = `${groupKey}:${index}`;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push({pass, rangeMs});
+      }
+    };
+
+    const biathlon = result.analysis && result.analysis.biathlon;
+    addPasses(biathlon && biathlon.passes, "main");
+
+    const legs = result.team && Array.isArray(result.team.legs) ?
+      result.team.legs :
+      [];
+    for (const leg of legs) {
+      if (!leg || typeof leg !== "object") continue;
+      const legNumber = Number(leg.legNumber);
+      if (!Number.isInteger(legNumber) || legNumber <= 0) continue;
+      const legBiathlon = leg.biathlon;
+      addPasses(
+        legBiathlon && legBiathlon.passes,
+        `leg:${legNumber}`,
+      );
+    }
+  }
+
+  for (const entries of grouped.values()) {
+    entries.sort((a, b) => a.rangeMs - b.rangeMs);
+    let previousValue = null;
+    let previousRank = null;
+    for (let i = 0; i < entries.length; i++) {
+      const value = entries[i].rangeMs;
+      const rank = previousValue != null && value === previousValue ?
+        previousRank :
+        i + 1;
+      entries[i].pass.rangeRank = rank;
+      previousValue = value;
+      previousRank = rank;
+    }
+  }
+}
+
 function isNonFinishStatus(status) {
   const text = String(status || "").trim().toUpperCase();
   return text.includes("DNF") ||
     text.includes("DNS") ||
     text.includes("DSQ") ||
+    text.includes("DQ") ||
+    text.includes("DID NOT FINISH") ||
+    text.includes("DID NOT START") ||
+    text.includes("IKKE STARTET") ||
+    text.includes("STARTET IKKE") ||
+    text.includes("DISQUAL") ||
     text.includes("BRUTT") ||
     text.includes("IKKE FULLF");
 }
@@ -2275,18 +2615,19 @@ function addRawPassRanks(results) {
   for (const result of results) {
     const rawPasses = Array.isArray(result.timingPoints) ? result.timingPoints : [];
     for (const pass of rawPasses) {
+      if (!pass || typeof pass !== "object") continue;
       pass.cumRank = null;
       pass.cumRankCount = null;
       pass.legRank = null;
       pass.legRankCount = null;
-      if (!pass || pass.setupUid == null) continue;
+      if (isNonFinishStatus(result.status) || pass.setupUid == null) continue;
 
       const key = String(pass.setupUid);
-      if (typeof pass.cumMs === "number") {
+      if (typeof pass.cumMs === "number" && Number.isFinite(pass.cumMs) && pass.cumMs > 0) {
         if (!cumBySetupUid.has(key)) cumBySetupUid.set(key, []);
         cumBySetupUid.get(key).push(pass);
       }
-      if (typeof pass.legMs === "number") {
+      if (typeof pass.legMs === "number" && Number.isFinite(pass.legMs) && pass.legMs > 0) {
         if (!legBySetupUid.has(key)) legBySetupUid.set(key, []);
         legBySetupUid.get(key).push(pass);
       }
@@ -2648,7 +2989,7 @@ function buildEventDoc(event, eventId, participants) {
     },
     resultProfile: eventProfile.profile,
     resultProfileSource: eventProfile.determinedBy,
-    source: admin.firestore.FieldValue.delete(),
+    source: FieldValue.delete(),
   };
 }
 
@@ -2669,14 +3010,89 @@ function choosePrimaryStageId(event, classId) {
     const classes = entry.stage.Klasser || {};
     return Object.prototype.hasOwnProperty.call(classes, classKey);
   });
-  candidates.sort((a, b) => {
-    const aLevel = toNumberOrNull(a.stage.Nivaa);
-    const bLevel = toNumberOrNull(b.stage.Nivaa);
-    const aPriority = aLevel === 1 ? -1 : (aLevel == null ? 1000 : aLevel);
-    const bPriority = bLevel === 1 ? -1 : (bLevel == null ? 1000 : bLevel);
-    return aPriority - bPriority || a.index - b.index;
-  });
+  candidates.sort(compareStagePriority);
   return candidates.length ? candidates[0].id : null;
+}
+
+function compareStagePriority(a, b) {
+  const aLevel = toNumberOrNull(a.stage.Nivaa);
+  const bLevel = toNumberOrNull(b.stage.Nivaa);
+  const aPriority = aLevel === 1 ? -1 : (aLevel == null ? 1000 : aLevel);
+  const bPriority = bLevel === 1 ? -1 : (bLevel == null ? 1000 : bLevel);
+  return aPriority - bPriority || a.index - b.index;
+}
+
+function classStageAthleteCount(summary) {
+  const participantCount = toNumberOrNull(summary && summary.participantCount);
+  if (participantCount != null && participantCount > 0) return participantCount;
+  const resultCount = toNumberOrNull(summary && summary.resultCount);
+  return resultCount != null && resultCount > 0 ? resultCount : 0;
+}
+
+function choosePrimaryStageSummary(event, classId, stageSummaries) {
+  const classKey = String(classId);
+  const stageEntries = getEventStages(event).filter((entry) => {
+    const classes = entry.stage.Klasser || {};
+    return Object.prototype.hasOwnProperty.call(classes, classKey);
+  });
+  const entryById = new Map(stageEntries.map((entry) => [entry.id, entry]));
+  const candidates = stageSummaries
+    .map((summary) => {
+      const stageId = String(summary.stageId);
+      const stage = entryById.get(stageId);
+      if (!stage) return null;
+      return {
+        data: summary.data,
+        stageId,
+        stage,
+        athleteCount: classStageAthleteCount(summary.data),
+      };
+    })
+    .filter((candidate) => candidate != null);
+
+  candidates.sort((a, b) => {
+    if (a.athleteCount !== b.athleteCount) {
+      return b.athleteCount - a.athleteCount;
+    }
+    return compareStagePriority(a.stage, b.stage);
+  });
+  return candidates.length ? candidates[0] : null;
+}
+
+async function refreshClassRootSummary(eventDocRef, event, classId) {
+  const classKey = String(classId);
+  const stageEntries = getEventStages(event).filter((entry) => {
+    const classes = entry.stage.Klasser || {};
+    return Object.prototype.hasOwnProperty.call(classes, classKey);
+  });
+  if (stageEntries.length === 0) return null;
+
+  const snapshots = await getDb().getAll(
+    ...stageEntries.map((entry) =>
+      eventDocRef
+        .collection("stages")
+        .doc(entry.id)
+        .collection("classes")
+        .doc(classKey)),
+  );
+  const stageSummaries = snapshots
+    .map((snapshot, index) => ({
+      stageId: snapshot.exists && snapshot.data().stageId || stageEntries[index].id,
+      data: snapshot.exists ? snapshot.data() : null,
+    }))
+    .filter((summary) => summary.data != null);
+  const primary = choosePrimaryStageSummary(event, classId, stageSummaries);
+  if (!primary) return null;
+
+  const rootSummary = sanitizeForFirestore(Object.assign({}, primary.data, {
+    primaryStageId: primary.stageId,
+    updatedAt: FieldValue.serverTimestamp(),
+  })) || {};
+  await setImportDocument(eventDocRef.collection("classes").doc(classKey),
+    rootSummary,
+    {merge: true},
+  );
+  return primary;
 }
 
 function buildStageDoc(event, eventId, etappeUid, profileOverride) {
@@ -2709,7 +3125,7 @@ function buildStageDoc(event, eventId, etappeUid, profileOverride) {
     resultProfileSource: classification.determinedBy,
     isRelay: isRelayStage(event, stage),
     isBiathlon: isBiathlonEvent(event),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   }) || {};
 }
 
@@ -2765,7 +3181,7 @@ function buildClassStructureDoc(args) {
     participantCount: args.participantCount || 0,
     hasResults: resultIds.length > 0,
     hasTimingData: resultIds.length > 0,
-    results: admin.firestore.FieldValue.delete(),
+    results: FieldValue.delete(),
     timingSummary: {
       stationsFetched: args.stationsFetched,
       timeItemsFetched: args.timeItemsFetched,
@@ -2788,10 +3204,27 @@ async function importEqTimingFromUrls(params) {
   const timesUrlBase = params.timesUrlBase;
 
   // 1) hent event + participants
-  const [event, participants] = await Promise.all([
-    fetchJson(eventUrl),
-    fetchJson(participantsUrl),
-  ]);
+  const [event, participantPayload] = params.event && params.participants ?
+    [params.event, params.participants] :
+    await Promise.all([
+      fetchJson(eventUrl),
+      fetchJson(participantsUrl),
+    ]);
+  const participants = normalizeParticipants(participantPayload);
+  const publishedByEd = new Map();
+  let publishedRows = [];
+  if (params.verifyCoverage) {
+    publishedRows = await fetchAllForStation(timesUrlBase, null, true);
+    for (const row of publishedRows) {
+      const edUid = toNumberOrNull(row.EtappeDeltakerUID);
+      const participant = row.Deltaker;
+      const pid = participant && toNumberOrNull(participant.UID);
+      if (edUid == null || pid == null) throw sourceError("UNRESOLVED_PUBLISHED_PARTICIPANT");
+      if (publishedByEd.has(edUid)) throw sourceError("DUPLICATE_PUBLISHED_PARTICIPANT");
+      publishedByEd.set(edUid, {participant, pid, row});
+      participants[String(pid)] = Object.assign({}, participants[String(pid)] || {}, participant);
+    }
+  }
   const entityContext = {
     eventId,
     eventName: firstDefined(event && event.Navn, null),
@@ -2802,17 +3235,21 @@ async function importEqTimingFromUrls(params) {
   const classDocRef = eventDocRef.collection("classes").doc(String(classId));
 
   // 3) skriv event
-  await eventDocRef.set(
+  await setImportDocument(eventDocRef,
     sanitizeForFirestore(Object.assign({}, buildEventDoc(event, eventId, participants), {
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })) || {},
     { merge: true }
   );
 
+  // Do not replace the participant-based primary stage while importing a chunk.
+  // It is recalculated from all stage summaries after this chunk succeeds.
+  const classMetadata = buildClassDoc(event, classId, null);
+  delete classMetadata.primaryStageId;
   // 4) skriv class meta
-  await classDocRef.set(
-    sanitizeForFirestore(Object.assign({}, buildClassDoc(event, classId, null), {
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  await setImportDocument(classDocRef,
+    sanitizeForFirestore(Object.assign({}, classMetadata, {
+      updatedAt: FieldValue.serverTimestamp(),
     })) || {},
     { merge: true }
   );
@@ -2838,11 +3275,11 @@ async function importEqTimingFromUrls(params) {
     etappeUid,
     params.resultProfile,
   );
-  await stageDocRef.set(
+  await setImportDocument(stageDocRef,
     buildStageDoc(event, eventId, etappeUid, params.resultProfile),
     {merge: true},
   );
-  await stageClassDocRef.set(
+  await setImportDocument(stageClassDocRef,
     sanitizeForFirestore(Object.assign({}, buildClassDoc(event, classId, etappeUid), {
       eventId,
       stageId: String(etappeUid),
@@ -2852,7 +3289,7 @@ async function importEqTimingFromUrls(params) {
         event && event.Etapper ? event.Etapper[String(etappeUid)] : null,
       ),
       isBiathlon: isBiathlonEvent(event),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })) || {},
     {merge: true},
   );
@@ -2882,14 +3319,16 @@ async function importEqTimingFromUrls(params) {
       data: sanitizeForFirestore(classSplits.splitDefs[setupUid]) || {},
     }));
     await batchSetDocs(splitWrites);
-    splitDefCleanup = await deleteDocsNotInSet(
-      stageClassDocRef.collection("splitDefs"),
-      new Set(classSplits.splitOrder),
-    );
+    if (!params.verifyCoverage) {
+      splitDefCleanup = await deleteDocsNotInSet(
+        stageClassDocRef.collection("splitDefs"),
+        new Set(classSplits.splitOrder),
+      );
+    }
   }
   const importedSplitDefs = classSplits.splitOrder.length;
   // 8) HENT TIDER: én station om gangen (så vi får alle splits)
-  let allTimeItems = [];
+  let allTimeItems = publishedRows.slice();
   const stationFetches = [];
   for (const stationUid of stationUids) {
     const itemsForStation = await fetchAllForStation(timesUrlBase, stationUid);
@@ -2901,7 +3340,6 @@ async function importEqTimingFromUrls(params) {
     allTimeItems = allTimeItems.concat(itemsForStation);
   }
   if (stationUids.length === 0) {
-    try {
       const itemsWithoutStation = await fetchAllForStation(timesUrlBase, null);
       stationFetches.push({
         stationUid: null,
@@ -2909,14 +3347,6 @@ async function importEqTimingFromUrls(params) {
         source: "Result/Class",
       });
       allTimeItems = allTimeItems.concat(itemsWithoutStation);
-    } catch (error) {
-      stationFetches.push({
-        stationUid: null,
-        count: 0,
-        source: "Result/Class",
-        error: error && error.message ? error.message : String(error),
-      });
-    }
   }
 
   // Lag "times" objekt som normalizeTimes() kan lese
@@ -2929,11 +3359,17 @@ async function importEqTimingFromUrls(params) {
   let participantPassesFallbackError = null;
   let participantPassesFallbackUrl = null;
 
-  if (timeRecs.length === 0) {
+  const timedEdUids = new Set(timeRecs.map((record) => record.edUid));
+  const missingPublishedTimes = [...publishedByEd.entries()].some(([edUid, entry]) =>
+    !timedEdUids.has(edUid) && Number(entry.row.AkkumulertTid) > 0);
+  if ((!params.verifyCoverage && timeRecs.length === 0) || missingPublishedTimes) {
     const fallback = await fetchParticipantPassTimeItems(eventId, classId, etappeUid);
     participantPassItemsFetched = fallback.items.length;
     participantPassesFallbackError = fallback.error;
     participantPassesFallbackUrl = fallback.url;
+    if (params.verifyCoverage && fallback.error && publishedRows.length) {
+      throw sourceError("PARTICIPANT_FALLBACK_FAILED");
+    }
 
     if (fallback.items.length > 0) {
       allTimeItems = allTimeItems.concat(fallback.items);
@@ -2951,7 +3387,12 @@ async function importEqTimingFromUrls(params) {
 
   // 11) map EDUID -> participantUID
   const edToPid = buildEtappeMap(participants);
-  const classParticipantRecords = getClassParticipantRecords(participants, classId, etappeUid);
+  for (const [edUid, entry] of publishedByEd) {
+    edToPid.set(edUid, entry.pid);
+    if (!byEd.has(edUid)) byEd.set(edUid, []);
+  }
+  const classParticipantRecords = getClassParticipantRecords(participants, classId, etappeUid)
+    .filter((record) => !params.verifyCoverage || publishedByEd.has(record.edUid));
   const seededParticipantResults = seedParticipantResults(
     byEd,
     edToPid,
@@ -2962,14 +3403,17 @@ async function importEqTimingFromUrls(params) {
   const preparedResults = [];
   const clubWritesById = new Map();
   const athleteWritesById = new Map();
-  const participantCount = classParticipantRecords.length;
+  const participantCount = params.verifyCoverage ? publishedByEd.size : classParticipantRecords.length;
 
   for (const record of classParticipantRecords) {
     addParticipantEntityWrites(record.p, clubWritesById, athleteWritesById, entityContext);
   }
 
   for (const [edUid, recs] of byEd.entries()) {
-    if (!Array.isArray(recs) || recs.length === 0) continue;
+    if (!Array.isArray(recs) || (recs.length === 0 && !publishedByEd.has(edUid))) continue;
+    if (params.verifyCoverage && !publishedByEd.has(edUid)) {
+      throw sourceError("TIMING_PARTICIPANT_NOT_IN_PUBLISHED_LIST");
+    }
 
     const pid = edToPid.get(edUid);
     const p = (pid != null && participants) ? participants[String(pid)] : null;
@@ -2991,7 +3435,8 @@ async function importEqTimingFromUrls(params) {
     let totalText = null;
     let finishTotalMs = null;
     let finishTotalText = null;
-    let resultStatus = null;
+    let resultStatus = publishedByEd.has(edUid) ?
+      firstDefined(publishedByEd.get(edUid).row.StatusTekst, null) : null;
 
     for (const r of recs) {
       if (isNonFinishStatus(r.status)) {
@@ -3120,30 +3565,99 @@ async function importEqTimingFromUrls(params) {
   }
 
   const resultDocIds = new Set(preparedResults.map((r) => r.ref.id));
+  if (resultDocIds.size !== preparedResults.length) {
+    throw sourceError("RESULT_IDENTITY_CONFLICT");
+  }
+  if (params.verifyCoverage && resultDocIds.size !== publishedByEd.size) {
+    throw sourceError("INCOMPLETE_PUBLISHED_RESULTS");
+  }
+  if (params.verifyCoverage) {
+    const existingResults = await stageClassDocRef.collection("results").get();
+    if (existingResults.docs.some((document) => !resultDocIds.has(document.id))) {
+      throw sourceError("PUBLISHED_RESULTS_DISAPPEARED");
+    }
+  }
   const staleResultCleanup = await deleteStaleEmptyResults(
     stageClassDocRef.collection("results"),
     resultDocIds,
   );
 
   addClassRanks(preparedResults.map((r) => r.data));
-  addMetricRanks(preparedResults.map((r) => r.data), "skiTimeMs", "skiRank");
-  addMetricRanks(preparedResults.map((r) => r.data), "netSkiTimeMs", "netSkiRank");
-  addMetricRanks(preparedResults.map((r) => r.data), "rangeTimeMs", "rangeRank");
-  addMetricRanks(preparedResults.map((r) => r.data), "shootingTimeMs", "shootRank");
+  addMetricRanks(preparedResults.map((r) => r.data), "skiTimeMs", "skiRank", {positiveOnly: true});
+  addMetricRanks(preparedResults.map((r) => r.data), "netSkiTimeMs", "netSkiRank", {positiveOnly: true});
+  addMetricRanks(preparedResults.map((r) => r.data), "rangeTimeMs", "rangeRank", {positiveOnly: true});
+  addMetricRanks(preparedResults.map((r) => r.data), "shootingTimeMs", "shootRank", {positiveOnly: true});
   addMetricRanks(preparedResults.map((r) => r.data), "penaltyTimeMs", "penaltyRank");
+  addShootingPassRanks(preparedResults.map((r) => r.data));
   addRawPassRanks(preparedResults.map((r) => r.data));
+  addDisplayOrder(preparedResults.map((r) => r.data),
+    new Map(preparedResults.map((r) => [r.data, r.ref.id])));
   for (const preparedResult of preparedResults) {
     addAthleteEventResultWrite(athleteWritesById, preparedResult.data, entityContext);
   }
-
-  await batchSetDocs(Array.from(clubWritesById.values()).map(prepareEntityWrite));
-  await batchSetDocs(Array.from(athleteWritesById.values()).map(prepareEntityWrite));
-  const resultWrites = preparedResults.map((result) => ({
-    ref: result.ref,
-    data: sanitizeForFirestore(result.data) || {},
-  }));
+  const privateAnalysisWrites = [];
+  for (const preparedResult of preparedResults) {
+    Object.assign(preparedResult.data, {
+      participantUid: FieldValue.delete(),
+      etappeDeltakerUid: FieldValue.delete(),
+      arrangementUid: FieldValue.delete(),
+      athleteSourceUid: FieldValue.delete(),
+      gender: FieldValue.delete(),
+      birthYear: FieldValue.delete(),
+      age: FieldValue.delete(),
+      timingIds: FieldValue.delete(),
+      registration: FieldValue.delete(),
+    });
+    preparedResult.data.entrant = {...preparedResult.data.entrant,
+      participantUid: FieldValue.delete()};
+    const detailedAnalysis = preparedResult.data.analysis;
+    if (detailedAnalysis) {
+      privateAnalysisWrites.push({
+        ref: preparedResult.ref.collection("privateAnalysis").doc("current"),
+        data: {
+          schemaVersion: 1,
+          analysis: detailedAnalysis,
+          contentHash: resultContentHash(detailedAnalysis),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+      });
+    }
+    preparedResult.data.analysisSummary = buildPublicAnalysisSummary(detailedAnalysis);
+    preparedResult.data.analysis = FieldValue.delete();
+    preparedResult.data.contentHash = resultContentHash(preparedResult.data);
+  }
+  const clubWrites = await filterChangedEntityWrites(
+    Array.from(clubWritesById.values()),
+    eventId,
+  );
+  const athleteWrites = await filterChangedEntityWrites(
+    Array.from(athleteWritesById.values()),
+    eventId,
+  );
+  await batchSetDocs(clubWrites);
+  await batchSetDocs(athleteWrites);
+  await batchSetDocs(privateAnalysisWrites);
+  const existingContentHashes = staleResultCleanup.existingContentHashes || {};
+  delete staleResultCleanup.existingContentHashes;
+  const resultWrites = preparedResults
+    .filter((result) => existingContentHashes[result.ref.id] !== result.data.contentHash)
+    .map((result) => ({
+      ref: result.ref,
+      data: sanitizeForFirestore(result.data) || {},
+    }));
   await batchSetDocs(resultWrites);
-
+  if (params.verifyCoverage && preparedResults.length) {
+    const stored = await getDb().getAll(...preparedResults.map((result) => result.ref));
+    if (stored.some((snapshot, index) => !snapshot.exists ||
+      snapshot.data().contentHash !== preparedResults[index].data.contentHash)) {
+      throw sourceError("RESULT_WRITE_VERIFICATION_FAILED");
+    }
+  }
+  if (params.verifyCoverage && setupMap) {
+    splitDefCleanup = await deleteDocsNotInSet(
+      stageClassDocRef.collection("splitDefs"), new Set(classSplits.splitOrder),
+    );
+  }
   const finalResultDocIds = new Set([
     ...(staleResultCleanup.keptDocIds || []),
     ...Array.from(resultDocIds),
@@ -3185,13 +3699,28 @@ async function importEqTimingFromUrls(params) {
     {
       stageId: String(etappeUid),
       resultProfile: classification.profile,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      resultOrderVersion: 1,
+      hasTimingData: preparedResults.some((result) =>
+        typeof result.data.totalMs === "number" ||
+        Object.keys(result.data.splits || {}).length > 0),
+      changedResultCount: resultWrites.length,
+      changedClubCount: clubWrites.length,
+      changedAthleteCount: athleteWrites.length,
+      updatedAt: FieldValue.serverTimestamp(),
     },
   )) || {};
-  await stageClassDocRef.set(stageClassSummary, { merge: true });
-  if (String(buildClassDoc(event, classId, etappeUid).primaryStageId) === String(etappeUid)) {
-    await classDocRef.set(stageClassSummary, {merge: true});
-  }
+  await setImportDocument(stageClassDocRef, stageClassSummary, { merge: true });
+  await refreshClassRootSummary(eventDocRef, event, classId);
+  const hasCompleteResults = !(staleResultCleanup.keptDocIds || [])
+    .some((id) => !resultDocIds.has(id));
+  const aggregates = (classification.profile === "biathlon" ||
+    isBiathlonEvent(event)) &&
+    !isRelayStage(event, event && event.Etapper &&
+      event.Etapper[String(etappeUid)]) ?
+    buildBiathlonAggregates(preparedResults.map((result) =>
+      Object.assign({}, result.data, {id: result.ref.id})), splitMetaByUid) : null;
+  await publishBiathlonAggregates(stageClassDocRef, aggregates,
+    !hasCompleteResults);
 
   // 13) return debug
   return {
@@ -3202,6 +3731,11 @@ async function importEqTimingFromUrls(params) {
     importedSplitDefs,
     importedParticipants: 0,
     importedResults: preparedResults.length,
+    hasTimingData: preparedResults.some((result) =>
+      typeof result.data.totalMs === "number" || Object.keys(result.data.splits || {}).length > 0),
+    changedResults: resultWrites.length,
+    changedClubs: clubWrites.length,
+    changedAthletes: athleteWrites.length,
     seededParticipantResults,
     normalizedCount: timeRecs.length,
     stationsFetched: stationUids.length,
@@ -3241,6 +3775,12 @@ function getImportableClassIds(event, participants) {
   return Array.from(set.values());
 }
 
+function isAdministrativeStage(stage) {
+  const name = normalizeCodeForMatch(stage && stage.Navn);
+  return name === "PAMELDING" || name === "REGISTRATION" ||
+    name.startsWith("VISITASJON");
+}
+
 function getImportTargets(event, participants) {
   const targets = new Map();
   const excludedStageIds = new Set();
@@ -3254,9 +3794,7 @@ function getImportTargets(event, participants) {
   };
 
   for (const entry of getEventStages(event)) {
-    const level = toNumberOrNull(entry.stage.Nivaa);
-    const name = normalizeCodeForMatch(entry.stage.Navn);
-    if (level === 0 || name === "PAMELDING" || name === "REGISTRATION") {
+    if (isAdministrativeStage(entry.stage)) {
       excludedStageIds.add(String(entry.id));
       continue;
     }
@@ -3270,6 +3808,7 @@ function getImportTargets(event, participants) {
     for (const stageParticipant of Object.values(stageEntries)) {
       add(getEtappeUidFromEtappeDeltaker(stageParticipant), classId, 10000);
     }
+    add(getParticipantEtappeUid(participant), classId, 10000);
   }
 
   return Array.from(targets.values()).sort((a, b) =>
@@ -3294,13 +3833,16 @@ async function importWholeEvent(params) {
 
   // Finn alle klasser som enten finnes i event-oppsettet eller har contestants.
   // Noen resultatklasser (for eksempel U23) kan mangle egne contestants i participants-endpointet.
-  const importTargets = getImportTargets(event, participants);
+  // A queued job supplies a snapshot so later chunks cannot skip classes when
+  // EQ Timing returns a slightly different participant list.
+  const importTargets = Array.isArray(params.importTargets) ?
+    params.importTargets : getImportTargets(event, participants);
 
   // Lagre event-meta tidlig
   const eventDocRef = getDb().collection("events").doc(String(eventId));
-  await eventDocRef.set(
+  await setImportDocument(eventDocRef,
     sanitizeForFirestore(Object.assign({}, buildEventDoc(event, eventId, participants), {
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })) || {},
     { merge: true }
   );
@@ -3317,13 +3859,25 @@ async function importWholeEvent(params) {
 
     const timesUrlBase = buildTimesUrlBase(eventId, etappeUid, classId);
 
-    const r = await importEqTimingFromUrls({
+    let r;
+    try {
+    r = await importEqTimingFromUrls({
       eventId,
       classId,
       eventUrl,
       participantsUrl,
       timesUrlBase,
+      event,
+      participants,
+      verifyCoverage: params.verifyCoverage === true,
     });
+    } catch (error) {
+      const code = typeof error.code === "string" && /^[A-Z_]{3,80}$/.test(error.code) ?
+        error.code : "IMPORT_TARGET_FAILED";
+      const isValidationError = /^(INVALID_|INCOMPLETE_|UNRESOLVED_|DUPLICATE_|REPEATED_|TIMING_|RESULT_|PUBLISHED_|PARTICIPANT_)/.test(code);
+      if (!params.verifyCoverage || !isValidationError) throw error;
+      r = {ok: false, eventId, classId, etappeUid, errorCode: code, importedResults: 0};
+    }
 
     results.push(r);
     if (r && r.ok) classesImported++;
@@ -3349,7 +3903,7 @@ async function importWholeEvent(params) {
 /**
  * HTTP Cloud Function
  */
-exports.importFromEqTimingUrls = functions.https.onRequest(async (req, res) => {
+async function importFromEqTimingUrlsHandler(req, res) {
   try {
     if (req.method !== "POST") {
       res.status(405).send("Use POST");
@@ -3380,16 +3934,90 @@ const result = await importEqTimingFromUrls({
 
     res.json(result);
   } catch (e) {
-    console.error(e);
-    res.status(500).json({
-      error: (e && e.message) ? e.message : String(e),
-    });
+    console.error("importFromEqTimingUrls failed", e && e.stack || e && e.message || String(e));
+    res.status(500).json({error: "Internal server error"});
   }
-});
+}
+
+function resultStatusOrder(result) {
+  const status = String(result && result.status || "").trim().toUpperCase();
+  if (status.includes("DNS") || status.includes("DID NOT START") ||
+    status.includes("IKKE STARTET") || status.includes("STARTET IKKE")) return 3;
+  if (status.includes("DNF") || status.includes("DID NOT FINISH") ||
+    status.includes("BRUTT") || status.includes("IKKE FULLF")) return 2;
+  if (status.includes("DSQ") || status.includes("DQ") ||
+    status.includes("DISQUAL")) return 1;
+  const finished = typeof result.totalMs === "number" && result.totalMs > 0 ||
+    typeof result.rank === "number";
+  return finished ? 0 : 1;
+}
+
+function compareResultDisplayOrder(a, b, resultIds) {
+  const status = resultStatusOrder(a) - resultStatusOrder(b);
+  if (status !== 0) return status;
+  for (const field of ["rank", "totalMs"]) {
+    const aValue = typeof a[field] === "number" && Number.isFinite(a[field]) ? a[field] : null;
+    const bValue = typeof b[field] === "number" && Number.isFinite(b[field]) ? b[field] : null;
+    if (aValue !== bValue) {
+      if (aValue === null) return 1;
+      if (bValue === null) return -1;
+      return aValue - bValue;
+    }
+  }
+  const aName = String(a.entrant && a.entrant.name || a.name || "");
+  const bName = String(b.entrant && b.entrant.name || b.name || "");
+  if (aName !== bName) return aName < bName ? -1 : 1;
+  const aId = String(resultIds && resultIds.get(a) || a.id || "");
+  const bId = String(resultIds && resultIds.get(b) || b.id || "");
+  return aId === bId ? 0 : aId < bId ? -1 : 1;
+}
+
+function addDisplayOrder(results, resultIds) {
+  const ordered = results.slice().sort((a, b) => compareResultDisplayOrder(a, b, resultIds));
+  ordered.forEach((result, index) => {
+    result.displayOrder = index;
+  });
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value)
+      .filter(([key, item]) => key !== "updatedAt" && key !== "contentHash" &&
+        !(item && typeof item === "object" &&
+          (item._methodName || item.constructor && item.constructor.name === "FieldValue")))
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, item]) =>
+      `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function resultContentHash(data) {
+  return crypto.createHash("sha256").update(stableJson(data)).digest("hex");
+}
+
+function buildPublicAnalysisSummary(analysis) {
+  const biathlon = analysis && analysis.biathlon;
+  const metrics = biathlon && biathlon.metrics;
+  if (!metrics || typeof metrics !== "object") return null;
+  const publicAnalysis = withoutHitFields(metrics, biathlon.passes, biathlon.laps);
+  return sanitizeForFirestore({
+    biathlon: {
+      version: firstDefined(biathlon.version, 1),
+      metrics: publicAnalysis.metrics,
+      passes: publicAnalysis.passes,
+      laps: publicAnalysis.laps,
+    },
+  }) || null;
+}
 
 
 // Export internal functions for tests
 module.exports._test = {
+  dispatchPendingImport,
+  publishBiathlonAggregates,
+  getDb,
   withStation,
   buildEtappeMap,
   buildStationSetupMap,
@@ -3400,9 +4028,18 @@ module.exports._test = {
   buildDerivedResultMetrics,
   buildRelayLegBiathlon,
   sanitizeForFirestore,
+  resultContentHash,
+  addDisplayOrder,
+  compareResultDisplayOrder,
+  buildPublicAnalysisSummary,
   classifyResultProfile,
   buildStageDoc,
   addMetricRanks,
+  addShootingPassRanks,
+  addRawPassRanks,
+  choosePrimaryStageSummary,
+  classStageAthleteCount,
+  refreshClassRootSummary,
   buildClubDoc,
   buildAffiliationDoc,
   buildAthleteDoc,
@@ -3415,6 +4052,7 @@ module.exports._test = {
   getClassIdsFromEtapper,
   getImportableClassIds,
   getImportTargets,
+  importFromEqTimingUrlsHandler,
   hasAdvancedToLaterStage,
   collectTimeItemsFromParticipantPasses,
   buildContestantsPassesUrl,
@@ -3433,56 +4071,119 @@ function getTasksClient() {
   return tasksClient;
 }
 
-const PROJECT_ID = process.env.GCLOUD_PROJECT;
-const QUEUE_LOCATION = "us-central1"; // samme region som functions
+const QUEUE_LOCATION = FUNCTION_REGION;
 const QUEUE_ID = "imports";
 
-async function enqueueImportChunk(jobId, eventId, nextClassIndex, classCount) {
+async function enqueueImportChunk(jobId, eventId, nextClassIndex, classCount, runId, dispatchGeneration = 0) {
   const parent = getTasksClient().queuePath(PROJECT_ID, QUEUE_LOCATION, QUEUE_ID);
 
-  const url = `https://us-central1-${PROJECT_ID}.cloudfunctions.net/runImportEventChunk`;
+  const url = `https://${FUNCTION_REGION}-${PROJECT_ID}.cloudfunctions.net/runImportEventChunk`;
+  const serviceAccountEmail = TASKS_SERVICE_ACCOUNT;
 // 79179
   const payload = {
     jobId,
     eventId,
     classIndex: nextClassIndex,
     classCount,
+    ...(runId ? {runId, dispatchGeneration} : {}),
   };
 
   const task = {
+    ...(runId ? {name: `${parent}/tasks/import-${runId}-${nextClassIndex}-${dispatchGeneration}`} : {}),
     httpRequest: {
       httpMethod: "POST",
       url,
       headers: { "Content-Type": "application/json" },
       body: Buffer.from(JSON.stringify(payload)).toString("base64"),
+      oidcToken: {
+        serviceAccountEmail,
+        audience: url,
+      },
     },
   };
 
-  await getTasksClient().createTask({ parent, task });
+  try {
+    await getTasksClient().createTask({ parent, task });
+  } catch (error) {
+    if (!runId || Number(error.code) !== 6) throw error;
+    // ALREADY_EXISTS: the same durable dispatch was previously accepted.
+  }
+}
+
+async function dispatchPendingImport(jobRef) {
+  const snapshot = await jobRef.get();
+  const job = snapshot.exists ? snapshot.data() : {};
+  const pending = job.pendingDispatch;
+  if (!pending || pending.runId !== job.runId || job.done ||
+    ["initializing", "blocked", "partial"].includes(job.status)) return;
+  try {
+    await enqueueImportChunk(jobRef.id, job.eventId, pending.classIndex,
+      job.classCount, pending.runId, pending.dispatchGeneration || 0);
+  } catch (error) {
+    await getDb().runTransaction(async (transaction) => {
+      const current = await transaction.get(jobRef);
+      const data = current.exists ? current.data() : {};
+      if (data.runId !== pending.runId || !data.pendingDispatch ||
+        data.pendingDispatch.classIndex !== pending.classIndex ||
+        (data.pendingDispatch.dispatchGeneration || 0) !==
+        (pending.dispatchGeneration || 0)) return;
+      transaction.set(jobRef, {
+        dispatchFailureCount: (data.dispatchFailureCount || 0) + 1,
+        lastDispatchErrorCode: String(error.code || "UNKNOWN"),
+      }, {merge: true});
+    });
+    throw error;
+  }
+  await getDb().runTransaction(async (transaction) => {
+    const current = await transaction.get(jobRef);
+    const data = current.exists ? current.data() : {};
+    if (data.runId !== pending.runId || !data.pendingDispatch ||
+      (data.pendingDispatch.dispatchGeneration || 0) !== (pending.dispatchGeneration || 0) ||
+      data.pendingDispatch.classIndex !== pending.classIndex) return;
+    transaction.set(jobRef, {
+      pendingDispatch: FieldValue.delete(),
+      lastDispatchAtMs: Date.now(),
+      dispatchFailureCount: 0,
+      lastDispatchErrorCode: FieldValue.delete(),
+    }, {merge: true});
+  });
 }
 
 /**
  * Starter en importjobb og legger første task i kø.
  * Body: { eventId: number, classCount?: number }
  */
-exports.startImportEvent = functions.https.onRequest(async (req, res) => {
+exports.startImportEvent = onRequest({
+  region: FUNCTION_REGION,
+  timeoutSeconds: 60,
+  maxInstances: 2,
+  serviceAccount: RUNTIME_SERVICE_ACCOUNT,
+  invoker: "private",
+}, async (req, res) => {
   try {
     if (req.method !== "POST") {
       res.status(405).send("Use POST");
       return;
     }
 
-    const body = req.body || {};
+    const body = req.body && typeof req.body === "object" &&
+      !Array.isArray(req.body) ? req.body : {};
     const eventId = Number(body.eventId);
     const classCount = body.classCount != null ? Number(body.classCount) : 1;
 
-    if (Number.isNaN(eventId)) {
+    if (!Number.isInteger(eventId) || eventId <= 0) {
       res.status(400).json({ error: "Missing/invalid eventId" });
       return;
     }
-    if (Number.isNaN(classCount) || classCount <= 0) {
-      res.status(400).json({ error: "classCount must be a number > 0" });
+    if (!Number.isInteger(classCount) || classCount <= 0 || classCount > 20) {
+      res.status(400).json({ error: "classCount must be an integer between 1 and 20" });
       return;
+    }
+
+    const resumeRunId = body.resumeRunId;
+    if (resumeRunId != null && (typeof resumeRunId !== "string" ||
+      !/^[A-Za-z0-9-]{1,128}$/.test(resumeRunId))) {
+      throw new HttpError(400, "Invalid resumeRunId");
     }
 
     const eventUrl = `https://live.eqtiming.com/api/Event/${eventId}`;
@@ -3493,30 +4194,123 @@ exports.startImportEvent = functions.https.onRequest(async (req, res) => {
     ]);
 
     const classOverview = buildClassOverview(event, participants);
+    const allImportTargets = getImportTargets(event, participants);
+    let importTargets = allImportTargets;
 
-    const jobRef = getDb().collection("importJobs").doc();
+    const jobRef = getDb().collection("importJobs").doc(`event-${eventId}`);
+    if (resumeRunId != null) {
+      const previous = await jobRef.get();
+      if (!previous.exists || previous.data().runId !== resumeRunId ||
+        previous.data().manifestVersion !== 1 || previous.data().initialized !== true ||
+        !["partial", "blocked", "error"].includes(previous.data().status)) {
+        throw new HttpError(409, "This run cannot be resumed");
+      }
+      const targets = await jobRef.collection("runs").doc(resumeRunId)
+        .collection("targets").get();
+      if (targets.docs.length !== previous.data().targetCount) {
+        throw new HttpError(409, "Incomplete manifest; start a new verified import instead");
+      }
+      importTargets = targets.docs.map((doc) => doc.data())
+        .filter((target) => target.status !== "done")
+        .sort((a, b) => a.ordinal - b.ordinal)
+        .map((target) => ({stageId: target.stageId, classId: target.classId, order: target.order}));
+      if (!importTargets.length) throw new HttpError(409, "No unresolved targets");
+    }
     const jobId = jobRef.id;
-
-    await jobRef.set({
-      jobId,
-      eventId,
-      classCount,
-      status: "queued",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      nextClassIndex: 0,
-      done: false,
-      errors: [],
-      classOverview,
-      classResults: {},
+    const runId = crypto.randomUUID();
+    let alreadyRunning = false;
+    await getDb().runTransaction(async (transaction) => {
+      const existing = await transaction.get(jobRef);
+      if (resumeRunId && (!existing.exists || existing.data().runId !== resumeRunId)) {
+        throw new HttpError(409, "Import run changed before resumption");
+      }
+      const status = existing.exists ? String(existing.data().status || "") : "";
+      if (status === "initializing" || status === "queued" || status === "running") {
+        alreadyRunning = true;
+        return;
+      }
+      transaction.set(jobRef, {
+        jobId,
+        runId,
+        ...(resumeRunId ? {resumedFromRunId: resumeRunId} : {}),
+        eventId,
+        classCount,
+        status: "initializing",
+        initializationExpiresAtMs: Date.now() + INITIALIZATION_TIMEOUT_MS,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        nextClassIndex: 0,
+        done: false,
+        errors: [],
+        manifestVersion: 1,
+        targetCount: importTargets.length,
+        completedTargetCount: 0,
+      });
     });
+    if (alreadyRunning) {
+      res.status(409).json({error: "An import is already running for this event", jobId});
+      return;
+    }
 
-    await enqueueImportChunk(jobId, eventId, 0, classCount);
+    try {
+      const targetCollection = jobRef.collection("runs").doc(runId).collection("targets");
+      await batchSetDocs(importTargets.map((target, ordinal) => ({
+        ref: targetCollection.doc(`${target.stageId}_${target.classId}`),
+        data: {...target, ordinal, status: "queued", attempts: 0},
+      })));
+      const eventRef = getDb().collection("events").doc(String(eventId));
+      await eventRef.set(sanitizeForFirestore({...buildEventDoc(event, eventId, participants),
+        importState: "importing"}) || {}, {merge: true});
+      await batchSetDocs([...new Set(allImportTargets.map((target) => target.classId))]
+        .map((classId) => ({
+          ref: eventRef.collection("classes").doc(String(classId)),
+          data: {classId, name: event.Klasser && event.Klasser[String(classId)] &&
+            event.Klasser[String(classId)].Navn || `Klasse ${classId}`},
+        })));
+      const stageWrites = getEventStages(event)
+        .filter((entry) => !isAdministrativeStage(entry.stage))
+        .map((entry) => ({
+          ref: eventRef.collection("stages").doc(entry.id),
+          data: Object.assign({}, buildStageDoc(event, eventId, entry.id), {
+            classImportStates: Object.fromEntries(importTargets
+              .filter((target) => String(target.stageId) === entry.id)
+              .map((target) => [String(target.classId), "importing"])),
+            classIds: [...new Set(allImportTargets
+              .filter((target) => String(target.stageId) === entry.id)
+              .map((target) => target.classId))],
+          }),
+        }));
+      await batchSetDocs(stageWrites);
+      await getDb().runTransaction(async (transaction) => {
+        const current = await transaction.get(jobRef);
+        if (!current.exists ||
+          !canFinalizeInitialization(current.data(), runId, Date.now())) {
+          throw new HttpError(409, "Import initialization expired or run changed");
+        }
+        transaction.set(jobRef, {
+          status: "queued", pendingDispatch: {runId, classIndex: 0, dispatchGeneration: 0},
+          initialized: true, initializationExpiresAtMs: FieldValue.delete(),
+          dispatchGeneration: 0, lastProgressAtMs: Date.now(),
+        }, {merge: true});
+      });
+      await dispatchPendingImport(jobRef);
+    } catch (enqueueError) {
+      await getDb().runTransaction(async (transaction) => {
+      const current = await transaction.get(jobRef);
+      if (!current.exists || current.data().runId !== runId ||
+        !["initializing", "queued"].includes(current.data().status)) return;
+      transaction.set(jobRef, {
+        status: "error",
+        lastError: "Could not queue the first import chunk.",
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      });
+      throw enqueueError;
+    }
 
-    res.json({ ok: true, jobId, eventId, status: "queued" });
+    res.json({ ok: true, jobId, runId, eventId, status: "queued" });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e?.message || String(e) });
+    sendHandlerError(res, e, "startImportEvent failed");
   }
 });
 
@@ -3524,11 +4318,18 @@ exports.startImportEvent = functions.https.onRequest(async (req, res) => {
  * Worker som kjører én chunk, oppdaterer jobben, og legger neste chunk i kø hvis ikke ferdig.
  * Body: { jobId: string, eventId: number, classIndex: number, classCount: number }
  */
-exports.runImportEventChunk = functions.https.onRequest({
+exports.runImportEventChunk = onRequest({
+  region: FUNCTION_REGION,
   memory: "1GiB",
   timeoutSeconds: 540,
+  maxInstances: 2,
+  serviceAccount: RUNTIME_SERVICE_ACCOUNT,
+  invoker: [TASKS_SERVICE_ACCOUNT],
 }, async (req, res) => {
   let jobId = "";
+  let claimed = false;
+  const leaseOwner = crypto.randomUUID();
+  let claimedRunId = null;
 
   try {
     if (req.method !== "POST") {
@@ -3536,13 +4337,26 @@ exports.runImportEventChunk = functions.https.onRequest({
       return;
     }
 
-    const body = req.body || {};
+    const body = req.body && typeof req.body === "object" &&
+      !Array.isArray(req.body) ? req.body : {};
     jobId = String(body.jobId || "");
+    if (body.kind === "probe") {
+      if (typeof body.probeId !== "string" || !/^[a-f0-9-]{36}$/.test(body.probeId)) {
+        throw new HttpError(400, "Invalid probeId");
+      }
+      await getDb().collection("importProbes").doc(body.probeId).set({
+        ok: true, processedAt: FieldValue.serverTimestamp(),
+      });
+      res.json({ok: true, probeId: body.probeId});
+      return;
+    }
     const eventId = Number(body.eventId);
-    const classIndex = Number(body.classIndex || 0);
-    const classCount = Number(body.classCount || 1);
+    const classIndex = Number(body.classIndex);
+    const classCount = Number(body.classCount);
 
-    if (!jobId || Number.isNaN(eventId)) {
+    if (!jobId || !Number.isInteger(eventId) || eventId <= 0 ||
+      !Number.isInteger(classIndex) || classIndex < 0 ||
+      !Number.isInteger(classCount) || classCount <= 0 || classCount > 20) {
       res.status(400).json({ error: "Missing/invalid jobId/eventId" });
       return;
     }
@@ -3550,78 +4364,296 @@ exports.runImportEventChunk = functions.https.onRequest({
     
 
     const jobRef = getDb().collection("importJobs").doc(jobId);
-    const jobSnap = await jobRef.get();
-    if (!jobSnap.exists) {
-      res.status(404).json({ error: "Job not found" });
+    const claim = await getDb().runTransaction(async (transaction) => {
+      const jobSnap = await transaction.get(jobRef);
+      if (!jobSnap.exists) throw new HttpError(404, "Job not found");
+
+      const job = jobSnap.data() || {};
+      const decision = claimDecision(job, {
+        eventId, classCount, classIndex, runId: body.runId,
+        dispatchGeneration: body.dispatchGeneration,
+      }, Date.now());
+      if (decision === "mismatch") {
+        throw new HttpError(409, "Chunk does not match the import job");
+      }
+      if (decision === "complete" || decision === "obsolete") {
+        return {shouldRun: false, recoverDispatch: decision === "complete"};
+      }
+      if (decision === "busy" || decision === "legacy-lock") {
+        throw new HttpError(409, "Another import chunk is already running");
+      }
+      if (decision !== "claim") {
+        throw new HttpError(409, "Chunk is not the next import chunk");
+      }
+
+      transaction.set(jobRef, {
+        status: "running",
+        activeClassIndex: classIndex,
+        leaseOwner,
+        leaseExpiresAtMs: Date.now() + LEASE_MS,
+        lastError: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {
+        shouldRun: true,
+        runId: job.runId || null,
+        manifestVersion: job.manifestVersion || null,
+        targetCount: job.targetCount,
+        importTargets: Array.isArray(job.importTargets) ? job.importTargets : null,
+      };
+    });
+
+    if (!claim.shouldRun) {
+      if (claim.recoverDispatch) await dispatchPendingImport(jobRef);
+      res.json({ok: true, skipped: true, jobId});
       return;
     }
-
-    await jobRef.set(
-      {
-        status: "running",
-        lastError: admin.firestore.FieldValue.delete(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    claimed = true;
+    claimedRunId = claim.runId;
+    if (claim.manifestVersion === 1) {
+      const snapshot = await jobRef.collection("runs").doc(claimedRunId)
+        .collection("targets").get();
+      claim.importTargets = snapshot.docs.map((doc) => doc.data())
+        .sort((left, right) => left.ordinal - right.ordinal);
+      if (claim.importTargets.length !== claim.targetCount ||
+        claim.importTargets.some((target, ordinal) => target.ordinal !== ordinal)) {
+        throw sourceError("INCOMPLETE_IMPORT_MANIFEST");
+      }
+    }
 
     // 👇 Denne må finnes: chunk-importen din
-    const chunkResult = await importWholeEvent({
+    const chunkResult = await execution.run({
+      jobRef, owner: leaseOwner, runId: claimedRunId,
+      deadlineMs: Date.now() + 7 * 60 * 1000,
+    }, () => importWholeEvent({
       eventId,
       classIndex,
       classCount,
-    });
+      importTargets: claim.importTargets || undefined,
+      verifyCoverage: claim.manifestVersion === 1,
+    }));
+    if (claim.manifestVersion === 1) {
+      verifyChunk(claim.importTargets, classIndex, classCount, chunkResult);
+    }
 
     const classResults = {};
     for (const classResult of chunkResult.perClass || []) {
       if (classResult && classResult.classId != null) {
-        classResults[String(classResult.classId)] = classResult;
+        classResults[`${classResult.etappeUid}_${classResult.classId}`] = classResult;
       }
     }
 
-    await jobRef.set(
+    await getDb().runTransaction(async (transaction) => {
+    const currentJob = await transaction.get(jobRef);
+    if (!currentJob.exists || !ownsLease(currentJob.data(), leaseOwner, claimedRunId)) {
+      throw new HttpError(409, "Import lease ownership changed");
+    }
+    const previousClassResults = currentJob.exists &&
+      currentJob.data() && typeof currentJob.data().classResults === "object" ?
+      currentJob.data().classResults : {};
+    const failedThisChunk = (chunkResult.perClass || []).filter((result) => !result.ok).length;
+    const failedTargetCount = Number(currentJob.data().failedTargetCount || 0) + failedThisChunk;
+    const verifiedDone = chunkResult.done && failedTargetCount === 0;
+    transaction.set(jobRef,
       {
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         nextClassIndex: chunkResult.nextClassIndex,
-        done: chunkResult.done,
-        lastResult: chunkResult,
-        classResults,
-        lastError: admin.firestore.FieldValue.delete(),
-        status: chunkResult.done ? "done" : "running",
+        lastProgressAtMs: Date.now(),
+        recoveryCount: 0,
+        done: verifiedDone,
+        lastResult: claim.manifestVersion === 1 ? {
+          classIndex: chunkResult.classIndex,
+          nextClassIndex: chunkResult.nextClassIndex,
+          classesFound: chunkResult.classesFound,
+          classesImported: chunkResult.classesImported,
+          done: chunkResult.done,
+        } : chunkResult,
+        ...(claim.manifestVersion === 1 ? {
+          completedTargetCount: Number(currentJob.data().completedTargetCount || 0) + chunkResult.classesImported,
+          failedTargetCount,
+          allTargetsAttempted: chunkResult.done,
+        } : {classResults: Object.assign({}, previousClassResults, classResults)}),
+        lastError: FieldValue.delete(),
+        activeClassIndex: FieldValue.delete(),
+        leaseOwner: FieldValue.delete(),
+        leaseExpiresAtMs: FieldValue.delete(),
+        status: chunkResult.done ? (verifiedDone ? "done" : "partial") : "queued",
+        pendingDispatch: !chunkResult.done && claimedRunId ? {
+          runId: claimedRunId, classIndex: chunkResult.nextClassIndex,
+          dispatchGeneration: currentJob.data().dispatchGeneration || 0,
+        } : FieldValue.delete(),
       },
       { merge: true }
     );
+    if (claim.manifestVersion === 1) {
+      transaction.set(getDb().collection("events").doc(String(eventId)), {
+        importState: chunkResult.done ? (verifiedDone ? "updated" : "partial") : "importing",
+        ...(verifiedDone ? {lastVerifiedRunId: claimedRunId} : {}),
+      }, {merge: true});
+      for (const result of chunkResult.perClass || []) {
+        const targetRef = jobRef.collection("runs").doc(claimedRunId)
+          .collection("targets").doc(`${result.etappeUid}_${result.classId}`);
+        transaction.set(targetRef, {
+          status: result.ok ? "done" : "failed",
+          importedResults: result.importedResults,
+          errorCode: result.errorCode || FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        const importState = result.ok ? (result.hasTimingData ? "updated" : "waiting") : "partial";
+        const stageRef = getDb().collection("events").doc(String(eventId))
+          .collection("stages").doc(String(result.etappeUid));
+        transaction.set(stageRef, {
+          classImportStates: {[String(result.classId)]: importState},
+        }, {merge: true});
+        transaction.set(stageRef.collection("classes").doc(String(result.classId)), {
+          importState,
+        }, {merge: true});
+      }
+    }
+    });
 
     if (!chunkResult.done) {
-      await enqueueImportChunk(jobId, eventId, chunkResult.nextClassIndex, classCount);
+      if (claimedRunId) {
+        await dispatchPendingImport(jobRef);
+      } else {
+        await enqueueImportChunk(jobId, eventId, chunkResult.nextClassIndex, classCount);
+      }
     }
 
     res.json({ ok: true, jobId, chunk: chunkResult });
   } catch (e) {
-    console.error(e);
-    if (jobId) {
+    if (claimed && jobId) {
       try {
-        await getDb().collection("importJobs").doc(jobId).set({
-          status: "error",
-          lastError: e?.message || String(e),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        let yielded = false;
+        const failedJobRef = getDb().collection("importJobs").doc(jobId);
+        await getDb().runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(failedJobRef);
+        if (!snapshot.exists || !ownsLease(snapshot.data(), leaseOwner, claimedRunId)) return;
+        yielded = e.code === "IMPORT_SLICE_YIELD" && Boolean(claimedRunId);
+        const generation = (snapshot.data().dispatchGeneration || 0) + 1;
+        transaction.set(failedJobRef, {
+          status: yielded ? "queued" : "error",
+          lastError: yielded ? FieldValue.delete() : "Import failed; see function logs for details.",
+          ...(yielded ? {
+            dispatchGeneration: generation,
+            pendingDispatch: {runId: claimedRunId,
+              classIndex: snapshot.data().nextClassIndex, dispatchGeneration: generation},
+          } : {}),
+          activeClassIndex: FieldValue.delete(),
+          leaseOwner: FieldValue.delete(),
+          leaseExpiresAtMs: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
+        });
+        if (yielded) {
+          await dispatchPendingImport(failedJobRef);
+          res.json({ok: true, yielded: true, jobId});
+          return;
+        }
       } catch (statusError) {
-        console.error("Failed to persist import job error", statusError);
+        console.error(
+          "Failed to persist import job error",
+          statusError && statusError.stack || statusError && statusError.message ||
+            String(statusError),
+        );
       }
     }
-    res.status(500).json({ error: e?.message || String(e) });
+    sendHandlerError(res, e, "runImportEventChunk failed");
   }
 });
 
 /**
  * Sjekk status: GET ?jobId=...
  */
-exports.getImportStatus = functions.https.onRequest(async (req, res) => {
+exports.repairImportDispatches = onSchedule({
+  schedule: "every 5 minutes",
+  region: FUNCTION_REGION,
+  timeoutSeconds: 300,
+  maxInstances: 1,
+  serviceAccount: RUNTIME_SERVICE_ACCOUNT,
+}, async () => {
+  const pending = await getDb().collection("importJobs")
+    .where("status", "in", ["initializing", "queued", "running", "error"]).get();
+  for (const snapshot of pending.docs) {
+    const job = snapshot.data();
+    if (!job.runId || job.done) continue;
+    try {
+      await getDb().runTransaction(async (transaction) => {
+        const current = await transaction.get(snapshot.ref);
+        if (!current.exists) return;
+        const data = current.data();
+        if (data.runId !== job.runId) return;
+        const decision = recoveryDecision(data, Date.now());
+        if (decision === "block-initialization") {
+          const eventRef = getDb().collection("events").doc(String(data.eventId));
+          const event = await transaction.get(eventRef);
+          transaction.set(snapshot.ref, {
+            status: "blocked", lastError: "IMPORT_INITIALIZATION_EXPIRED",
+            initialized: false, pendingDispatch: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+          if (event.exists) transaction.set(eventRef, {importState: "partial"}, {merge: true});
+        } else if (decision === "block") {
+          transaction.set(snapshot.ref, {
+            status: "blocked", lastError: "IMPORT_RECOVERY_EXHAUSTED",
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+          transaction.set(getDb().collection("events").doc(String(data.eventId)), {
+            importState: "partial",
+          }, {merge: true});
+        } else if (decision === "recover") {
+          const generation = (data.dispatchGeneration || 0) + 1;
+          transaction.set(snapshot.ref, {
+            status: "queued",
+            recoveryCount: (data.recoveryCount || 0) + 1,
+            dispatchGeneration: generation,
+            activeClassIndex: FieldValue.delete(),
+            leaseOwner: FieldValue.delete(),
+            leaseExpiresAtMs: FieldValue.delete(),
+            pendingDispatch: {runId: data.runId, classIndex: data.nextClassIndex,
+              dispatchGeneration: generation},
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+        }
+      });
+      await dispatchPendingImport(snapshot.ref);
+      const latest = await snapshot.ref.get();
+      if (latest.data().status === "blocked") {
+        console.error("IMPORT_RECOVERY_EXHAUSTED", {jobId: snapshot.id});
+      }
+    } catch (error) {
+      console.error("IMPORT_DISPATCH_FAILED", {
+        jobId: snapshot.id,
+        code: String(error.code || "UNKNOWN"),
+      });
+    }
+  }
+});
+
+exports.getImportStatus = onRequest({
+  region: FUNCTION_REGION,
+  timeoutSeconds: 60,
+  maxInstances: 2,
+  serviceAccount: RUNTIME_SERVICE_ACCOUNT,
+  invoker: "private",
+}, async (req, res) => {
   try {
-    const jobId = String(req.query.jobId || "");
-    if (!jobId) {
-      res.status(400).json({ error: "Missing jobId" });
+    if (req.method !== "GET") {
+      res.status(405).send("Use GET");
+      return;
+    }
+
+    if (req.query && req.query.probeId != null) {
+      const probeId = String(req.query.probeId);
+      if (!/^[a-f0-9-]{36}$/.test(probeId)) throw new HttpError(400, "Invalid probeId");
+      const probe = await getDb().collection("importProbes").doc(probeId).get();
+      res.json({ok: probe.exists && probe.data().ok === true});
+      return;
+    }
+
+    const jobId = String((req.query && req.query.jobId) || "");
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(jobId)) {
+      res.status(400).json({error: "Missing/invalid jobId"});
       return;
     }
 
@@ -3632,9 +4664,21 @@ exports.getImportStatus = functions.https.onRequest(async (req, res) => {
       return;
     }
 
-    res.json(snap.data());
+    const job = snap.data();
+    if (req.query.includeTargets === "true" && job.runId && job.manifestVersion === 1) {
+      const offset = Number(req.query.offset || 0);
+      if (!Number.isInteger(offset) || offset < 0) {
+        throw new HttpError(400, "Invalid target offset");
+      }
+      const targets = await snap.ref.collection("runs").doc(job.runId)
+        .collection("targets").orderBy("ordinal").offset(offset).limit(100).get();
+      res.json({...job, targets: targets.docs.map((target) => ({id: target.id, ...target.data()})),
+        nextOffset: targets.size === 100 && offset + targets.size < job.targetCount ?
+          offset + targets.size : null});
+    } else {
+      res.json(job);
+    }
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: e?.message || String(e) });
+    sendHandlerError(res, e, "getImportStatus failed");
   }
 });

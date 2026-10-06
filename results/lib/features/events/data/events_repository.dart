@@ -24,7 +24,7 @@ class FirestoreEventsRepository implements EventsRepository {
         if (dateCompare != 0) return dateCompare;
         return a.name.compareTo(b.name);
       });
-      return events;
+      return List.unmodifiable(events);
     });
   }
 }

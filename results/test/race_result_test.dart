@@ -60,6 +60,68 @@ void main() {
     expect(result.biathlon?.netSkiTimeMs, 335000);
   });
 
+  test('reads public biathlon analysis with ski laps', () {
+    final result = RaceResult.fromMap('result-1', {
+      'analysisSummary': {
+        'biathlon': {
+          'metrics': {
+            'skiTimeMs': 310000,
+            'netSkiTimeMs': 335000,
+            'shootingTimeMs': 65000,
+          },
+          'passes': {
+            'shoot1': {
+              'index': 1,
+              'rangeMs': 30000,
+              'rangeRank': 2,
+              'misses': 1,
+            },
+          },
+          'laps': {
+            'lap1': {
+              'skiMs': 100000,
+              'startCode': 'start',
+              'endCode': 'INS1',
+              'beforeShooting': 1,
+            },
+            'lap2': {
+              'skiMs': 120000,
+              'startCode': 'UTS1',
+              'endCode': 'INS2',
+              'beforeShooting': 2,
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.biathlon?.skiTimeMs, 310000);
+    expect(result.biathlon?.netSkiTimeMs, 335000);
+    expect(result.biathlon?.shootingTimeMs, 65000);
+    expect(result.biathlon?.passAt(1)?.rangeRank, 2);
+    expect(result.biathlon?.laps, hasLength(2));
+    expect(result.biathlon?.lapAt(2)?.skiMs, 120000);
+    expect(result.biathlon?.lapAt(2)?.startCode, 'UTS1');
+  });
+
+  test('derives ski time from US-to-INS laps when the metric is missing', () {
+    final result = RaceResult.fromMap('result-1', {
+      'analysisSummary': {
+        'biathlon': {
+          'metrics': {'netSkiTimeMs': 1153900, 'penaltyTimeMs': 21300},
+          'laps': {
+            'lap1': {'skiMs': 304000, 'startCode': 'start', 'endCode': 'INS1'},
+            'lap2': {'skiMs': 424600, 'startCode': 'US1', 'endCode': 'INS2'},
+            'lap3': {'skiMs': 404000, 'startCode': 'US2', 'endCode': 'Mål'},
+          },
+        },
+      },
+    });
+
+    expect(result.biathlon?.skiTimeMs, 1132600);
+    expect(result.biathlon?.netSkiTimeMs, 1153900);
+  });
+
   test('schema v3 leaves irrelevant sport analysis absent', () {
     final result = RaceResult.fromMap('result-1', {
       'schemaVersion': 3,

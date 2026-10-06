@@ -1,5 +1,13 @@
+import 'dart:convert';
+
+import '../domain/split_def.dart';
+
 const resultClassQueryParameter = 'classId';
 const resultSplitQueryParameter = 'split';
+const resultSplitModeQueryParameter = 'splitMode';
+const resultSplitFromQueryParameter = 'splitFrom';
+const resultSplitToQueryParameter = 'splitTo';
+const resultSplitIdsQueryParameter = 'splitIds';
 const compareBaseClassQueryParameter = 'compareBaseClassId';
 const compareBaseResultQueryParameter = 'compareBaseResultId';
 const compareWithResultQueryParameter = 'compareWithResultId';
@@ -13,11 +21,52 @@ String? resultSplitQueryValue(Map<String, String> queryParameters) {
       queryParameters['splitId'];
 }
 
+SplitRangeSelection? resultSplitRangeQueryValue(
+  Map<String, String> queryParameters,
+) {
+  final mode = queryParameters[resultSplitModeQueryParameter];
+  final toSplitId =
+      _queryValue(queryParameters[resultSplitToQueryParameter]) ??
+      resultSplitQueryValue(queryParameters);
+  if (mode == 'range') {
+    if (toSplitId == null) return null;
+    return SplitRangeSelection(
+      fromSplitId: _queryValue(queryParameters[resultSplitFromQueryParameter]),
+      toSplitId: toSplitId,
+    );
+  }
+  if (mode != 'independent') return null;
+
+  final encodedIds = queryParameters[resultSplitIdsQueryParameter];
+  if (encodedIds == null) return null;
+  try {
+    final decodedIds = jsonDecode(encodedIds);
+    if (decodedIds is! List) return null;
+    final includedSplitIds = decodedIds
+        .whereType<String>()
+        .map(_queryValue)
+        .whereType<String>()
+        .toList(growable: false);
+    final focusedSplitId =
+        toSplitId ?? (includedSplitIds.isEmpty ? null : includedSplitIds.last);
+    if (focusedSplitId == null || includedSplitIds.isEmpty) return null;
+    return SplitRangeSelection(
+      fromSplitId: _queryValue(queryParameters[resultSplitFromQueryParameter]),
+      toSplitId: focusedSplitId,
+      includedSplitIds: includedSplitIds,
+      isIndependent: true,
+    );
+  } on FormatException {
+    return null;
+  }
+}
+
 String resultsLocation({
   required String eventId,
   String? classId,
   String? stageId,
   String? splitId,
+  SplitRangeSelection? splitRange,
   int? relayLegNumber,
   String? compareBaseClassId,
   String? compareBaseResultId,
@@ -28,7 +77,7 @@ String resultsLocation({
     queryParameters: _queryParameters({
       resultClassQueryParameter: classId,
       resultStageQueryParameter: stageId,
-      resultSplitQueryParameter: splitId,
+      ..._splitQueryParameters(splitId: splitId, splitRange: splitRange),
       relayLegQueryParameter: relayLegNumber?.toString(),
       compareBaseClassQueryParameter: compareBaseClassId,
       compareBaseResultQueryParameter: compareBaseResultId,
@@ -43,6 +92,7 @@ String athleteLocation({
   required String resultId,
   String? stageId,
   String? splitId,
+  SplitRangeSelection? splitRange,
   int? relayLegNumber,
   String? compareWithResultId,
   int? compareWithRelayLegNumber,
@@ -53,13 +103,38 @@ String athleteLocation({
         '${Uri.encodeComponent(classId)}/athletes/'
         '${Uri.encodeComponent(resultId)}',
     queryParameters: _queryParameters({
-      resultSplitQueryParameter: splitId,
+      ..._splitQueryParameters(splitId: splitId, splitRange: splitRange),
       resultStageQueryParameter: stageId,
       relayLegQueryParameter: relayLegNumber?.toString(),
       compareWithResultQueryParameter: compareWithResultId,
       compareWithRelayLegQueryParameter: compareWithRelayLegNumber?.toString(),
     }),
   ).toString();
+}
+
+Map<String, String?> _splitQueryParameters({
+  required String? splitId,
+  required SplitRangeSelection? splitRange,
+}) {
+  if (splitRange == null) {
+    return {resultSplitQueryParameter: splitId};
+  }
+  return {
+    resultSplitQueryParameter: splitRange.toSplitId,
+    resultSplitModeQueryParameter: splitRange.isIndependent
+        ? 'independent'
+        : 'range',
+    resultSplitFromQueryParameter: splitRange.fromSplitId,
+    resultSplitToQueryParameter: splitRange.toSplitId,
+    resultSplitIdsQueryParameter: splitRange.isIndependent
+        ? jsonEncode(splitRange.includedSplitIds)
+        : null,
+  };
+}
+
+String? _queryValue(String? value) {
+  final trimmed = value?.trim();
+  return trimmed == null || trimmed.isEmpty ? null : trimmed;
 }
 
 Map<String, String>? _queryParameters(Map<String, String?> values) {

@@ -18,6 +18,8 @@ class BiathlonTable extends StatelessWidget {
     this.onLoadMore,
     this.isLoadingMore = false,
     this.searchQuery = '',
+    this.pageScrollController,
+    this.stickyClassHeader,
     required this.onAthleteTap,
   });
 
@@ -31,11 +33,37 @@ class BiathlonTable extends StatelessWidget {
   final VoidCallback? onLoadMore;
   final bool isLoadingMore;
   final String searchQuery;
+  final ScrollController? pageScrollController;
+  final Widget? stickyClassHeader;
   final ValueChanged<ResultTableRow> onAthleteTap;
 
   @override
   Widget build(BuildContext context) {
-    final columns = _visibleColumns(rows);
+    final width = MediaQuery.sizeOf(context).width;
+    final prioritizeCoreColumns = width < 850;
+    final ultraCompact = width < 320;
+    final compact = width < 600;
+    final showAffiliation = width >= 850;
+    final showBib = width >= 480;
+    final athleteColumnWidth = prioritizeCoreColumns
+        ? (width - (ultraCompact ? 170 : 202)).clamp(72.0, 300.0)
+        : 320.0;
+    final allColumns = _visibleColumns(rows);
+    // On narrow screens put the most useful time field directly after the
+    // athlete. Remaining metrics stay available through horizontal scrolling.
+    final columns = [...allColumns];
+    if (prioritizeCoreColumns) {
+      columns.sort((a, b) {
+        int priority(_BiathlonColumn column) => switch (column.key) {
+          'shooting' => 0,
+          'ski' => 1,
+          'penalty' => 2,
+          'misses' => 3,
+          _ => 4,
+        };
+        return priority(a).compareTo(priority(b));
+      });
+    }
     final activeSortKey = columns.any((column) => column.key == sortKey)
         ? sortKey
         : columns.firstOrNull?.key ?? 'ski';
@@ -43,26 +71,33 @@ class BiathlonTable extends StatelessWidget {
     final visibleRows = sortedRows.indexed
         .where((entry) => entry.$2.result.matchesSearch(searchQuery))
         .toList();
-    final rowHeight = tableDensity == TableDensity.compact ? 42.0 : 54.0;
-    return ResultsLoadMoreViewport(
-      onLoadMore: onLoadMore,
-      isLoadingMore: isLoadingMore,
-      itemCount: rows.length,
-      child: RepaintBoundary(
-        child: DataTable(
-          showCheckboxColumn: false,
-          sortColumnIndex: columns.isEmpty
-              ? null
-              : _sortColumnIndex(activeSortKey, columns),
-          sortAscending: true,
-          headingRowHeight: 42,
-          dataRowMinHeight: rowHeight,
-          dataRowMaxHeight: rowHeight + 8,
-          horizontalMargin: 8,
-          columnSpacing: 26,
-          columns: [
-            const DataColumn(label: Text('PLASS')),
-            const DataColumn(label: Text('UTOVER')),
+    final rowHeight = prioritizeCoreColumns
+        ? tableDensity == TableDensity.compact
+              ? 38.0
+              : 44.0
+        : tableDensity == TableDensity.compact
+        ? 42.0
+        : 54.0;
+    final table = RepaintBoundary(
+      child: DataTable(
+        showCheckboxColumn: false,
+        sortColumnIndex: columns.isEmpty
+            ? null
+            : _sortColumnIndex(
+                activeSortKey,
+                columns,
+                showAffiliation: showAffiliation,
+              ),
+        sortAscending: true,
+        headingRowHeight: prioritizeCoreColumns ? 36 : 42,
+        dataRowMinHeight: rowHeight,
+        dataRowMaxHeight: rowHeight + (prioritizeCoreColumns ? 2 : 8),
+        horizontalMargin: prioritizeCoreColumns ? 0 : 8,
+        columnSpacing: prioritizeCoreColumns ? 4 : 26,
+        columns: [
+          DataColumn(label: Text(ultraCompact ? '#' : 'PLASS')),
+          const DataColumn(label: Text('UTOVER')),
+          if (showAffiliation)
             DataColumn(
               label: ResultAffiliationHeader(
                 view: affiliationView,
@@ -71,31 +106,43 @@ class BiathlonTable extends StatelessWidget {
                 onToggle: onAffiliationViewToggle,
               ),
             ),
-            for (final column in columns)
-              DataColumn(
-                label: SortableTableHeader(label: column.label),
-                numeric: true,
-                onSort: (_, _) => onSortKeyChanged(column.key),
+          for (final column in columns)
+            DataColumn(
+              label: SortableTableHeader(label: column.label),
+              numeric: true,
+              onSort: (_, _) => onSortKeyChanged(column.key),
+            ),
+        ],
+        rows: [
+          for (final (index, row) in visibleRows)
+            DataRow(
+              color: _rowColor(context, row),
+              onSelectChanged: _isDisabled(row)
+                  ? null
+                  : (_) => onAthleteTap(row),
+              cells: _cellsForResult(
+                sortedRows,
+                index,
+                columns,
+                activeSortKey,
+                affiliationView,
+                compact,
+                showAffiliation,
+                showBib,
+                athleteColumnWidth,
               ),
-          ],
-          rows: [
-            for (final (index, row) in visibleRows)
-              DataRow(
-                color: _rowColor(context, row),
-                onSelectChanged: _isDisabled(row)
-                    ? null
-                    : (_) => onAthleteTap(row),
-                cells: _cellsForResult(
-                  sortedRows,
-                  index,
-                  columns,
-                  activeSortKey,
-                  affiliationView,
-                ),
-              ),
-          ],
-        ),
+            ),
+        ],
       ),
+    );
+    return ResultsLoadMoreViewport(
+      onLoadMore: onLoadMore,
+      isLoadingMore: isLoadingMore,
+      itemCount: rows.length,
+      pageScrollController: pageScrollController,
+      stickyClassHeader: stickyClassHeader,
+      stickyTableHeader: table,
+      child: table,
     );
   }
 
@@ -136,6 +183,10 @@ class BiathlonTable extends StatelessWidget {
     List<_BiathlonColumn> columns,
     String activeSortKey,
     ResultAffiliationView affiliationView,
+    bool compact,
+    bool showAffiliation,
+    bool showBib,
+    double athleteColumnWidth,
   ) {
     final row = sortedRows[index];
     final result = row.result;
@@ -148,8 +199,16 @@ class BiathlonTable extends StatelessWidget {
     );
     return [
       DataCell(_MonoText(placement)),
-      DataCell(_NameCell(row: row)),
-      DataCell(Text(_affiliationText(result, affiliationView))),
+      DataCell(
+        _NameCell(
+          row: row,
+          compact: compact,
+          showBib: showBib,
+          width: athleteColumnWidth,
+        ),
+      ),
+      if (showAffiliation)
+        DataCell(Text(_affiliationText(result, affiliationView))),
       for (final column in columns)
         DataCell(_MonoText(column.text(analysis), alignEnd: true)),
     ];
@@ -290,6 +349,15 @@ class BiathlonTable extends StatelessWidget {
       return showOriginalPlacement ? '$placement(DNF)' : placement;
     }
 
+    final persistedSkiRank = row.result.biathlon?.skiRank;
+    if (sortKey == 'ski' && persistedSkiRank != null && persistedSkiRank > 0) {
+      return _withOriginalPlacement(
+        persistedSkiRank,
+        row,
+        showOriginalPlacement: showOriginalPlacement,
+      );
+    }
+
     final currentSortValue = _sortValue(row.result, sortKey);
     if (currentSortValue == null) return '-';
     for (var i = 0; i < index; i++) {
@@ -308,9 +376,14 @@ class BiathlonTable extends StatelessWidget {
     );
   }
 
-  static int _sortColumnIndex(String sortKey, List<_BiathlonColumn> columns) {
+  static int _sortColumnIndex(
+    String sortKey,
+    List<_BiathlonColumn> columns, {
+    required bool showAffiliation,
+  }) {
     final index = columns.indexWhere((column) => column.key == sortKey);
-    return index < 0 ? 3 : 3 + index;
+    final firstMetricColumn = showAffiliation ? 3 : 2;
+    return index < 0 ? firstMetricColumn : firstMetricColumn + index;
   }
 
   static String _withOriginalPlacement(
@@ -340,31 +413,41 @@ class _BiathlonColumn {
 }
 
 class _NameCell extends StatelessWidget {
-  const _NameCell({required this.row});
+  const _NameCell({
+    required this.row,
+    required this.width,
+    required this.showBib,
+    this.compact = false,
+  });
 
   final ResultTableRow row;
+  final double width;
+  final bool showBib;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final result = row.result;
     return SizedBox(
-      width: 320,
+      width: width,
       child: Row(
         children: [
-          SizedBox(
-            width: 52,
-            child: _MonoText(result.bib.isEmpty ? '-' : result.bib),
-          ),
-          const SizedBox(width: 8),
+          if (showBib) ...[
+            SizedBox(
+              width: compact ? 38 : 52,
+              child: _MonoText(result.bib.isEmpty ? '-' : result.bib),
+            ),
+            SizedBox(width: compact ? 4 : 8),
+          ],
           Container(
-            width: 8,
-            height: 32,
+            width: compact ? 5 : 8,
+            height: compact ? 26 : 32,
             decoration: BoxDecoration(
               color: row.color ?? Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: compact ? 6 : 10),
           Expanded(
             child: Row(
               children: [

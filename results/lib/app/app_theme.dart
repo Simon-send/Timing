@@ -67,6 +67,10 @@ ThemeData buildAppTheme(AppThemeVariant variant) {
       headingRowColor: WidgetStateProperty.resolveWith<Color?>(
         (states) => Colors.transparent,
       ),
+      headingTextStyle: TextStyle(
+        color: colorScheme.onSurface,
+        fontWeight: FontWeight.w600,
+      ),
       dataRowColor: WidgetStatePropertyAll(palette.panel),
       dividerThickness: 0.7,
     ),

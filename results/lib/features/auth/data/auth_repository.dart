@@ -6,7 +6,9 @@ abstract class AuthRepository {
 
   User? get currentUser;
 
-  Future<void> signInWithGoogle();
+  Future<GoogleSignInOutcome> signInWithGoogle();
+
+  Future<User?> completeGoogleRedirect();
 
   Future<void> signInWithEmail({
     required String email,
@@ -36,11 +38,28 @@ class FirebaseAuthRepository implements AuthRepository {
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
   @override
-  Future<void> signInWithGoogle() async {
+  Future<GoogleSignInOutcome> signInWithGoogle() async {
     if (!kIsWeb) {
       throw UnsupportedError('Google login is configured for web first.');
     }
-    await _auth.signInWithPopup(GoogleAuthProvider());
+    if (Uri.base.scheme != 'http' && Uri.base.scheme != 'https') {
+      throw const AuthWebEnvironmentException();
+    }
+    final provider = GoogleAuthProvider();
+    if (googleSignInMethodFor(defaultTargetPlatform) ==
+        GoogleSignInMethod.redirect) {
+      await _auth.signInWithRedirect(provider);
+      return GoogleSignInOutcome.redirectStarted;
+    }
+    await _auth.signInWithPopup(provider);
+    return GoogleSignInOutcome.signedIn;
+  }
+
+  @override
+  Future<User?> completeGoogleRedirect() async {
+    if (!kIsWeb) return null;
+    final credential = await _auth.getRedirectResult();
+    return credential.user;
   }
 
   @override
@@ -84,6 +103,17 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<void> signOut() => _auth.signOut();
 }
 
+enum GoogleSignInOutcome { signedIn, redirectStarted }
+
+enum GoogleSignInMethod { popup, redirect }
+
+GoogleSignInMethod googleSignInMethodFor(TargetPlatform platform) {
+  return switch (platform) {
+    TargetPlatform.android || TargetPlatform.iOS => GoogleSignInMethod.redirect,
+    _ => GoogleSignInMethod.popup,
+  };
+}
+
 bool _requiresEmailVerification(User user) {
   final usesPassword = user.providerData.any(
     (provider) => provider.providerId == EmailAuthProvider.PROVIDER_ID,
@@ -96,4 +126,11 @@ class EmailNotVerifiedException implements Exception {
 
   @override
   String toString() => 'EmailNotVerifiedException';
+}
+
+class AuthWebEnvironmentException implements Exception {
+  const AuthWebEnvironmentException();
+
+  @override
+  String toString() => 'AuthWebEnvironmentException';
 }

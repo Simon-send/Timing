@@ -1,6 +1,160 @@
 {
+  "biathlonStatistics": "Статистика биатлона",
+  "biathlonFinishTime": "Итоговое время",
+  "biathlonSkiTime": "Время на лыжне",
+  "biathlonShootingTime": "Время стрельбы",
+  "biathlonHitProneLabel": "Точность лёжа",
+  "biathlonHitStandingLabel": "Точность стоя",
+  "biathlonHitTotalLabel": "Общая точность",
+  "biathlonAllFinishers": "Все финишировавшие",
+  "biathlonTopHalf": "Лучшие 50 %",
+  "biathlonNetSkiTime": "Чистое время на лыжне",
+  "biathlonPenaltyTime": "Штрафное время",
+  "biathlonRangeTime": "Время на стрельбище",
+  "biathlonProneTime": "Время стрельбы лёжа",
+  "biathlonStandingTime": "Время стрельбы стоя",
+  "biathlonTotalMisses": "Всего промахов",
+  "biathlonProneMisses": "Промахи лёжа",
+  "biathlonStandingMisses": "Промахи стоя",
+  "biathlonSkiRank": "Место на лыжне",
+  "biathlonNetSkiRank": "Место по чистому времени",
+  "biathlonShootingRank": "Место по стрельбе",
+  "biathlonRangeRank": "Место на стрельбище",
+  "biathlonPenaltyRank": "Место по штрафам",
+  "biathlonFinishRank": "Итоговое место",
+  "biathlonPassingTime": "Время прохождения",
+  "biathlonSplitTime": "Время отрезка",
+  "biathlonPassingRank": "Место при прохождении",
+  "biathlonSplitRank": "Место на отрезке",
+  "biathlonMissesLabel": "Промахи",
+  "biathlonRangeExitTime": "Время выхода со стрельбища",
+  "biathlonRangeApproach": "Прибытие на стрельбище",
+  "biathlonRangeEntry": "Вход на стрельбище",
+  "biathlonShootingDone": "Стрельба завершена",
+  "biathlonShootingExit": "Выход после стрельбы",
+  "biathlonRangeExitTotal": "Общее время до выхода со стрельбища",
+  "biathlonCumulativeMisses": "Накопленные промахи",
+  "biathlonStartTime": "Время старта",
+  "biathlonDetailSelector": "Другие показатели: отрезки, стрельба и круги",
+  "biathlonExtraDetails": "Все отрезки, стрельбы и лыжные круги",
+  "biathlonComparisonDescription": "Ваши индивидуальные гонки в сравнении с {group} в том же классе и этапе.",
+  "@biathlonComparisonDescription": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonComparisonUnavailable": "Сравнение показателя {metric} с {group} пока недоступно. Для этого показателя нет эталонных данных.",
+  "@biathlonComparisonUnavailable": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentDifferenceCaption": "Разница в процентных пунктах · выше линии лучше",
+  "biathlonDifferenceCaption": "Разница относительно {group} · выше линии лучше",
+  "@biathlonDifferenceCaption": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonRaceLabel": "Гонка {id}",
+  "@biathlonRaceLabel": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonCohortSummary": "{group}: {count} из {total} финишировавших",
+  "@biathlonCohortSummary": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonShootingNumber": "Стрельба {index}",
+  "@biathlonShootingNumber": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonSkiLap": "Лыжный круг {index}",
+  "@biathlonSkiLap": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonOwnValue": "Вы: {value}",
+  "@biathlonOwnValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonYourDifference": "Ваша разница: {value}",
+  "@biathlonYourDifference": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonDecimalMisses": "{value} промахов",
+  "@biathlonDecimalMisses": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentagePoints": "{value} процентных пункта",
+  "@biathlonPercentagePoints": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonAverageHitPercent": "Средний процент попаданий",
+  "biathlonAverageHitExplanation": "Ваши завершённые индивидуальные гонки по биатлону. Каждая гонка имеет одинаковый вес; отсутствующие данные стрельбы не учитываются.",
+  "biathlonHitProne": "Лёжа",
+  "biathlonHitStanding": "Стоя",
+  "biathlonHitTotal": "Всего",
+  "biathlonAverageRaceCount": "Гонок: {count}",
+  "@biathlonAverageRaceCount": {"placeholders": {"count": {"type": "int"}}},
+  "importWaiting": "Ожидание результатов",
+  "importInProgress": "Импорт",
+  "importPartial": "Частично импортировано",
+  "importUpdated": "Обновлено",
   "@@locale": "ru",
-  "appTitle": "EQ Results",
+  "regressionCompareWith": "Сравнить с: {target}",
+  "@regressionCompareWith": {"placeholders": {"target": {"type": "String"}}},
+  "regressionChooseTarget": "Выбрать сравнение",
+  "regressionSelectFromList": "Выберите в списке результатов значение для сравнения с {subject}, затем нажмите ОК.",
+  "@regressionSelectFromList": {"placeholders": {"subject": {"type": "String"}}},
+  "regressionCancel": "Отмена",
+  "regressionApply": "ОК",
+  "appTitle": "Результаты",
   "eventsTitle": "Choose an event",
   "eventsSubtitle": "Find an event and open live results.",
   "searchEvents": "Search events",
@@ -22,9 +176,22 @@
   "classes": "Classes",
   "classLabel": "Class",
   "split": "Split",
+  "searchResults": "Поиск спортсмена, клуба или команды",
   "athlete": "Athlete",
   "club": "Club",
   "shooting": "Shooting",
+  "biathlonShootingIn": "На огневой рубеж {index}",
+  "@biathlonShootingIn": {"placeholders": {"index": {"type": "int"}}},
+  "biathlonPositionProne": "prone",
+  "biathlonPositionStanding": "standing",
+  "biathlonPositionUnknown": "unknown position",
+  "biathlonMisses": "{count} misses",
+  "@biathlonMisses": {"placeholders": {"count": {"type": "int"}}},
+  "biathlonPenalty": "Penalty {time}",
+  "@biathlonPenalty": {"placeholders": {"time": {"type": "String"}}},
+  "biathlonRankNumber": "No. {rank}",
+  "@biathlonRankNumber": {"placeholders": {"rank": {"type": "int"}}},
+  "biathlonRankUnavailable": "№ –",
   "time": "Time",
   "gap": "Gap",
   "place": "Place",
@@ -43,5 +210,19 @@
   "password": "Password",
   "signInWithGoogle": "Continue with Google",
   "signInWithEmail": "Sign in with email",
-  "createAccount": "Create account"
+  "createAccount": "Create account",
+  "connectAthlete": "Link athlete",
+  "connectAthleteDescription": "Search by full name to link your account to the right athlete.",
+  "connectAthleteOnboardingTitle": "Find your athlete profile",
+  "connectAthleteOnboardingDescription": "Link your account to your own results, or choose Not now.",
+  "fullName": "Full name",
+  "findAthlete": "Find athlete",
+  "noAthleteMatches": "No athlete was found with this full name.",
+  "notNow": "Not now",
+  "enterFullName": "Enter your full name first.",
+  "athleteLinked": "{name} is linked to your account",
+  "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
+  "couldNotReadAthleteLink": "Could not read the athlete link",
+  "settingsSyncFailed": "Не удалось сохранить или синхронизировать настройки. Ваш выбор остаётся выбранным.",
+  "settingsRetry": "Повторить"
 }

@@ -163,15 +163,18 @@ class _RangeSelector extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: CheckboxListTile(
-                key: const Key('independent-splits-checkbox'),
-                value: rangeSelection.isIndependent,
-                onChanged: (value) => onIndependentChanged(value ?? false),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                visualDensity: VisualDensity.compact,
-                title: const Text('Uavhengige splitter'),
+              child: Material(
+                type: MaterialType.transparency,
+                child: CheckboxListTile(
+                  key: const Key('independent-splits-checkbox'),
+                  value: rangeSelection.isIndependent,
+                  onChanged: (value) => onIndependentChanged(value ?? false),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  title: const Text('Uavhengige splitter'),
+                ),
               ),
             ),
           ],

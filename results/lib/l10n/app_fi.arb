@@ -1,6 +1,160 @@
 {
+  "biathlonStatistics": "Ampumahiihtotilastot",
+  "biathlonFinishTime": "Loppuaika",
+  "biathlonSkiTime": "Hiihtoaika",
+  "biathlonShootingTime": "Ampuma-aika",
+  "biathlonHitProneLabel": "Makuuosumaprosentti",
+  "biathlonHitStandingLabel": "Pystyosumaprosentti",
+  "biathlonHitTotalLabel": "Kokonaisosumaprosentti",
+  "biathlonAllFinishers": "Kaikki maaliin tulleet",
+  "biathlonTopHalf": "Paras 50 %",
+  "biathlonNetSkiTime": "Nettohiihtoaika",
+  "biathlonPenaltyTime": "Sakkoaika",
+  "biathlonRangeTime": "Aika ampumapaikalla",
+  "biathlonProneTime": "Makuuammunnan aika",
+  "biathlonStandingTime": "Pystyammunnan aika",
+  "biathlonTotalMisses": "Ohilaukaukset yhteensä",
+  "biathlonProneMisses": "Makuuammunnan ohilaukaukset",
+  "biathlonStandingMisses": "Pystyammunnan ohilaukaukset",
+  "biathlonSkiRank": "Hiihtosijoitus",
+  "biathlonNetSkiRank": "Nettohiihtosijoitus",
+  "biathlonShootingRank": "Ampumasijoitus",
+  "biathlonRangeRank": "Ampumapaikan sijoitus",
+  "biathlonPenaltyRank": "Sakkoajan sijoitus",
+  "biathlonFinishRank": "Loppusijoitus",
+  "biathlonPassingTime": "Ohitusaika",
+  "biathlonSplitTime": "Väliaika",
+  "biathlonPassingRank": "Sijoitus ohituksessa",
+  "biathlonSplitRank": "Osuussijoitus",
+  "biathlonMissesLabel": "Ohilaukaukset",
+  "biathlonRangeExitTime": "Ampumapaikalta poistumisaika",
+  "biathlonRangeApproach": "Saapuminen ampumapaikalle",
+  "biathlonRangeEntry": "Ampumapaikalle tulo",
+  "biathlonShootingDone": "Ammunta valmis",
+  "biathlonShootingExit": "Poistuminen ammunnasta",
+  "biathlonRangeExitTotal": "Kokonaisaika ampumapaikalta poistumiseen",
+  "biathlonCumulativeMisses": "Ohilaukaukset tähän asti",
+  "biathlonStartTime": "Lähtöaika",
+  "biathlonDetailSelector": "Lisää mittareita: väliajat, ammunnat ja kierrokset",
+  "biathlonExtraDetails": "Kaikki väliajat, ammunnat ja hiihtokierrokset",
+  "biathlonComparisonDescription": "Omat yksilökilpailusi verrattuna ryhmään {group} samassa sarjassa ja kilpailuvaiheessa.",
+  "@biathlonComparisonDescription": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonComparisonUnavailable": "Mittarin {metric} vertailu ryhmään {group} ei ole vielä saatavilla. Tämän mittarin vertailutiedot puuttuvat.",
+  "@biathlonComparisonUnavailable": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentDifferenceCaption": "Ero prosenttiyksikköinä · viivan yläpuolella on parempi",
+  "biathlonDifferenceCaption": "Ero ryhmään {group} · viivan yläpuolella on parempi",
+  "@biathlonDifferenceCaption": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonRaceLabel": "Kilpailu {id}",
+  "@biathlonRaceLabel": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonCohortSummary": "{group}: {count} maaliin tullutta {total}:stä",
+  "@biathlonCohortSummary": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonShootingNumber": "Ammunta {index}",
+  "@biathlonShootingNumber": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonSkiLap": "Hiihtokierros {index}",
+  "@biathlonSkiLap": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonOwnValue": "Sinä: {value}",
+  "@biathlonOwnValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonYourDifference": "Oma erosi: {value}",
+  "@biathlonYourDifference": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonDecimalMisses": "{value} ohilaukausta",
+  "@biathlonDecimalMisses": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentagePoints": "{value} prosenttiyksikköä",
+  "@biathlonPercentagePoints": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonAverageHitPercent": "Keskimääräinen osumaprosentti",
+  "biathlonAverageHitExplanation": "Loppuun suoritetut henkilökohtaiset ampumahiihtokilpailusi. Jokaisella kilpailulla on sama paino; puuttuvat ammuntatiedot jätetään pois.",
+  "biathlonHitProne": "Makuu",
+  "biathlonHitStanding": "Pysty",
+  "biathlonHitTotal": "Yhteensä",
+  "biathlonAverageRaceCount": "{count} kilpailua",
+  "@biathlonAverageRaceCount": {"placeholders": {"count": {"type": "int"}}},
+  "importWaiting": "Odotetaan tuloksia",
+  "importInProgress": "Tuodaan",
+  "importPartial": "Osittain tuotu",
+  "importUpdated": "Päivitetty",
   "@@locale": "fi",
-  "appTitle": "EQ Results",
+  "regressionCompareWith": "Vertaa kohteeseen: {target}",
+  "@regressionCompareWith": {"placeholders": {"target": {"type": "String"}}},
+  "regressionChooseTarget": "Valitse vertailu",
+  "regressionSelectFromList": "Valitse tulosluettelosta vertailuarvo kohteelle {subject} ja paina OK.",
+  "@regressionSelectFromList": {"placeholders": {"subject": {"type": "String"}}},
+  "regressionCancel": "Peruuta",
+  "regressionApply": "OK",
+  "appTitle": "Tulokset",
   "eventsTitle": "Choose an event",
   "eventsSubtitle": "Find an event and open live results.",
   "searchEvents": "Search events",
@@ -22,9 +176,22 @@
   "classes": "Classes",
   "classLabel": "Class",
   "split": "Split",
+  "searchResults": "Hae urheilijaa, seuraa tai joukkuetta",
   "athlete": "Athlete",
   "club": "Club",
   "shooting": "Shooting",
+  "biathlonShootingIn": "Ampumapaikalle {index}",
+  "@biathlonShootingIn": {"placeholders": {"index": {"type": "int"}}},
+  "biathlonPositionProne": "prone",
+  "biathlonPositionStanding": "standing",
+  "biathlonPositionUnknown": "unknown position",
+  "biathlonMisses": "{count} misses",
+  "@biathlonMisses": {"placeholders": {"count": {"type": "int"}}},
+  "biathlonPenalty": "Penalty {time}",
+  "@biathlonPenalty": {"placeholders": {"time": {"type": "String"}}},
+  "biathlonRankNumber": "No. {rank}",
+  "@biathlonRankNumber": {"placeholders": {"rank": {"type": "int"}}},
+  "biathlonRankUnavailable": "Nro –",
   "time": "Time",
   "gap": "Gap",
   "place": "Place",
@@ -43,5 +210,19 @@
   "password": "Password",
   "signInWithGoogle": "Continue with Google",
   "signInWithEmail": "Sign in with email",
-  "createAccount": "Create account"
+  "createAccount": "Create account",
+  "connectAthlete": "Link athlete",
+  "connectAthleteDescription": "Search by full name to link your account to the right athlete.",
+  "connectAthleteOnboardingTitle": "Find your athlete profile",
+  "connectAthleteOnboardingDescription": "Link your account to your own results, or choose Not now.",
+  "fullName": "Full name",
+  "findAthlete": "Find athlete",
+  "noAthleteMatches": "No athlete was found with this full name.",
+  "notNow": "Not now",
+  "enterFullName": "Enter your full name first.",
+  "athleteLinked": "{name} is linked to your account",
+  "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
+  "couldNotReadAthleteLink": "Could not read the athlete link",
+  "settingsSyncFailed": "Asetuksia ei voitu tallentaa tai synkronoida. Valintasi säilyy.",
+  "settingsRetry": "Yritä uudelleen"
 }

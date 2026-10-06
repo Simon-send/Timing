@@ -27,7 +27,7 @@ class DefaultFirebaseOptions {
     appId: '1:1009635085387:web:8a1513681059657ac1d1ce',
     messagingSenderId: '1009635085387',
     projectId: 'time-plotting',
-    authDomain: 'time-plotting.firebaseapp.com',
+    authDomain: 'results.plotting.live',
     storageBucket: 'time-plotting.firebasestorage.app',
     measurementId: 'G-P7C9QL9EXS',
   );

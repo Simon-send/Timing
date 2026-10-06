@@ -35,6 +35,7 @@ class _EventsPageState extends ConsumerState<EventsPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final events = ref.watch(eventsProvider);
+    final participatedEventIds = ref.watch(participatedEventIdsProvider);
     return AppShell(
       title: l10n.appTitle,
       subtitle: l10n.eventsSubtitle,
@@ -42,8 +43,11 @@ class _EventsPageState extends ConsumerState<EventsPage> {
       child: ShellPanel(
         child: events.when(
           loading: () => LoadingState(label: l10n.loadingEvents),
-          error: (error, _) =>
-              ErrorState(title: l10n.couldNotReadEvents, error: error),
+          error: (error, _) => ErrorState(
+            title: l10n.couldNotReadEvents,
+            error: error,
+            onRetry: () => refreshAppData(ref),
+          ),
           data: (events) {
             if (events.isEmpty) {
               return EmptyState(
@@ -53,6 +57,7 @@ class _EventsPageState extends ConsumerState<EventsPage> {
             }
             return _EventGrid(
               events: events,
+              participatedEventIds: participatedEventIds,
               searchController: _searchController,
               onEventTap: (event) {
                 ref
@@ -60,7 +65,6 @@ class _EventsPageState extends ConsumerState<EventsPage> {
                     .setDefaultEvent(event.id);
                 ref.read(resultSortModeProvider(event.id).notifier).state =
                     ResultSortMode.cumulative;
-                ref.read(splitRangeSelectionProvider.notifier).state = null;
                 context.go('/events/${event.id}/results');
               },
             );
@@ -74,11 +78,13 @@ class _EventsPageState extends ConsumerState<EventsPage> {
 class _EventGrid extends StatefulWidget {
   const _EventGrid({
     required this.events,
+    required this.participatedEventIds,
     required this.searchController,
     required this.onEventTap,
   });
 
   final List<ResultEvent> events;
+  final Set<String> participatedEventIds;
   final TextEditingController searchController;
   final ValueChanged<ResultEvent> onEventTap;
 
@@ -112,52 +118,61 @@ class _EventGridState extends State<_EventGrid> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filteredEvents();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        EventFilters(
-          controller: widget.searchController,
-          criteria: _criteria,
-          options: EventFilterOptions.fromEvents(widget.events),
-          filteredCount: filtered.length,
-          totalCount: widget.events.length,
-          onChanged: (criteria) => setState(() => _criteria = criteria),
-          onReset: () {
-            widget.searchController.clear();
-            setState(() => _criteria = const EventFilterCriteria());
-          },
-        ),
-        const SizedBox(height: 14),
-        Expanded(
-          child: filtered.isEmpty
-              ? const _NoFilteredEvents()
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final columns = constraints.maxWidth >= 1080
-                        ? 3
-                        : constraints.maxWidth >= 700
-                        ? 2
-                        : 1;
-                    return GridView.builder(
-                      itemCount: filtered.length,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                        childAspectRatio: columns == 1 ? 2.4 : 1.7,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1080
+            ? 3
+            : constraints.maxWidth >= 700
+            ? 2
+            : 1;
+        return SingleChildScrollView(
+          key: const Key('events-page-scroll'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              EventFilters(
+                controller: widget.searchController,
+                criteria: _criteria,
+                options: EventFilterOptions.fromEvents(widget.events),
+                filteredCount: filtered.length,
+                totalCount: widget.events.length,
+                onChanged: (criteria) => setState(() => _criteria = criteria),
+                onReset: () {
+                  widget.searchController.clear();
+                  setState(() => _criteria = const EventFilterCriteria());
+                },
+              ),
+              const SizedBox(height: 14),
+              if (filtered.isEmpty)
+                const SizedBox(height: 280, child: _NoFilteredEvents())
+              else
+                GridView.builder(
+                  shrinkWrap: true,
+                  primary: false,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: filtered.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    mainAxisExtent: columns == 1 ? 210 : null,
+                    childAspectRatio: columns == 1 ? 1 : 1.7,
+                  ),
+                  itemBuilder: (context, index) {
+                    final event = filtered[index];
+                    return EventCard(
+                      event: event,
+                      participated: widget.participatedEventIds.contains(
+                        event.id,
                       ),
-                      itemBuilder: (context, index) {
-                        final event = filtered[index];
-                        return EventCard(
-                          event: event,
-                          onTap: () => widget.onEventTap(event),
-                        );
-                      },
+                      onTap: () => widget.onEventTap(event),
                     );
                   },
                 ),
-        ),
-      ],
+            ],
+          ),
+        );
+      },
     );
   }
 

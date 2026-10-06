@@ -21,12 +21,13 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final compact = MediaQuery.sizeOf(context).width < 600;
     return Scaffold(
       body: DecoratedBox(
         decoration: BoxDecoration(color: palette.background),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(compact ? 6 : 16),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 1440),
@@ -39,7 +40,7 @@ class AppShell extends StatelessWidget {
                       leading: leading,
                       actions: actions,
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: compact ? 8 : 14),
                     Expanded(child: child),
                   ],
                 ),
@@ -89,19 +90,23 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final compact = MediaQuery.sizeOf(context).width < 600;
     return ShellPanel(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 8 : 14,
+        vertical: compact ? 8 : 12,
+      ),
       child: Row(
         children: [
           if (leading != null) ...[leading!, const SizedBox(width: 10)],
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: palette.primary,
-              borderRadius: BorderRadius.circular(8),
+          SizedBox(
+            width: compact ? 38 : 48,
+            height: compact ? 38 : 48,
+            child: Image.asset(
+              'assets/branding/plotting_results_logo_v2.png',
+              fit: BoxFit.contain,
+              alignment: Alignment.centerLeft,
             ),
-            child: Icon(Icons.timer_outlined, color: palette.logoForeground),
           ),
           const SizedBox(width: 12),
           Expanded(

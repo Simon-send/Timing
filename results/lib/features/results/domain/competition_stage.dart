@@ -16,6 +16,7 @@ class CompetitionStage {
     required this.profileSource,
     this.hasRelayCapability = false,
     this.hasBiathlonCapability = false,
+    this.classImportStates = const {},
   });
 
   factory CompetitionStage.fromMap(String id, Map<String, dynamic> data) {
@@ -32,6 +33,10 @@ class CompetitionStage {
           : ResultProfileSource.eq,
       hasRelayCapability: asBool(data['isRelay']) ?? false,
       hasBiathlonCapability: asBool(data['isBiathlon']) ?? false,
+      classImportStates: {
+        for (final entry in asStringMap(data['classImportStates']).entries)
+          if (entry.value is String) entry.key: entry.value as String,
+      },
     );
   }
 
@@ -45,6 +50,7 @@ class CompetitionStage {
   final ResultProfileSource profileSource;
   final bool hasRelayCapability;
   final bool hasBiathlonCapability;
+  final Map<String, String> classImportStates;
 
   bool get isRelay => hasRelayCapability || profile == ResultProfile.relay;
   bool get isBiathlon =>

@@ -1,6 +1,160 @@
 {
+  "biathlonStatistics": "Biathlon statistics",
+  "biathlonFinishTime": "Finish time",
+  "biathlonSkiTime": "Ski time",
+  "biathlonShootingTime": "Shooting time",
+  "biathlonHitProneLabel": "Prone hit percentage",
+  "biathlonHitStandingLabel": "Standing hit percentage",
+  "biathlonHitTotalLabel": "Total hit percentage",
+  "biathlonAllFinishers": "All finishers",
+  "biathlonTopHalf": "Top 50 %",
+  "biathlonNetSkiTime": "Net ski time",
+  "biathlonPenaltyTime": "Penalty time",
+  "biathlonRangeTime": "Time on the range",
+  "biathlonProneTime": "Prone shooting time",
+  "biathlonStandingTime": "Standing shooting time",
+  "biathlonTotalMisses": "Total misses",
+  "biathlonProneMisses": "Prone misses",
+  "biathlonStandingMisses": "Standing misses",
+  "biathlonSkiRank": "Ski rank",
+  "biathlonNetSkiRank": "Net ski rank",
+  "biathlonShootingRank": "Shooting rank",
+  "biathlonRangeRank": "Range rank",
+  "biathlonPenaltyRank": "Penalty rank",
+  "biathlonFinishRank": "Finish rank",
+  "biathlonPassingTime": "Passing time",
+  "biathlonSplitTime": "Split time",
+  "biathlonPassingRank": "Rank at passing",
+  "biathlonSplitRank": "Split rank",
+  "biathlonMissesLabel": "Misses",
+  "biathlonRangeExitTime": "Range exit time",
+  "biathlonRangeApproach": "Approach to range",
+  "biathlonRangeEntry": "Entry to range",
+  "biathlonShootingDone": "Shooting completed",
+  "biathlonShootingExit": "Exit from shooting",
+  "biathlonRangeExitTotal": "Total time to range exit",
+  "biathlonCumulativeMisses": "Misses so far",
+  "biathlonStartTime": "Start time",
+  "biathlonDetailSelector": "More measurements: splits, shooting and laps",
+  "biathlonExtraDetails": "All splits, shooting bouts and ski laps",
+  "biathlonComparisonDescription": "Your individual races compared with {group} in the same class and stage.",
+  "@biathlonComparisonDescription": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonComparisonUnavailable": "No comparison of {metric} with {group} yet. Reference data for this measurement is unavailable.",
+  "@biathlonComparisonUnavailable": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentDifferenceCaption": "Difference in percentage points · above the line is better",
+  "biathlonDifferenceCaption": "Difference from {group} · above the line is better",
+  "@biathlonDifferenceCaption": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonRaceLabel": "Race {id}",
+  "@biathlonRaceLabel": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonCohortSummary": "{group}: {count} of {total} finishers",
+  "@biathlonCohortSummary": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonShootingNumber": "Shooting {index}",
+  "@biathlonShootingNumber": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonSkiLap": "Ski lap {index}",
+  "@biathlonSkiLap": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonOwnValue": "You: {value}",
+  "@biathlonOwnValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonYourDifference": "Your difference: {value}",
+  "@biathlonYourDifference": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonDecimalMisses": "{value} misses",
+  "@biathlonDecimalMisses": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentagePoints": "{value} percentage points",
+  "@biathlonPercentagePoints": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonAverageHitPercent": "Average hit percentage",
+  "biathlonAverageHitExplanation": "Your completed individual biathlon races. Each race has equal weight; missing shooting data is excluded.",
+  "biathlonHitProne": "Prone",
+  "biathlonHitStanding": "Standing",
+  "biathlonHitTotal": "Total",
+  "biathlonAverageRaceCount": "{count} races",
+  "@biathlonAverageRaceCount": {"placeholders": {"count": {"type": "int"}}},
+  "importWaiting": "Waiting for results",
+  "importInProgress": "Importing",
+  "importPartial": "Partially imported",
+  "importUpdated": "Updated",
   "@@locale": "en",
-  "appTitle": "EQ Results",
+  "regressionCompareWith": "Compare with: {target}",
+  "@regressionCompareWith": {"placeholders": {"target": {"type": "String"}}},
+  "regressionChooseTarget": "Choose comparison",
+  "regressionSelectFromList": "Choose a comparison value in the results list for {subject}, then press OK.",
+  "@regressionSelectFromList": {"placeholders": {"subject": {"type": "String"}}},
+  "regressionCancel": "Cancel",
+  "regressionApply": "OK",
+  "appTitle": "Results",
   "eventsTitle": "Choose an event",
   "eventsSubtitle": "Find an event and open live results.",
   "searchEvents": "Search events",
@@ -26,6 +180,18 @@
   "athlete": "Athlete",
   "club": "Club",
   "shooting": "Shooting",
+  "biathlonShootingIn": "Into shooting {index}",
+  "@biathlonShootingIn": {"placeholders": {"index": {"type": "int"}}},
+  "biathlonPositionProne": "prone",
+  "biathlonPositionStanding": "standing",
+  "biathlonPositionUnknown": "unknown position",
+  "biathlonMisses": "{count} misses",
+  "@biathlonMisses": {"placeholders": {"count": {"type": "int"}}},
+  "biathlonPenalty": "Penalty {time}",
+  "@biathlonPenalty": {"placeholders": {"time": {"type": "String"}}},
+  "biathlonRankNumber": "No. {rank}",
+  "@biathlonRankNumber": {"placeholders": {"rank": {"type": "int"}}},
+  "biathlonRankUnavailable": "No. –",
   "time": "Time",
   "gap": "Gap",
   "place": "Place",
@@ -44,5 +210,19 @@
   "password": "Password",
   "signInWithGoogle": "Continue with Google",
   "signInWithEmail": "Sign in with email",
-  "createAccount": "Create account"
+  "createAccount": "Create account",
+  "connectAthlete": "Link athlete",
+  "connectAthleteDescription": "Search by full name to link your account to the right athlete.",
+  "connectAthleteOnboardingTitle": "Find your athlete profile",
+  "connectAthleteOnboardingDescription": "Link your account to your own results, or choose Not now.",
+  "fullName": "Full name",
+  "findAthlete": "Find athlete",
+  "noAthleteMatches": "No athlete was found with this full name.",
+  "notNow": "Not now",
+  "enterFullName": "Enter your full name first.",
+  "athleteLinked": "{name} is linked to your account",
+  "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
+  "couldNotReadAthleteLink": "Could not read the athlete link",
+  "settingsSyncFailed": "Could not save or sync your settings. Your choice is still selected.",
+  "settingsRetry": "Try again"
 }

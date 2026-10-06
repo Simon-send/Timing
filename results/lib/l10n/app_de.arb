@@ -1,6 +1,160 @@
 {
+  "biathlonStatistics": "Biathlonstatistik",
+  "biathlonFinishTime": "Zielzeit",
+  "biathlonSkiTime": "Laufzeit",
+  "biathlonShootingTime": "Schießzeit",
+  "biathlonHitProneLabel": "Trefferquote liegend",
+  "biathlonHitStandingLabel": "Trefferquote stehend",
+  "biathlonHitTotalLabel": "Trefferquote gesamt",
+  "biathlonAllFinishers": "Alle Finisher",
+  "biathlonTopHalf": "Beste 50 %",
+  "biathlonNetSkiTime": "Netto-Laufzeit",
+  "biathlonPenaltyTime": "Strafzeit",
+  "biathlonRangeTime": "Zeit am Schießstand",
+  "biathlonProneTime": "Schießzeit liegend",
+  "biathlonStandingTime": "Schießzeit stehend",
+  "biathlonTotalMisses": "Fehlschüsse gesamt",
+  "biathlonProneMisses": "Fehlschüsse liegend",
+  "biathlonStandingMisses": "Fehlschüsse stehend",
+  "biathlonSkiRank": "Laufplatzierung",
+  "biathlonNetSkiRank": "Netto-Laufplatzierung",
+  "biathlonShootingRank": "Schießplatzierung",
+  "biathlonRangeRank": "Schießstandplatzierung",
+  "biathlonPenaltyRank": "Strafzeitplatzierung",
+  "biathlonFinishRank": "Zielplatzierung",
+  "biathlonPassingTime": "Durchgangszeit",
+  "biathlonSplitTime": "Abschnittszeit",
+  "biathlonPassingRank": "Platz beim Durchgang",
+  "biathlonSplitRank": "Abschnittsplatz",
+  "biathlonMissesLabel": "Fehlschüsse",
+  "biathlonRangeExitTime": "Zeit bis zum Verlassen des Schießstands",
+  "biathlonRangeApproach": "Ankunft am Schießstand",
+  "biathlonRangeEntry": "Eintritt in den Schießstand",
+  "biathlonShootingDone": "Schießen beendet",
+  "biathlonShootingExit": "Verlassen des Schießbereichs",
+  "biathlonRangeExitTotal": "Gesamtzeit bis zum Verlassen des Schießstands",
+  "biathlonCumulativeMisses": "Bisherige Fehlschüsse",
+  "biathlonStartTime": "Startzeit",
+  "biathlonDetailSelector": "Weitere Messwerte: Zwischenzeiten, Schießen und Runden",
+  "biathlonExtraDetails": "Alle Zwischenzeiten, Schießeinlagen und Laufrunden",
+  "biathlonComparisonDescription": "Deine Einzelrennen im Vergleich mit {group} in derselben Klasse und Wettkampfstufe.",
+  "@biathlonComparisonDescription": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonComparisonUnavailable": "Noch kein Vergleich von {metric} mit {group}. Referenzdaten für diese Messung sind nicht verfügbar.",
+  "@biathlonComparisonUnavailable": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentDifferenceCaption": "Differenz in Prozentpunkten · oberhalb der Linie ist besser",
+  "biathlonDifferenceCaption": "Differenz zu {group} · oberhalb der Linie ist besser",
+  "@biathlonDifferenceCaption": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonRaceLabel": "Rennen {id}",
+  "@biathlonRaceLabel": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonCohortSummary": "{group}: {count} von {total} Finishern",
+  "@biathlonCohortSummary": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonShootingNumber": "Schießen {index}",
+  "@biathlonShootingNumber": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonSkiLap": "Laufrunde {index}",
+  "@biathlonSkiLap": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonOwnValue": "Du: {value}",
+  "@biathlonOwnValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonYourDifference": "Deine Differenz: {value}",
+  "@biathlonYourDifference": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonDecimalMisses": "{value} Fehlschüsse",
+  "@biathlonDecimalMisses": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentagePoints": "{value} Prozentpunkte",
+  "@biathlonPercentagePoints": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonAverageHitPercent": "Durchschnittliche Trefferquote",
+  "biathlonAverageHitExplanation": "Deine abgeschlossenen Einzelrennen im Biathlon. Jedes Rennen zählt gleich; fehlende Schießdaten werden ausgelassen.",
+  "biathlonHitProne": "Liegend",
+  "biathlonHitStanding": "Stehend",
+  "biathlonHitTotal": "Gesamt",
+  "biathlonAverageRaceCount": "{count} Rennen",
+  "@biathlonAverageRaceCount": {"placeholders": {"count": {"type": "int"}}},
+  "importWaiting": "Warten auf Ergebnisse",
+  "importInProgress": "Import läuft",
+  "importPartial": "Teilweise importiert",
+  "importUpdated": "Aktualisiert",
   "@@locale": "de",
-  "appTitle": "EQ Results",
+  "regressionCompareWith": "Vergleichen mit: {target}",
+  "@regressionCompareWith": {"placeholders": {"target": {"type": "String"}}},
+  "regressionChooseTarget": "Vergleich auswählen",
+  "regressionSelectFromList": "Wählen Sie den Vergleichswert in der Ergebnisliste für {subject}, dann OK.",
+  "@regressionSelectFromList": {"placeholders": {"subject": {"type": "String"}}},
+  "regressionCancel": "Abbrechen",
+  "regressionApply": "OK",
+  "appTitle": "Ergebnisse",
   "eventsTitle": "Choose an event",
   "eventsSubtitle": "Find an event and open live results.",
   "searchEvents": "Search events",
@@ -22,9 +176,22 @@
   "classes": "Classes",
   "classLabel": "Class",
   "split": "Split",
+  "searchResults": "Athlet, Verein oder Team suchen",
   "athlete": "Athlete",
   "club": "Club",
   "shooting": "Shooting",
+  "biathlonShootingIn": "Zum Schießen {index}",
+  "@biathlonShootingIn": {"placeholders": {"index": {"type": "int"}}},
+  "biathlonPositionProne": "prone",
+  "biathlonPositionStanding": "standing",
+  "biathlonPositionUnknown": "unknown position",
+  "biathlonMisses": "{count} misses",
+  "@biathlonMisses": {"placeholders": {"count": {"type": "int"}}},
+  "biathlonPenalty": "Penalty {time}",
+  "@biathlonPenalty": {"placeholders": {"time": {"type": "String"}}},
+  "biathlonRankNumber": "No. {rank}",
+  "@biathlonRankNumber": {"placeholders": {"rank": {"type": "int"}}},
+  "biathlonRankUnavailable": "Nr. –",
   "time": "Time",
   "gap": "Gap",
   "place": "Place",
@@ -43,5 +210,19 @@
   "password": "Password",
   "signInWithGoogle": "Continue with Google",
   "signInWithEmail": "Sign in with email",
-  "createAccount": "Create account"
+  "createAccount": "Create account",
+  "connectAthlete": "Link athlete",
+  "connectAthleteDescription": "Search by full name to link your account to the right athlete.",
+  "connectAthleteOnboardingTitle": "Find your athlete profile",
+  "connectAthleteOnboardingDescription": "Link your account to your own results, or choose Not now.",
+  "fullName": "Full name",
+  "findAthlete": "Find athlete",
+  "noAthleteMatches": "No athlete was found with this full name.",
+  "notNow": "Not now",
+  "enterFullName": "Enter your full name first.",
+  "athleteLinked": "{name} is linked to your account",
+  "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
+  "couldNotReadAthleteLink": "Could not read the athlete link",
+  "settingsSyncFailed": "Die Einstellungen konnten nicht gespeichert oder synchronisiert werden. Ihre Auswahl bleibt bestehen.",
+  "settingsRetry": "Erneut versuchen"
 }

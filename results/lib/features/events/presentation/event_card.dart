@@ -5,17 +5,40 @@ import '../../../app/app_theme.dart';
 import '../domain/result_event.dart';
 
 class EventCard extends StatelessWidget {
-  const EventCard({super.key, required this.event, required this.onTap});
+  const EventCard({
+    super.key,
+    required this.event,
+    required this.onTap,
+    this.participated = false,
+  });
 
   final ResultEvent event;
   final VoidCallback onTap;
+  final bool participated;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final palette = context.palette;
+    final participatedColor = Color.alphaBlend(
+      palette.primary.withValues(
+        alpha: palette.brightness == Brightness.dark ? 0.18 : 0.12,
+      ),
+      palette.panel,
+    );
     return Card(
+      key: ValueKey('event-card-${event.id}'),
       margin: EdgeInsets.zero,
+      color: participated ? participatedColor : palette.panel,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: participated
+              ? palette.primary.withValues(alpha: 0.7)
+              : palette.border,
+          width: participated ? 1.2 : 1,
+        ),
+      ),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
