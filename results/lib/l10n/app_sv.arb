@@ -1,6 +1,160 @@
 {
+  "biathlonStatistics": "Skidskyttestatistik",
+  "biathlonFinishTime": "Sluttid",
+  "biathlonSkiTime": "Skidtid",
+  "biathlonShootingTime": "Skjuttid",
+  "biathlonHitProneLabel": "Träffprocent liggande",
+  "biathlonHitStandingLabel": "Träffprocent stående",
+  "biathlonHitTotalLabel": "Total träffprocent",
+  "biathlonAllFinishers": "Alla som gått i mål",
+  "biathlonTopHalf": "Bästa 50 %",
+  "biathlonNetSkiTime": "Netto skidtid",
+  "biathlonPenaltyTime": "Strafftid",
+  "biathlonRangeTime": "Tid på skjutvallen",
+  "biathlonProneTime": "Tid för liggande skytte",
+  "biathlonStandingTime": "Tid för stående skytte",
+  "biathlonTotalMisses": "Bom totalt",
+  "biathlonProneMisses": "Bom liggande",
+  "biathlonStandingMisses": "Bom stående",
+  "biathlonSkiRank": "Skidplacering",
+  "biathlonNetSkiRank": "Netto skidplacering",
+  "biathlonShootingRank": "Skjutplacering",
+  "biathlonRangeRank": "Placering på skjutvallen",
+  "biathlonPenaltyRank": "Straffplacering",
+  "biathlonFinishRank": "Slutplacering",
+  "biathlonPassingTime": "Passeringstid",
+  "biathlonSplitTime": "Deltid",
+  "biathlonPassingRank": "Placering vid passering",
+  "biathlonSplitRank": "Delplacering",
+  "biathlonMissesLabel": "Bom",
+  "biathlonRangeExitTime": "Tid ut från skjutvallen",
+  "biathlonRangeApproach": "Ankomst till skjutvallen",
+  "biathlonRangeEntry": "In på skjutvallen",
+  "biathlonShootingDone": "Skytte klart",
+  "biathlonShootingExit": "Ut från skyttet",
+  "biathlonRangeExitTotal": "Total tid ut från skjutvallen",
+  "biathlonCumulativeMisses": "Bom hittills",
+  "biathlonStartTime": "Starttid",
+  "biathlonDetailSelector": "Fler mätningar: mellantider, skytte och varv",
+  "biathlonExtraDetails": "Alla mellantider, skjutningar och skidvarv",
+  "biathlonComparisonDescription": "Dina individuella lopp jämfört med {group} i samma klass och tävlingsdel.",
+  "@biathlonComparisonDescription": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonComparisonUnavailable": "Ingen jämförelse av {metric} med {group} ännu. Referensdata för denna mätning saknas.",
+  "@biathlonComparisonUnavailable": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentDifferenceCaption": "Skillnad i procentenheter · över linjen är bättre",
+  "biathlonDifferenceCaption": "Skillnad från {group} · över linjen är bättre",
+  "@biathlonDifferenceCaption": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonRaceLabel": "Lopp {id}",
+  "@biathlonRaceLabel": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonCohortSummary": "{group}: {count} av {total} som gått i mål",
+  "@biathlonCohortSummary": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonShootingNumber": "Skjutning {index}",
+  "@biathlonShootingNumber": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonSkiLap": "Skidvarv {index}",
+  "@biathlonSkiLap": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonOwnValue": "Du: {value}",
+  "@biathlonOwnValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonYourDifference": "Din skillnad: {value}",
+  "@biathlonYourDifference": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonDecimalMisses": "{value} bom",
+  "@biathlonDecimalMisses": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentagePoints": "{value} procentenheter",
+  "@biathlonPercentagePoints": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonAverageHitPercent": "Genomsnittlig träffprocent",
+  "biathlonAverageHitExplanation": "Dina fullföljda individuella skidskyttelopp. Varje lopp väger lika; saknade skjutdata utelämnas.",
+  "biathlonHitProne": "Liggande",
+  "biathlonHitStanding": "Stående",
+  "biathlonHitTotal": "Totalt",
+  "biathlonAverageRaceCount": "{count} lopp",
+  "@biathlonAverageRaceCount": {"placeholders": {"count": {"type": "int"}}},
+  "importWaiting": "Väntar på resultat",
+  "importInProgress": "Importerar",
+  "importPartial": "Delvis importerat",
+  "importUpdated": "Uppdaterat",
   "@@locale": "sv",
-  "appTitle": "EQ Results",
+  "regressionCompareWith": "Jämför med: {target}",
+  "@regressionCompareWith": {"placeholders": {"target": {"type": "String"}}},
+  "regressionChooseTarget": "Välj jämförelse",
+  "regressionSelectFromList": "Välj ett jämförelsevärde i resultatlistan för {subject} och tryck på OK.",
+  "@regressionSelectFromList": {"placeholders": {"subject": {"type": "String"}}},
+  "regressionCancel": "Avbryt",
+  "regressionApply": "OK",
+  "appTitle": "Resultat",
   "eventsTitle": "Choose an event",
   "eventsSubtitle": "Find an event and open live results.",
   "searchEvents": "Search events",
@@ -22,9 +176,22 @@
   "classes": "Classes",
   "classLabel": "Class",
   "split": "Split",
+  "searchResults": "Sök efter idrottare, klubb eller lag",
   "athlete": "Athlete",
   "club": "Club",
   "shooting": "Shooting",
+  "biathlonShootingIn": "In till skjutning {index}",
+  "@biathlonShootingIn": {"placeholders": {"index": {"type": "int"}}},
+  "biathlonPositionProne": "prone",
+  "biathlonPositionStanding": "standing",
+  "biathlonPositionUnknown": "unknown position",
+  "biathlonMisses": "{count} misses",
+  "@biathlonMisses": {"placeholders": {"count": {"type": "int"}}},
+  "biathlonPenalty": "Penalty {time}",
+  "@biathlonPenalty": {"placeholders": {"time": {"type": "String"}}},
+  "biathlonRankNumber": "No. {rank}",
+  "@biathlonRankNumber": {"placeholders": {"rank": {"type": "int"}}},
+  "biathlonRankUnavailable": "Nr –",
   "time": "Time",
   "gap": "Gap",
   "place": "Place",
@@ -43,5 +210,19 @@
   "password": "Password",
   "signInWithGoogle": "Continue with Google",
   "signInWithEmail": "Sign in with email",
-  "createAccount": "Create account"
+  "createAccount": "Create account",
+  "connectAthlete": "Link athlete",
+  "connectAthleteDescription": "Search by full name to link your account to the right athlete.",
+  "connectAthleteOnboardingTitle": "Find your athlete profile",
+  "connectAthleteOnboardingDescription": "Link your account to your own results, or choose Not now.",
+  "fullName": "Full name",
+  "findAthlete": "Find athlete",
+  "noAthleteMatches": "No athlete was found with this full name.",
+  "notNow": "Not now",
+  "enterFullName": "Enter your full name first.",
+  "athleteLinked": "{name} is linked to your account",
+  "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
+  "couldNotReadAthleteLink": "Could not read the athlete link",
+  "settingsSyncFailed": "Det gick inte att spara eller synkronisera inställningarna. Ditt val finns kvar.",
+  "settingsRetry": "Försök igen"
 }

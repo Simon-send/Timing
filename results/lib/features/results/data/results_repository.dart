@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../core/firebase/switch_latest.dart';
 
 import '../domain/race_result.dart';
+import '../domain/race_result_order.dart';
 import '../domain/competition_stage.dart';
 import '../domain/result_class.dart';
 import '../domain/split_def.dart';
@@ -53,7 +55,7 @@ abstract class ResultsRepository {
   );
 }
 
-const resultsPageSize = 20;
+const resultsPageSize = 50;
 const initialResultsLimit = resultsPageSize;
 
 class FirestoreResultsRepository implements ResultsRepository {
@@ -95,7 +97,7 @@ class FirestoreResultsRepository implements ResultsRepository {
 
   @override
   Stream<List<SplitDef>> watchSplitDefs(String eventId, String classId) {
-    return _watchPrimaryStageId(eventId, classId).asyncExpand((stageId) {
+    return switchLatest(_watchPrimaryStageId(eventId, classId), (stageId) {
       if (stageId == null) return Stream.value(const <SplitDef>[]);
       return watchStageSplitDefs(eventId, stageId, classId);
     });
@@ -126,7 +128,7 @@ class FirestoreResultsRepository implements ResultsRepository {
     String classId, {
     int limit = initialResultsLimit,
   }) {
-    return _watchPrimaryStageId(eventId, classId).asyncExpand((stageId) {
+    return switchLatest(_watchPrimaryStageId(eventId, classId), (stageId) {
       if (stageId == null) return Stream.value(const <RaceResult>[]);
       return watchStageResults(eventId, stageId, classId, limit: limit);
     });
@@ -139,12 +141,24 @@ class FirestoreResultsRepository implements ResultsRepository {
     String classId, {
     int limit = initialResultsLimit,
   }) {
-    return _stageResultsQuery(eventId, stageId, classId).snapshots().map((
-      snapshot,
-    ) {
-      final results = _resultsFromSnapshot(snapshot);
-      return results.length <= limit ? results : results.take(limit).toList();
-    });
+    return switchLatest(
+      _stageClassDoc(eventId, stageId, classId)
+          .snapshots()
+          .map((snapshot) => snapshot.data()?['resultOrderVersion'] == 1)
+          .distinct(),
+      (hasServerOrder) {
+        final baseQuery = _stageResultsQuery(eventId, stageId, classId);
+        final query = hasServerOrder
+            ? baseQuery.orderBy('displayOrder').limit(limit)
+            : baseQuery;
+        return query.snapshots().map((snapshot) {
+          final results = _resultsFromSnapshot(snapshot);
+          return hasServerOrder || results.length <= limit
+              ? results
+              : results.take(limit).toList();
+        });
+      },
+    );
   }
 
   @override
@@ -189,7 +203,7 @@ class FirestoreResultsRepository implements ResultsRepository {
     String classId,
     String resultId,
   ) {
-    return _watchPrimaryStageId(eventId, classId).asyncExpand((stageId) {
+    return switchLatest(_watchPrimaryStageId(eventId, classId), (stageId) {
       if (stageId == null) return Stream.value(null);
       return watchStageResult(eventId, stageId, classId, resultId);
     });
@@ -245,27 +259,11 @@ List<RaceResult> _resultsFromSnapshot(
   final results = snapshot.docs
       .map((doc) => RaceResult.fromMap(doc.id, doc.data()))
       .toList();
-  results.sort(_compareResults);
+  results.sort(compareRaceResults);
   return results;
 }
 
 int _compareSplitDefs(SplitDef a, SplitDef b) {
   if (a.sort != b.sort) return a.sort - b.sort;
   return a.label.compareTo(b.label);
-}
-
-int _compareResults(RaceResult a, RaceResult b) {
-  final statusCompare = a.statusSortOrder.compareTo(b.statusSortOrder);
-  if (statusCompare != 0) return statusCompare;
-  if (a.rank != null && b.rank != null && a.rank != b.rank) {
-    return a.rank! - b.rank!;
-  }
-  if (a.totalMs != null && b.totalMs != null && a.totalMs != b.totalMs) {
-    return a.totalMs! - b.totalMs!;
-  }
-  if (a.rank != null) return -1;
-  if (b.rank != null) return 1;
-  if (a.totalMs != null) return -1;
-  if (b.totalMs != null) return 1;
-  return a.name.compareTo(b.name);
 }

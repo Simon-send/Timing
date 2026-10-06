@@ -1,6 +1,160 @@
 {
+  "biathlonStatistics": "Laskesuusatamise statistika",
+  "biathlonFinishTime": "Lõppaeg",
+  "biathlonSkiTime": "Suusaaeg",
+  "biathlonShootingTime": "Laskeaeg",
+  "biathlonHitProneLabel": "Lamades tabamusprotsent",
+  "biathlonHitStandingLabel": "Püsti tabamusprotsent",
+  "biathlonHitTotalLabel": "Tabamusprotsent kokku",
+  "biathlonAllFinishers": "Kõik lõpetanud",
+  "biathlonTopHalf": "Parimad 50 %",
+  "biathlonNetSkiTime": "Puhas suusaaeg",
+  "biathlonPenaltyTime": "Trahviaeg",
+  "biathlonRangeTime": "Aeg lasketiirus",
+  "biathlonProneTime": "Lamades laskeaeg",
+  "biathlonStandingTime": "Püsti laskeaeg",
+  "biathlonTotalMisses": "Möödalasud kokku",
+  "biathlonProneMisses": "Lamades möödalasud",
+  "biathlonStandingMisses": "Püsti möödalasud",
+  "biathlonSkiRank": "Suusatamise koht",
+  "biathlonNetSkiRank": "Puhta suusaaja koht",
+  "biathlonShootingRank": "Laskmise koht",
+  "biathlonRangeRank": "Lasketiiru koht",
+  "biathlonPenaltyRank": "Trahviaja koht",
+  "biathlonFinishRank": "Lõppkoht",
+  "biathlonPassingTime": "Läbimise aeg",
+  "biathlonSplitTime": "Vaheaeg",
+  "biathlonPassingRank": "Koht läbimisel",
+  "biathlonSplitRank": "Lõigu koht",
+  "biathlonMissesLabel": "Möödalasud",
+  "biathlonRangeExitTime": "Lasketiirust väljumise aeg",
+  "biathlonRangeApproach": "Lasketiiru saabumine",
+  "biathlonRangeEntry": "Lasketiiru sisenemine",
+  "biathlonShootingDone": "Laskmine lõpetatud",
+  "biathlonShootingExit": "Laskmisest väljumine",
+  "biathlonRangeExitTotal": "Koguaeg lasketiirust väljumiseni",
+  "biathlonCumulativeMisses": "Senised möödalasud",
+  "biathlonStartTime": "Stardiaeg",
+  "biathlonDetailSelector": "Veel mõõdikuid: vaheajad, laskmine ja ringid",
+  "biathlonExtraDetails": "Kõik vaheajad, laskmised ja suusaringid",
+  "biathlonComparisonDescription": "Sinu individuaalsed võistlused võrreldes rühmaga {group} samas klassis ja etapis.",
+  "@biathlonComparisonDescription": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonComparisonUnavailable": "Mõõdiku {metric} võrdlus rühmaga {group} puudub. Selle mõõdiku võrdlusandmed pole saadaval.",
+  "@biathlonComparisonUnavailable": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentDifferenceCaption": "Erinevus protsendipunktides · joone kohal on parem",
+  "biathlonDifferenceCaption": "Erinevus rühmast {group} · joone kohal on parem",
+  "@biathlonDifferenceCaption": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonRaceLabel": "Võistlus {id}",
+  "@biathlonRaceLabel": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonCohortSummary": "{group}: {count} lõpetanut {total}-st",
+  "@biathlonCohortSummary": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonShootingNumber": "Laskmine {index}",
+  "@biathlonShootingNumber": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonSkiLap": "Suusaring {index}",
+  "@biathlonSkiLap": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonOwnValue": "Sina: {value}",
+  "@biathlonOwnValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonYourDifference": "Sinu erinevus: {value}",
+  "@biathlonYourDifference": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonDecimalMisses": "{value} möödalasku",
+  "@biathlonDecimalMisses": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentagePoints": "{value} protsendipunkti",
+  "@biathlonPercentagePoints": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonAverageHitPercent": "Keskmine tabamusprotsent",
+  "biathlonAverageHitExplanation": "Sinu lõpetatud individuaalsed laskesuusavõistlused. Igal võistlusel on võrdne kaal; puuduvad laskeandmed jäetakse välja.",
+  "biathlonHitProne": "Lamades",
+  "biathlonHitStanding": "Püsti",
+  "biathlonHitTotal": "Kokku",
+  "biathlonAverageRaceCount": "{count} võistlust",
+  "@biathlonAverageRaceCount": {"placeholders": {"count": {"type": "int"}}},
+  "importWaiting": "Tulemuste ootel",
+  "importInProgress": "Importimine",
+  "importPartial": "Osaliselt imporditud",
+  "importUpdated": "Uuendatud",
   "@@locale": "et",
-  "appTitle": "EQ Results",
+  "regressionCompareWith": "Võrdle: {target}",
+  "@regressionCompareWith": {"placeholders": {"target": {"type": "String"}}},
+  "regressionChooseTarget": "Vali võrdlus",
+  "regressionSelectFromList": "Vali tulemuste loendist väärtus, mida võrrelda näitajaga {subject}, seejärel vajuta OK.",
+  "@regressionSelectFromList": {"placeholders": {"subject": {"type": "String"}}},
+  "regressionCancel": "Tühista",
+  "regressionApply": "OK",
+  "appTitle": "Tulemused",
   "eventsTitle": "Choose an event",
   "eventsSubtitle": "Find an event and open live results.",
   "searchEvents": "Search events",
@@ -22,9 +176,22 @@
   "classes": "Classes",
   "classLabel": "Class",
   "split": "Split",
+  "searchResults": "Otsi sportlast, klubi või meeskonda",
   "athlete": "Athlete",
   "club": "Club",
   "shooting": "Shooting",
+  "biathlonShootingIn": "Laskmisele {index}",
+  "@biathlonShootingIn": {"placeholders": {"index": {"type": "int"}}},
+  "biathlonPositionProne": "prone",
+  "biathlonPositionStanding": "standing",
+  "biathlonPositionUnknown": "unknown position",
+  "biathlonMisses": "{count} misses",
+  "@biathlonMisses": {"placeholders": {"count": {"type": "int"}}},
+  "biathlonPenalty": "Penalty {time}",
+  "@biathlonPenalty": {"placeholders": {"time": {"type": "String"}}},
+  "biathlonRankNumber": "No. {rank}",
+  "@biathlonRankNumber": {"placeholders": {"rank": {"type": "int"}}},
+  "biathlonRankUnavailable": "Nr –",
   "time": "Time",
   "gap": "Gap",
   "place": "Place",
@@ -43,5 +210,19 @@
   "password": "Password",
   "signInWithGoogle": "Continue with Google",
   "signInWithEmail": "Sign in with email",
-  "createAccount": "Create account"
+  "createAccount": "Create account",
+  "connectAthlete": "Link athlete",
+  "connectAthleteDescription": "Search by full name to link your account to the right athlete.",
+  "connectAthleteOnboardingTitle": "Find your athlete profile",
+  "connectAthleteOnboardingDescription": "Link your account to your own results, or choose Not now.",
+  "fullName": "Full name",
+  "findAthlete": "Find athlete",
+  "noAthleteMatches": "No athlete was found with this full name.",
+  "notNow": "Not now",
+  "enterFullName": "Enter your full name first.",
+  "athleteLinked": "{name} is linked to your account",
+  "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
+  "couldNotReadAthleteLink": "Could not read the athlete link",
+  "settingsSyncFailed": "Seadeid ei saanud salvestada ega sünkroonida. Sinu valik jääb kehtima.",
+  "settingsRetry": "Proovi uuesti"
 }

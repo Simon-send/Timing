@@ -1,6 +1,160 @@
 {
+  "biathlonStatistics": "Skiskytterstatistikk",
+  "biathlonFinishTime": "Sluttid",
+  "biathlonSkiTime": "Skitid",
+  "biathlonShootingTime": "Skytetid",
+  "biathlonHitProneLabel": "Treff ligg",
+  "biathlonHitStandingLabel": "Treff stå",
+  "biathlonHitTotalLabel": "Treff totalt",
+  "biathlonAllFinishers": "Alle fullførte",
+  "biathlonTopHalf": "Topp 50 %",
+  "biathlonNetSkiTime": "Netto skitid",
+  "biathlonPenaltyTime": "Straffetid",
+  "biathlonRangeTime": "Tid på standplass",
+  "biathlonProneTime": "Tid liggende skyting",
+  "biathlonStandingTime": "Tid stående skyting",
+  "biathlonTotalMisses": "Bom totalt",
+  "biathlonProneMisses": "Bom liggende",
+  "biathlonStandingMisses": "Bom stående",
+  "biathlonSkiRank": "Skiplass",
+  "biathlonNetSkiRank": "Netto skiplass",
+  "biathlonShootingRank": "Skyteplass",
+  "biathlonRangeRank": "Standplassplass",
+  "biathlonPenaltyRank": "Straffeplass",
+  "biathlonFinishRank": "Sluttplass",
+  "biathlonPassingTime": "Passeringstid",
+  "biathlonSplitTime": "Deltid",
+  "biathlonPassingRank": "Plass ved passering",
+  "biathlonSplitRank": "Delplass",
+  "biathlonMissesLabel": "Bom",
+  "biathlonRangeExitTime": "Tid ut fra standplass",
+  "biathlonRangeApproach": "Ankomst standplass",
+  "biathlonRangeEntry": "Inn på standplass",
+  "biathlonShootingDone": "Skyting ferdig",
+  "biathlonShootingExit": "Ut fra skyting",
+  "biathlonRangeExitTotal": "Ut fra standplass totalt",
+  "biathlonCumulativeMisses": "Bom hittil",
+  "biathlonStartTime": "Starttid",
+  "biathlonDetailSelector": "Flere målinger: splitter, skyting og runder",
+  "biathlonExtraDetails": "Alle splitter, skytinger og skirunder",
+  "biathlonComparisonDescription": "Dine individuelle løp mot {group} i samme klasse og konkurranseledd.",
+  "@biathlonComparisonDescription": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonComparisonUnavailable": "Ingen sammenligning av {metric} mot {group} ennå. Referansedata for denne målingen er ikke tilgjengelige.",
+  "@biathlonComparisonUnavailable": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentDifferenceCaption": "Forskjell i prosentpoeng · over linjen er bedre",
+  "biathlonDifferenceCaption": "Forskjell fra {group} · over linjen er bedre",
+  "@biathlonDifferenceCaption": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonRaceLabel": "Løp {id}",
+  "@biathlonRaceLabel": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonCohortSummary": "{group}: {count} av {total} fullførte",
+  "@biathlonCohortSummary": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonShootingNumber": "Skyting {index}",
+  "@biathlonShootingNumber": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonSkiLap": "Skirunde {index}",
+  "@biathlonSkiLap": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
+  "biathlonOwnValue": "Du: {value}",
+  "@biathlonOwnValue": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonYourDifference": "Din forskjell: {value}",
+  "@biathlonYourDifference": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonDecimalMisses": "{value} bom",
+  "@biathlonDecimalMisses": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonPercentagePoints": "{value} prosentpoeng",
+  "@biathlonPercentagePoints": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "biathlonAverageHitPercent": "Gjennomsnittlig treffprosent",
+  "biathlonAverageHitExplanation": "Dine fullførte individuelle skiskytingsløp. Hvert løp teller likt; manglende skytingsdata utelates.",
+  "biathlonHitProne": "Liggende",
+  "biathlonHitStanding": "Stående",
+  "biathlonHitTotal": "Totalt",
+  "biathlonAverageRaceCount": "{count} løp",
+  "@biathlonAverageRaceCount": {"placeholders": {"count": {"type": "int"}}},
+  "importWaiting": "Venter på resultater",
+  "importInProgress": "Importerer",
+  "importPartial": "Delvis importert",
+  "importUpdated": "Oppdatert",
   "@@locale": "nb",
-  "appTitle": "EQ Resultater",
+  "regressionCompareWith": "Sammenlign med: {target}",
+  "@regressionCompareWith": {"placeholders": {"target": {"type": "String"}}},
+  "regressionChooseTarget": "Velg sammenligning",
+  "regressionSelectFromList": "Velg sammenligningsverdi i resultatlisten for {subject}, og trykk OK.",
+  "@regressionSelectFromList": {"placeholders": {"subject": {"type": "String"}}},
+  "regressionCancel": "Avbryt",
+  "regressionApply": "OK",
+  "appTitle": "Resultater",
   "eventsTitle": "Velg et event",
   "eventsSubtitle": "Finn et event og åpne resultatlisten.",
   "searchEvents": "Søk i events",
@@ -26,6 +180,18 @@
   "athlete": "Utøver",
   "club": "Klubb",
   "shooting": "Skyting",
+  "biathlonShootingIn": "Inn skyting {index}",
+  "@biathlonShootingIn": {"placeholders": {"index": {"type": "int"}}},
+  "biathlonPositionProne": "liggende",
+  "biathlonPositionStanding": "stående",
+  "biathlonPositionUnknown": "ukjent stilling",
+  "biathlonMisses": "{count} bom",
+  "@biathlonMisses": {"placeholders": {"count": {"type": "int"}}},
+  "biathlonPenalty": "Straff {time}",
+  "@biathlonPenalty": {"placeholders": {"time": {"type": "String"}}},
+  "biathlonRankNumber": "Nr {rank}",
+  "@biathlonRankNumber": {"placeholders": {"rank": {"type": "int"}}},
+  "biathlonRankUnavailable": "Nr –",
   "time": "Tid",
   "gap": "Gap",
   "place": "Plass",
@@ -44,5 +210,19 @@
   "password": "Passord",
   "signInWithGoogle": "Fortsett med Google",
   "signInWithEmail": "Logg inn med e-post",
-  "createAccount": "Opprett konto"
+  "createAccount": "Opprett konto",
+  "connectAthlete": "Koble til utøver",
+  "connectAthleteDescription": "Søk på fullt navn for å koble kontoen din til riktig utøver.",
+  "connectAthleteOnboardingTitle": "Finn utøveren din",
+  "connectAthleteOnboardingDescription": "Koble kontoen din til egne resultater, eller velg Ikke nå.",
+  "fullName": "Fullt navn",
+  "findAthlete": "Finn utøver",
+  "noAthleteMatches": "Fant ingen utøver med dette fulle navnet.",
+  "notNow": "Ikke nå",
+  "enterFullName": "Skriv inn fullt navn først.",
+  "athleteLinked": "{name} er koblet til kontoen",
+  "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
+  "couldNotReadAthleteLink": "Kunne ikke lese utøverkoblingen",
+  "settingsSyncFailed": "Kunne ikke lagre eller synkronisere innstillingene. Valget ditt er fortsatt valgt.",
+  "settingsRetry": "Prøv igjen"
 }

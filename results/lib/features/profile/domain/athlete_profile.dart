@@ -1,4 +1,6 @@
 import '../../../core/firebase/firestore_mappers.dart';
+import 'biathlon_aggregate_profile.dart';
+import 'biathlon_comparison.dart';
 
 class AthleteProfile {
   const AthleteProfile({
@@ -92,6 +94,10 @@ class AthleteRace {
     this.totalMs,
     this.isRelay = false,
     this.splits = const [],
+    this.biathlonMetrics,
+    this.biathlonBenchmark,
+    this.biathlonAllProfile,
+    this.biathlonTopHalfProfile,
   });
 
   final String eventId;
@@ -113,8 +119,32 @@ class AthleteRace {
   final int? totalMs;
   final bool isRelay;
   final List<AthleteRaceSplit> splits;
+  final BiathlonRaceMetrics? biathlonMetrics;
+  final BiathlonTopHalfBenchmark? biathlonBenchmark;
+  final BiathlonAggregateProfile? biathlonAllProfile;
+  final BiathlonAggregateProfile? biathlonTopHalfProfile;
+
+  BiathlonAggregateProfile? referenceFor(BiathlonReferenceGroup group) {
+    if (group == BiathlonReferenceGroup.all) return biathlonAllProfile;
+    if (biathlonTopHalfProfile != null) return biathlonTopHalfProfile;
+    final legacy = biathlonBenchmark;
+    return legacy == null
+        ? null
+        : BiathlonAggregateProfile.fromLegacyTopHalf(legacy);
+  }
 
   String get key => '$eventId/$classId/${stageId ?? ''}';
+
+  /// Old imports can contain zero-valued analysis for non-finishers.
+  bool get isCompletedIndividualBiathlonRace {
+    if (isRelay || biathlonMetrics == null || (totalMs ?? 0) <= 0) {
+      return false;
+    }
+    final upperStatus = status.trim().toUpperCase();
+    return !RegExp(
+      r'\b(DNS|DNF|DSQ|DQ|NC|NQ|DID NOT START|DID NOT FINISH|DISQUALIFIED|BRUTT|IKKE STARTET|IKKE FULLFØRT|DISKVALIFISERT)\b',
+    ).hasMatch(upperStatus);
+  }
 
   String get placementLabel {
     if (finishRank != null && finishRank! > 0) return finishRank.toString();

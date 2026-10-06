@@ -201,33 +201,28 @@ class EventFilters extends StatefulWidget {
 }
 
 class _EventFiltersState extends State<EventFilters> {
-  bool _expanded = true;
+  bool? _expanded;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Keep the activities list compact until the user explicitly opens filters.
+    _expanded ??= false;
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final text = _FilterText.of(context);
     final palette = context.palette;
+    final expanded = _expanded ?? false;
+
+    final searchActive = widget.controller.text.trim().isNotEmpty;
+    final activeCount = widget.criteria.activeCount + (searchActive ? 1 : 0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(
-          key: const Key('event-search-field'),
-          controller: widget.controller,
-          decoration: InputDecoration(
-            labelText: l10n.searchEvents,
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: widget.controller.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: text.clearSearch,
-                    onPressed: widget.controller.clear,
-                    icon: const Icon(Icons.close),
-                  ),
-          ),
-        ),
-        const SizedBox(height: 10),
         DecoratedBox(
           decoration: BoxDecoration(
             color: palette.panelAlt,
@@ -245,14 +240,13 @@ class _EventFiltersState extends State<EventFilters> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        widget.criteria.activeCount == 0
+                        activeCount == 0
                             ? text.filters
-                            : '${text.filters} (${widget.criteria.activeCount})',
+                            : '${text.filters} ($activeCount)',
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
-                    if (widget.criteria.activeCount > 0 ||
-                        widget.controller.text.isNotEmpty)
+                    if (activeCount > 0)
                       TextButton.icon(
                         key: const Key('event-filters-reset'),
                         onPressed: widget.onReset,
@@ -260,129 +254,215 @@ class _EventFiltersState extends State<EventFilters> {
                         label: Text(text.reset),
                       ),
                     IconButton(
-                      tooltip: _expanded ? text.collapse : text.expand,
-                      onPressed: () => setState(() => _expanded = !_expanded),
+                      key: const Key('event-filters-toggle'),
+                      tooltip: expanded ? text.collapse : text.expand,
+                      onPressed: () => setState(() => _expanded = !expanded),
                       icon: Icon(
-                        _expanded ? Icons.expand_less : Icons.expand_more,
+                        expanded ? Icons.expand_less : Icons.expand_more,
                       ),
                     ),
                   ],
                 ),
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 180),
-                  crossFadeState: _expanded
+                  crossFadeState: expanded
                       ? CrossFadeState.showFirst
                       : CrossFadeState.showSecond,
                   firstChild: Padding(
                     padding: const EdgeInsets.only(top: 10),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 250),
-                      child: SingleChildScrollView(
-                        child: Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            _FilterSelect(
-                              key: const Key('event-filter-country'),
-                              label: text.country,
-                              value: widget.criteria.country,
-                              options: widget.options.countries,
-                              onChanged: (value) => widget.onChanged(
-                                widget.criteria.copyWith(country: value),
-                              ),
-                            ),
-                            _FilterSelect(
-                              key: const Key('event-filter-sport'),
-                              label: l10n.sport,
-                              value: widget.criteria.sport,
-                              options: widget.options.sports,
-                              onChanged: (value) => widget.onChanged(
-                                widget.criteria.copyWith(sport: value),
-                              ),
-                            ),
-                            _FilterSelect(
-                              key: const Key('event-filter-discipline'),
-                              label: text.discipline,
-                              value: widget.criteria.discipline,
-                              options: widget.options.disciplines,
-                              onChanged: (value) => widget.onChanged(
-                                widget.criteria.copyWith(discipline: value),
-                              ),
-                            ),
-                            _FilterSelect(
-                              key: const Key('event-filter-county'),
-                              label: text.county,
-                              value: widget.criteria.county,
-                              options: widget.options.counties,
-                              onChanged: (value) => widget.onChanged(
-                                widget.criteria.copyWith(county: value),
-                              ),
-                            ),
-                            _AreaField(
-                              value: widget.criteria.area,
-                              label: text.area,
-                              onChanged: (value) => widget.onChanged(
-                                widget.criteria.copyWith(area: value),
-                              ),
-                            ),
-                            _DateFilter(
-                              from: widget.criteria.dateFrom,
-                              to: widget.criteria.dateTo,
-                              label: text.dateInterval,
-                              allDates: text.allDates,
-                              clearLabel: text.clear,
-                              onChanged: (range) => widget.onChanged(
-                                range == null
-                                    ? widget.criteria.copyWith(clearDates: true)
-                                    : widget.criteria.copyWith(
-                                        dateFrom: range.start,
-                                        dateTo: range.end,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final compact = constraints.maxWidth < 520;
+                        final maxHeight = compact
+                            ? (MediaQuery.sizeOf(context).height * 0.5)
+                                  .clamp(280.0, 420.0)
+                                  .toDouble()
+                            : 250.0;
+                        Widget field(Widget child) => SizedBox(
+                          width: compact ? constraints.maxWidth : 205,
+                          child: child,
+                        );
+                        return ConstrainedBox(
+                          constraints: BoxConstraints(maxHeight: maxHeight),
+                          child: Scrollbar(
+                            child: SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  TextField(
+                                    key: const Key('event-search-field'),
+                                    controller: widget.controller,
+                                    decoration: InputDecoration(
+                                      labelText: l10n.searchEvents,
+                                      prefixIcon: const Icon(Icons.search),
+                                      suffixIcon: searchActive
+                                          ? IconButton(
+                                              tooltip: text.clearSearch,
+                                              onPressed:
+                                                  widget.controller.clear,
+                                              icon: const Icon(Icons.close),
+                                            )
+                                          : null,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 10,
+                                    runSpacing: 10,
+                                    children: [
+                                      field(
+                                        _FilterSelect(
+                                          key: const Key(
+                                            'event-filter-country',
+                                          ),
+                                          label: text.country,
+                                          value: widget.criteria.country,
+                                          options: widget.options.countries,
+                                          onChanged: (value) =>
+                                              widget.onChanged(
+                                                widget.criteria.copyWith(
+                                                  country: value,
+                                                ),
+                                              ),
+                                        ),
                                       ),
+                                      field(
+                                        _FilterSelect(
+                                          key: const Key('event-filter-sport'),
+                                          label: l10n.sport,
+                                          value: widget.criteria.sport,
+                                          options: widget.options.sports,
+                                          onChanged: (value) =>
+                                              widget.onChanged(
+                                                widget.criteria.copyWith(
+                                                  sport: value,
+                                                ),
+                                              ),
+                                        ),
+                                      ),
+                                      field(
+                                        _FilterSelect(
+                                          key: const Key(
+                                            'event-filter-discipline',
+                                          ),
+                                          label: text.discipline,
+                                          value: widget.criteria.discipline,
+                                          options: widget.options.disciplines,
+                                          onChanged: (value) =>
+                                              widget.onChanged(
+                                                widget.criteria.copyWith(
+                                                  discipline: value,
+                                                ),
+                                              ),
+                                        ),
+                                      ),
+                                      field(
+                                        _FilterSelect(
+                                          key: const Key('event-filter-county'),
+                                          label: text.county,
+                                          value: widget.criteria.county,
+                                          options: widget.options.counties,
+                                          onChanged: (value) =>
+                                              widget.onChanged(
+                                                widget.criteria.copyWith(
+                                                  county: value,
+                                                ),
+                                              ),
+                                        ),
+                                      ),
+                                      field(
+                                        _AreaField(
+                                          value: widget.criteria.area,
+                                          label: text.area,
+                                          onChanged: (value) =>
+                                              widget.onChanged(
+                                                widget.criteria.copyWith(
+                                                  area: value,
+                                                ),
+                                              ),
+                                        ),
+                                      ),
+                                      field(
+                                        _DateFilter(
+                                          from: widget.criteria.dateFrom,
+                                          to: widget.criteria.dateTo,
+                                          label: text.dateInterval,
+                                          allDates: text.allDates,
+                                          clearLabel: text.clear,
+                                          onChanged: (range) =>
+                                              widget.onChanged(
+                                                range == null
+                                                    ? widget.criteria.copyWith(
+                                                        clearDates: true,
+                                                      )
+                                                    : widget.criteria.copyWith(
+                                                        dateFrom: range.start,
+                                                        dateTo: range.end,
+                                                      ),
+                                              ),
+                                        ),
+                                      ),
+                                      field(
+                                        _RangeFilter(
+                                          key: const Key(
+                                            'event-filter-participants',
+                                          ),
+                                          label: text.participants,
+                                          from:
+                                              widget.criteria.participantsFrom,
+                                          to: widget.criteria.participantsTo,
+                                          fromLabel: text.minimum,
+                                          toLabel: text.maximum,
+                                          onFromChanged: (value) =>
+                                              widget.onChanged(
+                                                widget.criteria.copyWith(
+                                                  participantsFrom: value,
+                                                  clearParticipantsFrom:
+                                                      value == null,
+                                                ),
+                                              ),
+                                          onToChanged: (value) =>
+                                              widget.onChanged(
+                                                widget.criteria.copyWith(
+                                                  participantsTo: value,
+                                                  clearParticipantsTo:
+                                                      value == null,
+                                                ),
+                                              ),
+                                        ),
+                                      ),
+                                      field(
+                                        _RangeFilter(
+                                          key: const Key('event-filter-age'),
+                                          label: text.age,
+                                          from: widget.criteria.ageFrom,
+                                          to: widget.criteria.ageTo,
+                                          fromLabel: text.from,
+                                          toLabel: text.to,
+                                          onFromChanged: (value) =>
+                                              widget.onChanged(
+                                                widget.criteria.copyWith(
+                                                  ageFrom: value,
+                                                  clearAgeFrom: value == null,
+                                                ),
+                                              ),
+                                          onToChanged: (value) =>
+                                              widget.onChanged(
+                                                widget.criteria.copyWith(
+                                                  ageTo: value,
+                                                  clearAgeTo: value == null,
+                                                ),
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
-                            _RangeFilter(
-                              key: const Key('event-filter-participants'),
-                              label: text.participants,
-                              from: widget.criteria.participantsFrom,
-                              to: widget.criteria.participantsTo,
-                              fromLabel: text.minimum,
-                              toLabel: text.maximum,
-                              onFromChanged: (value) => widget.onChanged(
-                                widget.criteria.copyWith(
-                                  participantsFrom: value,
-                                  clearParticipantsFrom: value == null,
-                                ),
-                              ),
-                              onToChanged: (value) => widget.onChanged(
-                                widget.criteria.copyWith(
-                                  participantsTo: value,
-                                  clearParticipantsTo: value == null,
-                                ),
-                              ),
-                            ),
-                            _RangeFilter(
-                              key: const Key('event-filter-age'),
-                              label: text.age,
-                              from: widget.criteria.ageFrom,
-                              to: widget.criteria.ageTo,
-                              fromLabel: text.from,
-                              toLabel: text.to,
-                              onFromChanged: (value) => widget.onChanged(
-                                widget.criteria.copyWith(
-                                  ageFrom: value,
-                                  clearAgeFrom: value == null,
-                                ),
-                              ),
-                              onToChanged: (value) => widget.onChanged(
-                                widget.criteria.copyWith(
-                                  ageTo: value,
-                                  clearAgeTo: value == null,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   secondChild: const SizedBox.shrink(),

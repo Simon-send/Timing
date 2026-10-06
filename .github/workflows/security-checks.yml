@@ -1,0 +1,109 @@
+name: Security checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  importer-tests:
+    name: importer-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: eq-importer/functions
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: eq-importer/functions/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  firestore-rules:
+    name: firestore-rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GCLOUD_PROJECT: demo-eq-results
+      GOOGLE_CLOUD_PROJECT: demo-eq-results
+      FIREBASE_CLI_DISABLE_MOTD: "true"
+    defaults:
+      run:
+        working-directory: eq-importer/functions
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: eq-importer/functions/package-lock.json
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm ci
+      - name: Test rules against local demo project
+        run: >-
+          ./node_modules/.bin/firebase
+          --config ../firebase.test.json
+          --project demo-eq-results
+          emulators:exec --only firestore
+          "npm run test:rules"
+
+  flutter:
+    name: flutter
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: results
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter gen-l10n
+      - run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
+
+  dependency-audit:
+    name: dependency-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: eq-importer/functions
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: eq-importer/functions/package-lock.json
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high

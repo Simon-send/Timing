@@ -114,10 +114,400 @@ abstract class AppLocalizations {
     Locale('sv'),
   ];
 
+  /// No description provided for @biathlonStatistics.
+  ///
+  /// In en, this message translates to:
+  /// **'Biathlon statistics'**
+  String get biathlonStatistics;
+
+  /// No description provided for @biathlonFinishTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish time'**
+  String get biathlonFinishTime;
+
+  /// No description provided for @biathlonSkiTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Ski time'**
+  String get biathlonSkiTime;
+
+  /// No description provided for @biathlonShootingTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Shooting time'**
+  String get biathlonShootingTime;
+
+  /// No description provided for @biathlonHitProneLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Prone hit percentage'**
+  String get biathlonHitProneLabel;
+
+  /// No description provided for @biathlonHitStandingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Standing hit percentage'**
+  String get biathlonHitStandingLabel;
+
+  /// No description provided for @biathlonHitTotalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Total hit percentage'**
+  String get biathlonHitTotalLabel;
+
+  /// No description provided for @biathlonAllFinishers.
+  ///
+  /// In en, this message translates to:
+  /// **'All finishers'**
+  String get biathlonAllFinishers;
+
+  /// No description provided for @biathlonTopHalf.
+  ///
+  /// In en, this message translates to:
+  /// **'Top 50 %'**
+  String get biathlonTopHalf;
+
+  /// No description provided for @biathlonNetSkiTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Net ski time'**
+  String get biathlonNetSkiTime;
+
+  /// No description provided for @biathlonPenaltyTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Penalty time'**
+  String get biathlonPenaltyTime;
+
+  /// No description provided for @biathlonRangeTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Time on the range'**
+  String get biathlonRangeTime;
+
+  /// No description provided for @biathlonProneTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Prone shooting time'**
+  String get biathlonProneTime;
+
+  /// No description provided for @biathlonStandingTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Standing shooting time'**
+  String get biathlonStandingTime;
+
+  /// No description provided for @biathlonTotalMisses.
+  ///
+  /// In en, this message translates to:
+  /// **'Total misses'**
+  String get biathlonTotalMisses;
+
+  /// No description provided for @biathlonProneMisses.
+  ///
+  /// In en, this message translates to:
+  /// **'Prone misses'**
+  String get biathlonProneMisses;
+
+  /// No description provided for @biathlonStandingMisses.
+  ///
+  /// In en, this message translates to:
+  /// **'Standing misses'**
+  String get biathlonStandingMisses;
+
+  /// No description provided for @biathlonSkiRank.
+  ///
+  /// In en, this message translates to:
+  /// **'Ski rank'**
+  String get biathlonSkiRank;
+
+  /// No description provided for @biathlonNetSkiRank.
+  ///
+  /// In en, this message translates to:
+  /// **'Net ski rank'**
+  String get biathlonNetSkiRank;
+
+  /// No description provided for @biathlonShootingRank.
+  ///
+  /// In en, this message translates to:
+  /// **'Shooting rank'**
+  String get biathlonShootingRank;
+
+  /// No description provided for @biathlonRangeRank.
+  ///
+  /// In en, this message translates to:
+  /// **'Range rank'**
+  String get biathlonRangeRank;
+
+  /// No description provided for @biathlonPenaltyRank.
+  ///
+  /// In en, this message translates to:
+  /// **'Penalty rank'**
+  String get biathlonPenaltyRank;
+
+  /// No description provided for @biathlonFinishRank.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish rank'**
+  String get biathlonFinishRank;
+
+  /// No description provided for @biathlonPassingTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Passing time'**
+  String get biathlonPassingTime;
+
+  /// No description provided for @biathlonSplitTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Split time'**
+  String get biathlonSplitTime;
+
+  /// No description provided for @biathlonPassingRank.
+  ///
+  /// In en, this message translates to:
+  /// **'Rank at passing'**
+  String get biathlonPassingRank;
+
+  /// No description provided for @biathlonSplitRank.
+  ///
+  /// In en, this message translates to:
+  /// **'Split rank'**
+  String get biathlonSplitRank;
+
+  /// No description provided for @biathlonMissesLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Misses'**
+  String get biathlonMissesLabel;
+
+  /// No description provided for @biathlonRangeExitTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Range exit time'**
+  String get biathlonRangeExitTime;
+
+  /// No description provided for @biathlonRangeApproach.
+  ///
+  /// In en, this message translates to:
+  /// **'Approach to range'**
+  String get biathlonRangeApproach;
+
+  /// No description provided for @biathlonRangeEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Entry to range'**
+  String get biathlonRangeEntry;
+
+  /// No description provided for @biathlonShootingDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Shooting completed'**
+  String get biathlonShootingDone;
+
+  /// No description provided for @biathlonShootingExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit from shooting'**
+  String get biathlonShootingExit;
+
+  /// No description provided for @biathlonRangeExitTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total time to range exit'**
+  String get biathlonRangeExitTotal;
+
+  /// No description provided for @biathlonCumulativeMisses.
+  ///
+  /// In en, this message translates to:
+  /// **'Misses so far'**
+  String get biathlonCumulativeMisses;
+
+  /// No description provided for @biathlonStartTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Start time'**
+  String get biathlonStartTime;
+
+  /// No description provided for @biathlonDetailSelector.
+  ///
+  /// In en, this message translates to:
+  /// **'More measurements: splits, shooting and laps'**
+  String get biathlonDetailSelector;
+
+  /// No description provided for @biathlonExtraDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'All splits, shooting bouts and ski laps'**
+  String get biathlonExtraDetails;
+
+  /// No description provided for @biathlonComparisonDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Your individual races compared with {group} in the same class and stage.'**
+  String biathlonComparisonDescription(String group);
+
+  /// No description provided for @biathlonComparisonUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No comparison of {metric} with {group} yet. Reference data for this measurement is unavailable.'**
+  String biathlonComparisonUnavailable(String metric, String group);
+
+  /// No description provided for @biathlonPercentDifferenceCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Difference in percentage points · above the line is better'**
+  String get biathlonPercentDifferenceCaption;
+
+  /// No description provided for @biathlonDifferenceCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Difference from {group} · above the line is better'**
+  String biathlonDifferenceCaption(String group);
+
+  /// No description provided for @biathlonRaceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Race {id}'**
+  String biathlonRaceLabel(String id);
+
+  /// No description provided for @biathlonCohortSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{group}: {count} of {total} finishers'**
+  String biathlonCohortSummary(String group, int count, int total);
+
+  /// No description provided for @biathlonShootingNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Shooting {index}'**
+  String biathlonShootingNumber(int index);
+
+  /// No description provided for @biathlonSkiLap.
+  ///
+  /// In en, this message translates to:
+  /// **'Ski lap {index}'**
+  String biathlonSkiLap(int index);
+
+  /// No description provided for @biathlonOwnValue.
+  ///
+  /// In en, this message translates to:
+  /// **'You: {value}'**
+  String biathlonOwnValue(String value);
+
+  /// No description provided for @biathlonYourDifference.
+  ///
+  /// In en, this message translates to:
+  /// **'Your difference: {value}'**
+  String biathlonYourDifference(String value);
+
+  /// No description provided for @biathlonDecimalMisses.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} misses'**
+  String biathlonDecimalMisses(String value);
+
+  /// No description provided for @biathlonPercentagePoints.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} percentage points'**
+  String biathlonPercentagePoints(String value);
+
+  /// No description provided for @biathlonAverageHitPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'Average hit percentage'**
+  String get biathlonAverageHitPercent;
+
+  /// No description provided for @biathlonAverageHitExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Your completed individual biathlon races. Each race has equal weight; missing shooting data is excluded.'**
+  String get biathlonAverageHitExplanation;
+
+  /// No description provided for @biathlonHitProne.
+  ///
+  /// In en, this message translates to:
+  /// **'Prone'**
+  String get biathlonHitProne;
+
+  /// No description provided for @biathlonHitStanding.
+  ///
+  /// In en, this message translates to:
+  /// **'Standing'**
+  String get biathlonHitStanding;
+
+  /// No description provided for @biathlonHitTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get biathlonHitTotal;
+
+  /// No description provided for @biathlonAverageRaceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} races'**
+  String biathlonAverageRaceCount(int count);
+
+  /// No description provided for @importWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for results'**
+  String get importWaiting;
+
+  /// No description provided for @importInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Importing'**
+  String get importInProgress;
+
+  /// No description provided for @importPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Partially imported'**
+  String get importPartial;
+
+  /// No description provided for @importUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Updated'**
+  String get importUpdated;
+
+  /// No description provided for @regressionCompareWith.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare with: {target}'**
+  String regressionCompareWith(String target);
+
+  /// No description provided for @regressionChooseTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose comparison'**
+  String get regressionChooseTarget;
+
+  /// No description provided for @regressionSelectFromList.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a comparison value in the results list for {subject}, then press OK.'**
+  String regressionSelectFromList(String subject);
+
+  /// No description provided for @regressionCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get regressionCancel;
+
+  /// No description provided for @regressionApply.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get regressionApply;
+
   /// No description provided for @appTitle.
   ///
   /// In en, this message translates to:
-  /// **'EQ Results'**
+  /// **'Results'**
   String get appTitle;
 
   /// No description provided for @eventsTitle.
@@ -270,6 +660,54 @@ abstract class AppLocalizations {
   /// **'Shooting'**
   String get shooting;
 
+  /// No description provided for @biathlonShootingIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Into shooting {index}'**
+  String biathlonShootingIn(int index);
+
+  /// No description provided for @biathlonPositionProne.
+  ///
+  /// In en, this message translates to:
+  /// **'prone'**
+  String get biathlonPositionProne;
+
+  /// No description provided for @biathlonPositionStanding.
+  ///
+  /// In en, this message translates to:
+  /// **'standing'**
+  String get biathlonPositionStanding;
+
+  /// No description provided for @biathlonPositionUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown position'**
+  String get biathlonPositionUnknown;
+
+  /// No description provided for @biathlonMisses.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} misses'**
+  String biathlonMisses(int count);
+
+  /// No description provided for @biathlonPenalty.
+  ///
+  /// In en, this message translates to:
+  /// **'Penalty {time}'**
+  String biathlonPenalty(String time);
+
+  /// No description provided for @biathlonRankNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'No. {rank}'**
+  String biathlonRankNumber(int rank);
+
+  /// No description provided for @biathlonRankUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No. –'**
+  String get biathlonRankUnavailable;
+
   /// No description provided for @time.
   ///
   /// In en, this message translates to:
@@ -383,6 +821,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Create account'**
   String get createAccount;
+
+  /// No description provided for @connectAthlete.
+  ///
+  /// In en, this message translates to:
+  /// **'Link athlete'**
+  String get connectAthlete;
+
+  /// No description provided for @connectAthleteDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Search by full name to link your account to the right athlete.'**
+  String get connectAthleteDescription;
+
+  /// No description provided for @connectAthleteOnboardingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find your athlete profile'**
+  String get connectAthleteOnboardingTitle;
+
+  /// No description provided for @connectAthleteOnboardingDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Link your account to your own results, or choose Not now.'**
+  String get connectAthleteOnboardingDescription;
+
+  /// No description provided for @fullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Full name'**
+  String get fullName;
+
+  /// No description provided for @findAthlete.
+  ///
+  /// In en, this message translates to:
+  /// **'Find athlete'**
+  String get findAthlete;
+
+  /// No description provided for @noAthleteMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No athlete was found with this full name.'**
+  String get noAthleteMatches;
+
+  /// No description provided for @notNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get notNow;
+
+  /// No description provided for @enterFullName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your full name first.'**
+  String get enterFullName;
+
+  /// No description provided for @athleteLinked.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is linked to your account'**
+  String athleteLinked(String name);
+
+  /// No description provided for @couldNotReadAthleteLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the athlete link'**
+  String get couldNotReadAthleteLink;
+
+  /// No description provided for @settingsSyncFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save or sync your settings. Your choice is still selected.'**
+  String get settingsSyncFailed;
+
+  /// No description provided for @settingsRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get settingsRetry;
 }
 
 class _AppLocalizationsDelegate

@@ -1,10 +1,18 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/firebase/firestore_mappers.dart';
+import '../../../core/firebase/switch_latest.dart';
 import '../../results/domain/race_result.dart';
+import '../domain/athlete_link_state.dart';
 import '../domain/athlete_profile.dart';
+import '../domain/biathlon_aggregate_profile.dart';
+import '../domain/biathlon_comparison.dart';
 
 abstract class AthleteProfileRepository {
+  Stream<AthleteLinkState> watchAthleteLinkState(String uid);
+
   Stream<String?> watchLinkedAthleteId(String uid);
 
   Future<void> linkAthlete({
@@ -13,6 +21,8 @@ abstract class AthleteProfileRepository {
   });
 
   Future<void> clearLinkedAthlete(String uid);
+
+  Future<void> completeAthleteLinkOnboarding(String uid);
 
   Future<List<AthleteProfile>> searchAthletesByFullName(String fullName);
 
@@ -33,18 +43,26 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
   final FirebaseFirestore _firestore;
 
   @override
-  Stream<String?> watchLinkedAthleteId(String uid) async* {
+  Stream<AthleteLinkState> watchAthleteLinkState(String uid) async* {
     try {
       await for (final snapshot in _profileDoc(uid).snapshots()) {
-        yield asNonEmptyString(snapshot.data()?['athleteId']);
+        yield AthleteLinkState.fromMap(snapshot.data());
       }
     } on FirebaseException catch (error) {
       if (_isRecoverableProfileReadError(error)) {
-        yield null;
+        yield const AthleteLinkState(
+          athleteId: null,
+          onboardingCompleted: false,
+        );
         return;
       }
       rethrow;
     }
+  }
+
+  @override
+  Stream<String?> watchLinkedAthleteId(String uid) {
+    return watchAthleteLinkState(uid).map((state) => state.athleteId);
   }
 
   @override
@@ -55,6 +73,7 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
     return _profileDoc(uid).set({
       'athleteId': athlete.athleteId,
       'athleteName': athlete.displayName,
+      'athleteLinkOnboardingCompleted': true,
       'updatedAt': FieldValue.serverTimestamp(),
       'linkedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
@@ -62,7 +81,21 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
 
   @override
   Future<void> clearLinkedAthlete(String uid) {
-    return _profileDoc(uid).delete();
+    return _profileDoc(uid).set({
+      'athleteId': FieldValue.delete(),
+      'athleteName': FieldValue.delete(),
+      'linkedAt': FieldValue.delete(),
+      'athleteLinkOnboardingCompleted': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> completeAthleteLinkOnboarding(String uid) {
+    return _profileDoc(uid).set({
+      'athleteLinkOnboardingCompleted': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   @override
@@ -100,39 +133,130 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
 
   @override
   Stream<List<AthleteRace>> watchAthleteRaces(String athleteId) {
-    return _firestore
-        .collectionGroup('results')
-        .where('athleteId', isEqualTo: athleteId)
-        .snapshots()
-        .asyncMap((snapshot) async {
-          final participantCounts = await _participantCountsFor(snapshot.docs);
-          final races =
-              snapshot.docs
-                  .map(
-                    (doc) => _athleteRaceFromDoc(
-                      doc,
-                      participantCount:
-                          participantCounts[doc
-                              .reference
-                              .parent
-                              .parent
-                              ?.path] ??
-                          0,
-                    ),
-                  )
-                  .toList()
-                ..sort(_compareRacesDesc);
-          return races;
-        });
+    return switchLatest(
+      _firestore.collection('athletes').doc(athleteId).snapshots(),
+      (snapshot) {
+        final data = snapshot.data();
+        if (data == null) return Stream.value(const <AthleteRace>[]);
+        return _watchIndexedAthleteRaces(
+          athleteId,
+          AthleteProfile.fromMap(snapshot.id, data),
+        );
+      },
+    );
   }
 
-  Future<Map<String, int>> _participantCountsFor(
+  Stream<List<AthleteRace>> _watchIndexedAthleteRaces(
+    String athleteId,
+    AthleteProfile profile,
+  ) async* {
+    final stageIdsByEvent = <String, List<String>>{};
+    await Future.wait(
+      profile.events.map((event) async {
+        final snapshot = await _firestore
+            .collection('events')
+            .doc(event.eventId)
+            .collection('stages')
+            .get();
+        stageIdsByEvent[event.eventId] = snapshot.docs
+            .map((doc) => doc.id)
+            .toList();
+      }),
+    );
+
+    final paths = buildAthleteRaceResultCollectionPaths(
+      profile: profile,
+      stageIdsByEvent: stageIdsByEvent,
+    );
+    if (paths.isEmpty) {
+      yield const <AthleteRace>[];
+      return;
+    }
+
+    final queries = paths.map(
+      (path) =>
+          _firestore.collection(path).where('athleteId', isEqualTo: athleteId),
+    );
+    await for (final docs in _combineResultQueries(queries.toList())) {
+      final classMetadata = await _classMetadataFor(docs);
+      final races =
+          docs
+              .map(
+                (doc) => _athleteRaceFromDoc(
+                  doc,
+                  participantCount:
+                      classMetadata[doc.reference.parent.parent?.path]
+                          ?.participantCount ??
+                      0,
+                  biathlonBenchmark:
+                      classMetadata[doc.reference.parent.parent?.path]
+                          ?.biathlonBenchmark,
+                  biathlonAllProfile:
+                      classMetadata[doc.reference.parent.parent?.path]
+                          ?.biathlonAllProfile,
+                  biathlonTopHalfProfile:
+                      classMetadata[doc.reference.parent.parent?.path]
+                          ?.biathlonTopHalfProfile,
+                ),
+              )
+              .toList()
+            ..sort(_compareRacesDesc);
+      yield races;
+    }
+  }
+
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+  _combineResultQueries(List<Query<Map<String, dynamic>>> queries) {
+    late StreamController<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+    controller;
+    final latest = List<QuerySnapshot<Map<String, dynamic>>?>.filled(
+      queries.length,
+      null,
+    );
+    final subscriptions =
+        <StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>[];
+
+    controller =
+        StreamController<List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+          onListen: () {
+            for (var index = 0; index < queries.length; index++) {
+              subscriptions.add(
+                queries[index].snapshots().listen((snapshot) {
+                  latest[index] = snapshot;
+                  if (latest.every((value) => value != null)) {
+                    controller.add([
+                      for (final value in latest) ...value!.docs,
+                    ]);
+                  }
+                }, onError: controller.addError),
+              );
+            }
+          },
+          onCancel: () async {
+            await Future.wait(
+              subscriptions.map((subscription) => subscription.cancel()),
+            );
+          },
+        );
+    return controller.stream;
+  }
+
+  Future<Map<String, _ClassRaceMetadata>> _classMetadataFor(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> resultDocs,
   ) async {
     final classDocs = <String, DocumentReference<Map<String, dynamic>>>{};
+    final biathlonClassPaths = <String>{};
     for (final resultDoc in resultDocs) {
       final classDoc = resultDoc.reference.parent.parent;
-      if (classDoc != null) classDocs[classDoc.path] = classDoc;
+      if (classDoc == null) continue;
+      classDocs[classDoc.path] = classDoc;
+      final data = resultDoc.data();
+      if (asBool(data['isBiathlon']) == true ||
+          asStringMap(
+            asStringMap(data['analysisSummary'])['biathlon'],
+          ).isNotEmpty) {
+        biathlonClassPaths.add(classDoc.path);
+      }
     }
 
     final entries = await Future.wait(
@@ -141,18 +265,74 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
           final data = (await entry.value.get()).data();
           final participants = asInt(data?['participantCount']) ?? 0;
           final results = asInt(data?['resultCount']) ?? 0;
+          final profiles = biathlonClassPaths.contains(entry.key)
+              ? await Future.wait([
+                  _readAggregateProfile(
+                    entry.value,
+                    BiathlonReferenceGroup.all,
+                  ),
+                  _readAggregateProfile(
+                    entry.value,
+                    BiathlonReferenceGroup.topHalf,
+                  ),
+                ])
+              : const <BiathlonAggregateProfile?>[null, null];
           return MapEntry(
             entry.key,
-            participants > results ? participants : results,
+            _ClassRaceMetadata(
+              participantCount: participants > results ? participants : results,
+              biathlonBenchmark: BiathlonTopHalfBenchmark.fromMap(
+                data?['biathlonTopHalf'],
+              ),
+              biathlonAllProfile: profiles[0],
+              biathlonTopHalfProfile: profiles[1],
+            ),
           );
         } on FirebaseException {
           // Class metadata is supplementary. Keep the race list available if
           // an older database rule does not expose the parent class document.
-          return MapEntry(entry.key, 0);
+          return MapEntry(
+            entry.key,
+            const _ClassRaceMetadata(participantCount: 0),
+          );
         }
       }),
     );
     return Map.fromEntries(entries);
+  }
+
+  Future<BiathlonAggregateProfile?> _readAggregateProfile(
+    DocumentReference<Map<String, dynamic>> classDoc,
+    BiathlonReferenceGroup group,
+  ) async {
+    try {
+      final rootRef = classDoc
+          .collection('aggregateProfiles')
+          .doc(group.documentId);
+      final root = (await rootRef.get()).data();
+      if (root == null) return null;
+      final manifest = asStringMap(root['sections']);
+      final sectionIds = <String>[
+        for (final ids in manifest.values)
+          if (ids is List)
+            for (final id in ids)
+              if (id is String) id,
+      ];
+      if (sectionIds.length > 128) return null;
+      final sections = await Future.wait(
+        sectionIds.map((id) => rootRef.collection('sections').doc(id).get()),
+      );
+      final sectionDocs = <String, Map<String, dynamic>>{};
+      for (final section in sections) {
+        final data = section.data();
+        if (data != null) sectionDocs[section.id] = data;
+      }
+      final merged = mergeBiathlonAggregateSections(root, sectionDocs);
+      return BiathlonAggregateProfile.fromMap(merged, group);
+    } on FirebaseException {
+      // Old rules deny the new collection until the importer rollout.
+      return null;
+    }
   }
 
   @override
@@ -187,6 +367,40 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
   }
 }
 
+class _ClassRaceMetadata {
+  const _ClassRaceMetadata({
+    required this.participantCount,
+    this.biathlonBenchmark,
+    this.biathlonAllProfile,
+    this.biathlonTopHalfProfile,
+  });
+
+  final int participantCount;
+  final BiathlonTopHalfBenchmark? biathlonBenchmark;
+  final BiathlonAggregateProfile? biathlonAllProfile;
+  final BiathlonAggregateProfile? biathlonTopHalfProfile;
+}
+
+List<String> buildAthleteRaceResultCollectionPaths({
+  required AthleteProfile profile,
+  required Map<String, List<String>> stageIdsByEvent,
+}) {
+  final paths = <String>{};
+  for (final event in profile.events) {
+    if (event.eventId.isEmpty || event.classId.isEmpty) continue;
+
+    paths.add('events/${event.eventId}/classes/${event.classId}/results');
+    for (final stageId in stageIdsByEvent[event.eventId] ?? const <String>[]) {
+      if (stageId.isEmpty) continue;
+      paths.add(
+        'events/${event.eventId}/stages/$stageId/classes/'
+        '${event.classId}/results',
+      );
+    }
+  }
+  return paths.toList()..sort();
+}
+
 String? normalizeAthleteName(String value) {
   final normalized = value.trim().replaceAll(RegExp(r'\s+'), ' ');
   if (normalized.isEmpty) return null;
@@ -218,6 +432,9 @@ bool _isRecoverableProfileReadError(FirebaseException error) {
 AthleteRace _athleteRaceFromDoc(
   QueryDocumentSnapshot<Map<String, dynamic>> doc, {
   required int participantCount,
+  BiathlonTopHalfBenchmark? biathlonBenchmark,
+  BiathlonAggregateProfile? biathlonAllProfile,
+  BiathlonAggregateProfile? biathlonTopHalfProfile,
 }) {
   final data = doc.data();
   final parsedResult = RaceResult.fromMap(doc.id, data);
@@ -225,6 +442,20 @@ AthleteRace _athleteRaceFromDoc(
   final eventDoc = classDoc?.parent.parent;
   final eventId = asNonEmptyString(data['eventId']) ?? eventDoc?.id ?? '';
   final classId = asNonEmptyString(data['classId']) ?? classDoc?.id ?? '';
+  final biathlonSummary = asStringMap(
+    asStringMap(data['analysisSummary'])['biathlon'],
+  );
+  final isBiathlon =
+      asBool(data['isBiathlon']) == true ||
+      biathlonSummary.isNotEmpty ||
+      parsedResult.biathlon?.hasData == true;
+  final expectedShootingCount = biathlonAllProfile?.shootingPasses.values
+      .fold<int>(
+        0,
+        (maxIndex, point) => point.index != null && point.index! > maxIndex
+            ? point.index!
+            : maxIndex,
+      );
 
   return AthleteRace(
     eventId: eventId,
@@ -257,12 +488,20 @@ AthleteRace _athleteRaceFromDoc(
         '',
     shooting:
         asNonEmptyString(asStringMap(data['analysis'])['shootingResult']) ?? '',
-    status:
-        asNonEmptyString(data['status']) ??
-        asNonEmptyString(data['StatusTekst']) ??
-        '',
+    status: parsedResult.status,
     participantCount: participantCount,
     totalMs: parsedResult.totalMs,
+    biathlonMetrics: isBiathlon
+        ? BiathlonRaceMetrics.fromResult(
+            parsedResult,
+            publicMetrics: asStringMap(biathlonSummary['metrics']),
+            publicPasses: asStringMap(biathlonSummary['passes']),
+            expectedShootingCount: expectedShootingCount,
+          )
+        : null,
+    biathlonBenchmark: biathlonBenchmark,
+    biathlonAllProfile: biathlonAllProfile,
+    biathlonTopHalfProfile: biathlonTopHalfProfile,
     isRelay:
         asBool(data['isRelay']) ??
         (asNonEmptyString(asStringMap(data['entrant'])['kind']) == 'team'),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:results/l10n/app_localizations.dart';
 
-import '../../../app/app_theme.dart';
 import '../../../core/formatting/time_formatters.dart';
 import '../../settings/domain/user_settings.dart';
 import '../domain/race_result.dart';
@@ -23,6 +22,8 @@ class ResultsTable extends StatelessWidget {
     this.onLoadMore,
     this.isLoadingMore = false,
     this.searchQuery = '',
+    this.pageScrollController,
+    this.stickyClassHeader,
     required this.onAthleteTap,
   });
 
@@ -38,11 +39,23 @@ class ResultsTable extends StatelessWidget {
   final VoidCallback? onLoadMore;
   final bool isLoadingMore;
   final String searchQuery;
+  final ScrollController? pageScrollController;
+  final Widget? stickyClassHeader;
   final ValueChanged<ResultTableRow> onAthleteTap;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final prioritizeCoreColumns = width < 850;
+    final ultraCompact = width < 320;
+    final compact = width < 600;
+    final showAffiliation = width >= 850;
+    final showBib = width >= 480;
+    final showGap = width >= 700;
+    final athleteColumnWidth = prioritizeCoreColumns
+        ? (width - (ultraCompact ? 170 : 202)).clamp(72.0, 300.0)
+        : 320.0;
     final effectiveSortMode = splitRange?.isIndependent == true
         ? ResultSortMode.split
         : sortMode;
@@ -68,27 +81,52 @@ class ResultsTable extends StatelessWidget {
       splitRange,
       effectiveSortMode,
     );
-    final rowHeight = tableDensity == TableDensity.compact ? 42.0 : 54.0;
-    return ResultsLoadMoreViewport(
-      onLoadMore: onLoadMore,
-      isLoadingMore: isLoadingMore,
-      itemCount: rows.length,
-      child: RepaintBoundary(
-        child: DataTable(
-          showCheckboxColumn: false,
-          sortColumnIndex: _sortColumnIndex(
-            effectiveSortMode,
-            hasShootingData: hasShootingData,
+    final rowHeight = prioritizeCoreColumns
+        ? tableDensity == TableDensity.compact
+              ? 38.0
+              : 44.0
+        : tableDensity == TableDensity.compact
+        ? 42.0
+        : 54.0;
+    final timeColumn = DataColumn(
+      label: splitRange?.isIndependent == true
+          ? Text(l10n.time.toUpperCase())
+          : SortableTableHeader(label: l10n.time.toUpperCase()),
+      numeric: true,
+      onSort: splitRange?.isIndependent == true
+          ? null
+          : (columnIndex, ascending) {
+              onSortModeChanged(ResultSortMode.cumulative);
+            },
+    );
+    final splitColumn = DataColumn(
+      label: SortableTableHeader(label: l10n.split.toUpperCase()),
+      onSort: (columnIndex, ascending) {
+        onSortModeChanged(ResultSortMode.split);
+      },
+    );
+    final table = RepaintBoundary(
+      child: DataTable(
+        showCheckboxColumn: false,
+        sortColumnIndex: _sortColumnIndex(
+          effectiveSortMode,
+          hasShootingData: hasShootingData,
+          prioritizeCoreColumns: prioritizeCoreColumns,
+          showAffiliation: showAffiliation,
+        ),
+        sortAscending: true,
+        headingRowHeight: prioritizeCoreColumns ? 36 : 42,
+        dataRowMinHeight: rowHeight,
+        dataRowMaxHeight: rowHeight + (prioritizeCoreColumns ? 2 : 8),
+        horizontalMargin: prioritizeCoreColumns ? 0 : 8,
+        columnSpacing: prioritizeCoreColumns ? 4 : 26,
+        columns: [
+          DataColumn(
+            label: Text(ultraCompact ? '#' : l10n.place.toUpperCase()),
           ),
-          sortAscending: true,
-          headingRowHeight: 42,
-          dataRowMinHeight: rowHeight,
-          dataRowMaxHeight: rowHeight + 8,
-          horizontalMargin: 8,
-          columnSpacing: 26,
-          columns: [
-            DataColumn(label: Text(l10n.place.toUpperCase())),
-            DataColumn(label: Text(l10n.athlete.toUpperCase())),
+          DataColumn(label: Text(l10n.athlete.toUpperCase())),
+          if (prioritizeCoreColumns) timeColumn,
+          if (showAffiliation)
             DataColumn(
               label: ResultAffiliationHeader(
                 view: affiliationView,
@@ -97,49 +135,49 @@ class ResultsTable extends StatelessWidget {
                 onToggle: onAffiliationViewToggle,
               ),
             ),
-            if (hasShootingData)
-              DataColumn(label: Text(l10n.shooting.toUpperCase())),
-            DataColumn(
-              label: SortableTableHeader(label: l10n.split.toUpperCase()),
-              onSort: (columnIndex, ascending) {
-                onSortModeChanged(ResultSortMode.split);
-              },
-            ),
-            DataColumn(
-              label: splitRange?.isIndependent == true
-                  ? Text(l10n.time.toUpperCase())
-                  : SortableTableHeader(label: l10n.time.toUpperCase()),
-              numeric: true,
-              onSort: splitRange?.isIndependent == true
-                  ? null
-                  : (columnIndex, ascending) {
-                      onSortModeChanged(ResultSortMode.cumulative);
-                    },
-            ),
+          if (hasShootingData)
+            DataColumn(label: Text(l10n.shooting.toUpperCase())),
+          splitColumn,
+          if (!prioritizeCoreColumns) timeColumn,
+          if (showGap)
             DataColumn(label: Text(l10n.gap.toUpperCase()), numeric: true),
-          ],
-          rows: [
-            for (final (index, row) in visibleRows)
-              DataRow(
-                color: _rowColor(context, row),
-                onSelectChanged: _isDisabled(row)
-                    ? null
-                    : (_) => onAthleteTap(row),
-                cells: _cellsForResult(
-                  row,
-                  sortedRows,
-                  selectedSplitId,
-                  splitRange,
-                  effectiveSortMode,
-                  winnerMs,
-                  index,
-                  affiliationView,
-                  hasShootingData,
-                ),
+        ],
+        rows: [
+          for (final (index, row) in visibleRows)
+            DataRow(
+              color: _rowColor(context, row),
+              onSelectChanged: _isDisabled(row)
+                  ? null
+                  : (_) => onAthleteTap(row),
+              cells: _cellsForResult(
+                row,
+                sortedRows,
+                selectedSplitId,
+                splitRange,
+                effectiveSortMode,
+                winnerMs,
+                index,
+                affiliationView,
+                hasShootingData,
+                showAffiliation,
+                showGap,
+                compact,
+                showBib,
+                prioritizeCoreColumns,
+                athleteColumnWidth,
               ),
-          ],
-        ),
+            ),
+        ],
       ),
+    );
+    return ResultsLoadMoreViewport(
+      onLoadMore: onLoadMore,
+      isLoadingMore: isLoadingMore,
+      itemCount: rows.length,
+      pageScrollController: pageScrollController,
+      stickyClassHeader: stickyClassHeader,
+      stickyTableHeader: table,
+      child: table,
     );
   }
 
@@ -184,6 +222,12 @@ class ResultsTable extends StatelessWidget {
     int index,
     ResultAffiliationView affiliationView,
     bool hasShootingData,
+    bool showAffiliation,
+    bool showGap,
+    bool compact,
+    bool showBib,
+    bool prioritizeCoreColumns,
+    double athleteColumnWidth,
   ) {
     final result = row.result;
     final showOriginalPlacement = !_isFinalTimeSort(
@@ -201,31 +245,43 @@ class ResultsTable extends StatelessWidget {
       sortMode: sortMode,
       showOriginalPlacement: showOriginalPlacement,
     );
-    return [
-      DataCell(_MonoText(placement)),
-      DataCell(_NameCell(row: row)),
-      DataCell(Text(_affiliationText(result, affiliationView))),
+    final placeCell = DataCell(_MonoText(placement));
+    final athleteCell = DataCell(
+      _NameCell(
+        row: row,
+        compact: compact,
+        showBib: showBib,
+        width: athleteColumnWidth,
+      ),
+    );
+    final splitCell = DataCell(
+      _MonoText(
+        _splitText(result, selectedSplitId, splitRange),
+        alignEnd: true,
+      ),
+    );
+    final timeCell = DataCell(
+      _MonoText(_timeText(result, selectedSplitId, splitRange), alignEnd: true),
+    );
+    final optionalCells = <DataCell>[
+      if (showAffiliation)
+        DataCell(Text(_affiliationText(result, affiliationView))),
       if (hasShootingData)
         DataCell(_MonoText(_shootingText(result, selectedSplitId, splitRange))),
-      DataCell(
-        _MonoText(
-          _splitText(result, selectedSplitId, splitRange),
-          alignEnd: true,
+      splitCell,
+      if (!prioritizeCoreColumns) timeCell,
+      if (showGap)
+        DataCell(
+          _MonoText(
+            _gapText(result, selectedSplitId, splitRange, sortMode, winnerMs),
+            alignEnd: true,
+          ),
         ),
-      ),
-      DataCell(
-        _MonoText(
-          _timeText(result, selectedSplitId, splitRange),
-          alignEnd: true,
-        ),
-      ),
-      DataCell(
-        _MonoText(
-          _gapText(result, selectedSplitId, splitRange, sortMode, winnerMs),
-          alignEnd: true,
-        ),
-      ),
     ];
+    if (prioritizeCoreColumns) {
+      return [placeCell, athleteCell, timeCell, ...optionalCells];
+    }
+    return [placeCell, athleteCell, ...optionalCells];
   }
 
   static String _affiliationText(
@@ -250,12 +306,17 @@ class ResultsTable extends StatelessWidget {
       if (statusCompare != 0) return statusCompare;
       final aMs = _sortMs(a.result, selectedSplitId, splitRange, sortMode);
       final bMs = _sortMs(b.result, selectedSplitId, splitRange, sortMode);
-      if (aMs != null && bMs != null && aMs != bMs) {
-        return aMs - bMs;
+      if (aMs != bMs) {
+        if (aMs == null) return 1;
+        if (bMs == null) return -1;
+        return aMs.compareTo(bMs);
       }
-      if (aMs != null) return -1;
-      if (bMs != null) return 1;
-      return a.result.name.compareTo(b.result.name);
+      final nameCompare = a.result.name.compareTo(b.result.name);
+      if (nameCompare != 0) return nameCompare;
+      final classCompare = a.classId.compareTo(b.classId);
+      return classCompare != 0
+          ? classCompare
+          : a.result.id.compareTo(b.result.id);
     });
     return sorted;
   }
@@ -419,11 +480,20 @@ class ResultsTable extends StatelessWidget {
   static int _sortColumnIndex(
     ResultSortMode sortMode, {
     required bool hasShootingData,
+    required bool prioritizeCoreColumns,
+    required bool showAffiliation,
   }) {
+    if (prioritizeCoreColumns) {
+      return switch (sortMode) {
+        ResultSortMode.cumulative => 2,
+        ResultSortMode.split => 3 + (hasShootingData ? 1 : 0),
+      };
+    }
+    final affiliationOffset = showAffiliation ? 1 : 0;
     final shootingOffset = hasShootingData ? 1 : 0;
     return switch (sortMode) {
-      ResultSortMode.split => 3 + shootingOffset,
-      ResultSortMode.cumulative => 4 + shootingOffset,
+      ResultSortMode.split => 2 + affiliationOffset + shootingOffset,
+      ResultSortMode.cumulative => 3 + affiliationOffset + shootingOffset,
     };
   }
 
@@ -493,9 +563,10 @@ class _SortableTableHeaderState extends State<SortableTableHeader> {
 
   @override
   Widget build(BuildContext context) {
-    final primary =
-        Theme.of(context).extension<AppPalette>()?.primary ??
-        Theme.of(context).colorScheme.primary;
+    final theme = Theme.of(context);
+    final headingColor =
+        theme.dataTableTheme.headingTextStyle?.color ??
+        theme.colorScheme.onSurface;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
@@ -506,10 +577,7 @@ class _SortableTableHeaderState extends State<SortableTableHeader> {
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutCubic,
-          style: TextStyle(
-            color: _hovering ? primary : null,
-            fontWeight: FontWeight.w800,
-          ),
+          style: TextStyle(color: headingColor, fontWeight: FontWeight.w800),
           child: Text(widget.label),
         ),
       ),
@@ -524,15 +592,33 @@ class ResultsLoadMoreViewport extends StatelessWidget {
     required this.itemCount,
     required this.isLoadingMore,
     this.onLoadMore,
+    this.pageScrollController,
+    this.stickyClassHeader,
+    this.stickyTableHeader,
   });
 
   final Widget child;
   final int itemCount;
   final bool isLoadingMore;
   final VoidCallback? onLoadMore;
+  final ScrollController? pageScrollController;
+  final Widget? stickyClassHeader;
+  final Widget? stickyTableHeader;
 
   @override
   Widget build(BuildContext context) {
+    if (pageScrollController != null) {
+      return _PageEmbeddedResultsViewport(
+        pageScrollController: pageScrollController!,
+        enableStickyHeaders: MediaQuery.sizeOf(context).width >= 600,
+        onLoadMore: onLoadMore,
+        isLoadingMore: isLoadingMore,
+        itemCount: itemCount,
+        stickyClassHeader: stickyClassHeader,
+        stickyTableHeader: stickyTableHeader,
+        child: child,
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final overlayHeight = (constraints.maxHeight * 0.2).clamp(96.0, 180.0);
@@ -583,6 +669,353 @@ class ResultsLoadMoreViewport extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _PageEmbeddedResultsViewport extends StatefulWidget {
+  const _PageEmbeddedResultsViewport({
+    required this.pageScrollController,
+    required this.enableStickyHeaders,
+    required this.child,
+    required this.itemCount,
+    required this.isLoadingMore,
+    required this.stickyClassHeader,
+    required this.stickyTableHeader,
+    this.onLoadMore,
+  });
+
+  final ScrollController pageScrollController;
+  final bool enableStickyHeaders;
+  final Widget child;
+  final int itemCount;
+  final bool isLoadingMore;
+  final Widget? stickyClassHeader;
+  final Widget? stickyTableHeader;
+  final VoidCallback? onLoadMore;
+
+  @override
+  State<_PageEmbeddedResultsViewport> createState() =>
+      _PageEmbeddedResultsViewportState();
+}
+
+class _PageEmbeddedResultsViewportState
+    extends State<_PageEmbeddedResultsViewport> {
+  static const _loadMoreExtent = 220.0;
+
+  double get _stickyClassHeight =>
+      MediaQuery.sizeOf(context).width < 600 ? 40 : 48;
+  double get _stickyTableHeight =>
+      MediaQuery.sizeOf(context).width < 850 ? 36 : 42;
+
+  bool _loadRequestPending = false;
+  bool _loadMoreQueued = false;
+  bool _stickyVisible = false;
+  bool _syncingHorizontalScroll = false;
+  Rect _stickyRect = Rect.zero;
+  double _tableContentWidth = 0;
+  OverlayEntry? _stickyOverlay;
+  ModalRoute<dynamic>? _route;
+  final GlobalKey _horizontalViewportKey = GlobalKey();
+  final GlobalKey _tableAnchorKey = GlobalKey();
+  final ScrollController _bodyHorizontalController = ScrollController();
+  final ScrollController _stickyHorizontalController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.pageScrollController.addListener(_handlePageScroll);
+    _bodyHorizontalController.addListener(_syncStickyHorizontalScroll);
+    _stickyHorizontalController.addListener(_syncBodyHorizontalScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncStickyOverlay();
+      _maybeLoadMore();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route == _route) return;
+    _removeRouteListeners();
+    _route = route;
+    _route?.animation?.addListener(_handleRouteVisibilityChanged);
+    _route?.secondaryAnimation?.addListener(_handleRouteVisibilityChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PageEmbeddedResultsViewport oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.pageScrollController != widget.pageScrollController) {
+      oldWidget.pageScrollController.removeListener(_handlePageScroll);
+      widget.pageScrollController.addListener(_handlePageScroll);
+    }
+    final receivedMoreItems = widget.itemCount > oldWidget.itemCount;
+    final loadFinished = oldWidget.isLoadingMore && !widget.isLoadingMore;
+    if (receivedMoreItems || loadFinished) _loadRequestPending = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncStickyOverlay();
+      _maybeLoadMore();
+    });
+  }
+
+  @override
+  void dispose() {
+    _removeRouteListeners();
+    widget.pageScrollController.removeListener(_handlePageScroll);
+    _bodyHorizontalController.removeListener(_syncStickyHorizontalScroll);
+    _stickyHorizontalController.removeListener(_syncBodyHorizontalScroll);
+    _bodyHorizontalController.dispose();
+    _stickyHorizontalController.dispose();
+    _removeStickyOverlay();
+    super.dispose();
+  }
+
+  void _removeRouteListeners() {
+    _route?.animation?.removeListener(_handleRouteVisibilityChanged);
+    _route?.secondaryAnimation?.removeListener(_handleRouteVisibilityChanged);
+  }
+
+  void _handleRouteVisibilityChanged() {
+    if (!mounted) return;
+    if (_route?.isCurrent != true) {
+      _removeStickyOverlay();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _route?.isCurrent != true) return;
+      _syncStickyOverlay();
+    });
+  }
+
+  void _removeStickyOverlay() {
+    _stickyVisible = false;
+    _stickyOverlay?.remove();
+    _stickyOverlay = null;
+  }
+
+  void _handlePageScroll() {
+    _maybeLoadMore();
+    if (widget.enableStickyHeaders) _updateStickyOverlay();
+  }
+
+  void _syncStickyOverlay() {
+    if (!widget.enableStickyHeaders || _route?.isCurrent != true) {
+      _removeStickyOverlay();
+      return;
+    }
+    _ensureStickyOverlay();
+    _updateStickyOverlay();
+  }
+
+  void _ensureStickyOverlay() {
+    if (!mounted ||
+        _route?.isCurrent != true ||
+        widget.stickyClassHeader == null ||
+        widget.stickyTableHeader == null) {
+      _removeStickyOverlay();
+      return;
+    }
+    if (_stickyOverlay != null) return;
+    _stickyOverlay = OverlayEntry(builder: _buildStickyOverlay);
+    Overlay.of(context).insert(_stickyOverlay!);
+  }
+
+  Widget _buildStickyOverlay(BuildContext overlayContext) {
+    if (_route?.isCurrent != true || !_stickyVisible || _stickyRect.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final colors = Theme.of(overlayContext).colorScheme;
+    return Positioned(
+      key: const Key('sticky-results-header'),
+      left: _stickyRect.left,
+      top: _stickyRect.top,
+      width: _stickyRect.width,
+      height: _stickyClassHeight + _stickyTableHeight,
+      child: Material(
+        color: colors.surface,
+        elevation: 4,
+        clipBehavior: Clip.hardEdge,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              key: const Key('sticky-result-class'),
+              height: _stickyClassHeight,
+              child: widget.stickyClassHeader,
+            ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: colors.outlineVariant),
+                  bottom: BorderSide(color: colors.outlineVariant),
+                ),
+              ),
+              child: SizedBox(
+                key: const Key('sticky-table-header'),
+                height: _stickyTableHeight,
+                child: SingleChildScrollView(
+                  controller: _stickyHorizontalController,
+                  scrollDirection: Axis.horizontal,
+                  primary: false,
+                  child: SizedBox(
+                    width: _tableContentWidth,
+                    height: _stickyTableHeight,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        alignment: Alignment.topLeft,
+                        minWidth: _tableContentWidth,
+                        maxWidth: _tableContentWidth,
+                        minHeight: 0,
+                        maxHeight: double.infinity,
+                        child: SizedBox(
+                          width: _tableContentWidth,
+                          child: widget.stickyTableHeader,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _updateStickyOverlay() {
+    if (!mounted ||
+        _route?.isCurrent != true ||
+        !widget.enableStickyHeaders ||
+        _stickyOverlay == null ||
+        !widget.pageScrollController.hasClients) {
+      return;
+    }
+    final tableBox =
+        _tableAnchorKey.currentContext?.findRenderObject() as RenderBox?;
+    final horizontalViewportBox =
+        _horizontalViewportKey.currentContext?.findRenderObject() as RenderBox?;
+    final overlayBox =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final verticalViewportBox =
+        widget.pageScrollController.position.context.storageContext
+                .findRenderObject()
+            as RenderBox?;
+    if (tableBox == null ||
+        horizontalViewportBox == null ||
+        overlayBox == null ||
+        verticalViewportBox == null ||
+        !tableBox.hasSize ||
+        !horizontalViewportBox.hasSize ||
+        !verticalViewportBox.hasSize) {
+      return;
+    }
+
+    final tableTop = tableBox.localToGlobal(Offset.zero).dy;
+    final tableBottom = tableBox
+        .localToGlobal(Offset(0, tableBox.size.height))
+        .dy;
+    final viewportTop = verticalViewportBox.localToGlobal(Offset.zero).dy;
+    final stickyHeight = _stickyClassHeight + _stickyTableHeight;
+    final visible =
+        tableTop <= viewportTop && tableBottom > viewportTop + stickyHeight;
+    final viewportOrigin = horizontalViewportBox.localToGlobal(Offset.zero);
+    final overlayOrigin = overlayBox.globalToLocal(
+      Offset(viewportOrigin.dx, viewportTop),
+    );
+    final nextRect = Rect.fromLTWH(
+      overlayOrigin.dx,
+      overlayOrigin.dy,
+      horizontalViewportBox.size.width,
+      stickyHeight,
+    );
+    final nextTableWidth = tableBox.size.width;
+    final changed =
+        visible != _stickyVisible ||
+        nextRect != _stickyRect ||
+        nextTableWidth != _tableContentWidth;
+    _stickyVisible = visible;
+    _stickyRect = nextRect;
+    _tableContentWidth = nextTableWidth;
+    if (!changed) return;
+    _stickyOverlay?.markNeedsBuild();
+    if (visible) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _syncHorizontalOffset(
+          _bodyHorizontalController,
+          _stickyHorizontalController,
+        );
+      });
+    }
+  }
+
+  void _syncStickyHorizontalScroll() {
+    _syncHorizontalOffset(
+      _bodyHorizontalController,
+      _stickyHorizontalController,
+    );
+  }
+
+  void _syncBodyHorizontalScroll() {
+    _syncHorizontalOffset(
+      _stickyHorizontalController,
+      _bodyHorizontalController,
+    );
+  }
+
+  void _syncHorizontalOffset(ScrollController source, ScrollController target) {
+    if (_syncingHorizontalScroll || !source.hasClients || !target.hasClients) {
+      return;
+    }
+    final nextOffset = source.offset.clamp(
+      target.position.minScrollExtent,
+      target.position.maxScrollExtent,
+    );
+    if ((target.offset - nextOffset).abs() < 0.5) return;
+    _syncingHorizontalScroll = true;
+    target.jumpTo(nextOffset);
+    _syncingHorizontalScroll = false;
+  }
+
+  void _maybeLoadMore() {
+    if (!mounted ||
+        widget.onLoadMore == null ||
+        !widget.pageScrollController.hasClients) {
+      return;
+    }
+    final position = widget.pageScrollController.position;
+    if (position.extentAfter >= _loadMoreExtent ||
+        _loadMoreQueued ||
+        _loadRequestPending ||
+        widget.isLoadingMore) {
+      return;
+    }
+    _loadMoreQueued = true;
+    setState(() => _loadRequestPending = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadMoreQueued = false;
+      if (!mounted) return;
+      widget.onLoadMore?.call();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      key: _horizontalViewportKey,
+      controller: _bodyHorizontalController,
+      scrollDirection: Axis.horizontal,
+      primary: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          KeyedSubtree(key: _tableAnchorKey, child: widget.child),
+          if (widget.isLoadingMore || _loadRequestPending)
+            const PendingLoadMoreFooter(),
+        ],
+      ),
     );
   }
 }
@@ -805,31 +1238,41 @@ class ResultAffiliationHeader extends StatelessWidget {
 }
 
 class _NameCell extends StatelessWidget {
-  const _NameCell({required this.row});
+  const _NameCell({
+    required this.row,
+    required this.width,
+    this.compact = false,
+    this.showBib = true,
+  });
 
   final ResultTableRow row;
+  final double width;
+  final bool compact;
+  final bool showBib;
 
   @override
   Widget build(BuildContext context) {
     final result = row.result;
     return SizedBox(
-      width: 320,
+      width: width,
       child: Row(
         children: [
-          SizedBox(
-            width: 52,
-            child: _MonoText(result.bib.isEmpty ? '-' : result.bib),
-          ),
-          const SizedBox(width: 8),
+          if (showBib) ...[
+            SizedBox(
+              width: compact ? 38 : 52,
+              child: _MonoText(result.bib.isEmpty ? '-' : result.bib),
+            ),
+            SizedBox(width: compact ? 4 : 8),
+          ],
           Container(
-            width: 8,
-            height: 32,
+            width: compact ? 5 : 8,
+            height: compact ? 26 : 32,
             decoration: BoxDecoration(
               color: row.color ?? Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: compact ? 6 : 10),
           Expanded(
             child: Row(
               children: [

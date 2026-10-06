@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:results/l10n/app_localizations.dart';
 
 import '../../../app/app_theme.dart';
 
@@ -10,6 +11,8 @@ class ResultDistributionData {
     required this.values,
     required this.formatValue,
     this.regression,
+    this.regressionTargets = const [],
+    this.splitAnalysis,
     this.currentAthleteValue,
     this.currentAthleteLabel = 'Din tid',
   });
@@ -18,12 +21,42 @@ class ResultDistributionData {
   final List<int> values;
   final String Function(int value) formatValue;
   final ResultRegressionData? regression;
+  final List<ResultRegressionTarget> regressionTargets;
+  final ResultSplitAnalysisData? splitAnalysis;
   final int? currentAthleteValue;
   final String currentAthleteLabel;
 
   bool get hasDistribution => values.length >= 2;
   bool get hasRegression => regression?.hasEnoughData ?? false;
-  bool get hasEnoughData => hasDistribution || hasRegression;
+  bool get hasSplitAnalysis => splitAnalysis?.hasEnoughData ?? false;
+  bool get hasEnoughData =>
+      hasDistribution || hasRegression || hasSplitAnalysis;
+}
+
+class ResultSplitAnalysisData {
+  const ResultSplitAnalysisData({required this.points});
+
+  final List<ResultSplitAnalysisPoint> points;
+
+  bool get hasEnoughData => points.length >= 2;
+}
+
+class ResultSplitAnalysisPoint {
+  const ResultSplitAnalysisPoint({
+    required this.splitId,
+    required this.label,
+    required this.sort,
+    required this.timeCorrelation,
+    required this.rankCorrelation,
+    required this.sampleSize,
+  });
+
+  final String splitId;
+  final String label;
+  final int sort;
+  final double timeCorrelation;
+  final double rankCorrelation;
+  final int sampleSize;
 }
 
 class ResultRegressionData {
@@ -46,6 +79,18 @@ class ResultRegressionData {
   final String Function(int value) formatY;
 
   bool get hasEnoughData => points.length >= 2;
+}
+
+class ResultRegressionTarget {
+  const ResultRegressionTarget({
+    required this.key,
+    required this.label,
+    required this.regression,
+  });
+
+  final String key;
+  final String label;
+  final ResultRegressionData regression;
 }
 
 class ResultRegressionPoint {
@@ -71,12 +116,16 @@ class ResultDistributionButton extends StatelessWidget {
     this.loadData,
     this.loadingLabel = 'Laster grafdata',
     this.errorTitle = 'Kunne ikke lese grafdata',
+    this.onSplitSelected,
+    this.onChooseFromResultsList,
   });
 
   final ResultDistributionData? data;
   final Future<ResultDistributionData?> Function()? loadData;
   final String loadingLabel;
   final String errorTitle;
+  final ValueChanged<String>? onSplitSelected;
+  final VoidCallback? onChooseFromResultsList;
 
   @override
   Widget build(BuildContext context) {
@@ -85,22 +134,17 @@ class ResultDistributionButton extends StatelessWidget {
       width: 42,
       height: 42,
       child: IconButton.outlined(
-        tooltip: 'Fordeling og regresjon',
+        tooltip: 'Fordeling, regresjon og splittanalyse',
         onPressed: enabled
             ? () {
-                final loader = loadData;
-                showDialog<void>(
-                  context: context,
-                  builder: (context) {
-                    if (loader == null) {
-                      return _DistributionDialog(data: data!);
-                    }
-                    return _DistributionLoadDialog(
-                      loadData: loader,
-                      loadingLabel: loadingLabel,
-                      errorTitle: errorTitle,
-                    );
-                  },
+                showResultAnalysisDialog(
+                  context,
+                  data: data,
+                  loadData: loadData,
+                  loadingLabel: loadingLabel,
+                  errorTitle: errorTitle,
+                  onSplitSelected: onSplitSelected,
+                  onChooseFromResultsList: onChooseFromResultsList,
                 );
               }
             : null,
@@ -110,16 +154,57 @@ class ResultDistributionButton extends StatelessWidget {
   }
 }
 
+Future<void> showResultAnalysisDialog(
+  BuildContext context, {
+  ResultDistributionData? data,
+  Future<ResultDistributionData?> Function()? loadData,
+  required String loadingLabel,
+  required String errorTitle,
+  ValueChanged<String>? onSplitSelected,
+  VoidCallback? onChooseFromResultsList,
+  bool openRegression = false,
+  String? initialRegressionTargetKey,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (context) => loadData == null
+        ? _DistributionDialog(
+            data: data!,
+            onSplitSelected: onSplitSelected,
+            onChooseFromResultsList: onChooseFromResultsList,
+            openRegression: openRegression,
+            initialRegressionTargetKey: initialRegressionTargetKey,
+          )
+        : _DistributionLoadDialog(
+            loadData: loadData,
+            loadingLabel: loadingLabel,
+            errorTitle: errorTitle,
+            onSplitSelected: onSplitSelected,
+            onChooseFromResultsList: onChooseFromResultsList,
+            openRegression: openRegression,
+            initialRegressionTargetKey: initialRegressionTargetKey,
+          ),
+  );
+}
+
 class _DistributionLoadDialog extends StatefulWidget {
   const _DistributionLoadDialog({
     required this.loadData,
     required this.loadingLabel,
     required this.errorTitle,
+    required this.onSplitSelected,
+    required this.onChooseFromResultsList,
+    required this.openRegression,
+    required this.initialRegressionTargetKey,
   });
 
   final Future<ResultDistributionData?> Function() loadData;
   final String loadingLabel;
   final String errorTitle;
+  final ValueChanged<String>? onSplitSelected;
+  final VoidCallback? onChooseFromResultsList;
+  final bool openRegression;
+  final String? initialRegressionTargetKey;
 
   @override
   State<_DistributionLoadDialog> createState() =>
@@ -136,7 +221,7 @@ class _DistributionLoadDialogState extends State<_DistributionLoadDialog> {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return AlertDialog(
-            title: const Text('Fordeling og regresjon'),
+            title: const Text('Resultatanalyse'),
             content: SizedBox(
               width: 320,
               height: 110,
@@ -170,7 +255,7 @@ class _DistributionLoadDialogState extends State<_DistributionLoadDialog> {
         final data = snapshot.data;
         if (data == null || !data.hasEnoughData) {
           return AlertDialog(
-            title: const Text('Fordeling og regresjon'),
+            title: const Text('Resultatanalyse'),
             content: const Text('For lite data til graf'),
             actions: [
               TextButton(
@@ -181,16 +266,32 @@ class _DistributionLoadDialogState extends State<_DistributionLoadDialog> {
           );
         }
 
-        return _DistributionDialog(data: data);
+        return _DistributionDialog(
+          data: data,
+          onSplitSelected: widget.onSplitSelected,
+          onChooseFromResultsList: widget.onChooseFromResultsList,
+          openRegression: widget.openRegression,
+          initialRegressionTargetKey: widget.initialRegressionTargetKey,
+        );
       },
     );
   }
 }
 
 class _DistributionDialog extends StatefulWidget {
-  const _DistributionDialog({required this.data});
+  const _DistributionDialog({
+    required this.data,
+    this.onSplitSelected,
+    this.onChooseFromResultsList,
+    this.openRegression = false,
+    this.initialRegressionTargetKey,
+  });
 
   final ResultDistributionData data;
+  final ValueChanged<String>? onSplitSelected;
+  final VoidCallback? onChooseFromResultsList;
+  final bool openRegression;
+  final String? initialRegressionTargetKey;
 
   @override
   State<_DistributionDialog> createState() => _DistributionDialogState();
@@ -203,65 +304,170 @@ class _DistributionDialogState extends State<_DistributionDialog> {
   bool showPercentileSystem = false;
   bool showPlacements = false;
   _DistributionView view = _DistributionView.histogram;
+  String? regressionTargetKey;
   _DraggedMarker? draggedMarker;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openRegression) view = _DistributionView.regression;
+    regressionTargetKey = widget.initialRegressionTargetKey;
+  }
+
+  Future<void> _chooseRegressionTarget() async {
+    final targets = widget.data.regressionTargets;
+    final l10n = AppLocalizations.of(context);
+    var selected = regressionTargetKey ?? targets.first.key;
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, updateSelection) => AlertDialog(
+          title: Text(l10n.regressionChooseTarget),
+          content: SizedBox(
+            width: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final target in targets)
+                    ListTile(
+                      key: ValueKey('regression-target-${target.key}'),
+                      title: Text(target.label),
+                      selected: selected == target.key,
+                      trailing: selected == target.key
+                          ? const Icon(Icons.check)
+                          : null,
+                      onTap: () => updateSelection(() => selected = target.key),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.regressionCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(selected),
+              child: Text(l10n.regressionApply),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (chosen != null && mounted) {
+      setState(() => regressionTargetKey = chosen);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final canShowDistribution = widget.data.hasDistribution;
     final canShowRegression = widget.data.hasRegression;
-    final activeView = !canShowDistribution && canShowRegression
-        ? _DistributionView.regression
-        : view == _DistributionView.regression && canShowRegression
-        ? _DistributionView.regression
-        : _DistributionView.histogram;
+    final regressionTargets = widget.data.regressionTargets;
+    final selectedRegressionTarget = regressionTargets
+        .where((target) => target.key == regressionTargetKey)
+        .firstOrNull;
+    final regression =
+        selectedRegressionTarget?.regression ?? widget.data.regression;
+    final canShowSplitAnalysis = widget.data.hasSplitAnalysis;
+    final availableViews = <_DistributionView>[
+      if (canShowDistribution) _DistributionView.histogram,
+      if (canShowRegression) _DistributionView.regression,
+      if (canShowSplitAnalysis) _DistributionView.splits,
+    ];
+    final activeView = availableViews.contains(view)
+        ? view
+        : availableViews.first;
+    final title = Text(
+      switch (activeView) {
+        _DistributionView.regression => regression?.title ?? widget.data.title,
+        _DistributionView.splits => 'Analyse gjennom løpet',
+        _DistributionView.histogram => widget.data.title,
+      },
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+    final viewSelector = SegmentedButton<_DistributionView>(
+      segments: [
+        ButtonSegment<_DistributionView>(
+          value: _DistributionView.histogram,
+          enabled: canShowDistribution,
+          icon: const Icon(Icons.bar_chart),
+          label: const Text('Fordeling'),
+        ),
+        ButtonSegment<_DistributionView>(
+          value: _DistributionView.regression,
+          enabled: canShowRegression,
+          icon: const Icon(Icons.show_chart),
+          label: const Text('Regresjon'),
+        ),
+        ButtonSegment<_DistributionView>(
+          value: _DistributionView.splits,
+          enabled: canShowSplitAnalysis,
+          icon: const Icon(Icons.multiline_chart),
+          label: const Text('Splitter'),
+        ),
+      ],
+      selected: {activeView},
+      onSelectionChanged: (selection) {
+        setState(() => view = selection.first);
+      },
+    );
+    final compactHeader = MediaQuery.sizeOf(context).width < 760;
 
     return AlertDialog(
-      title: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Text(
-              activeView == _DistributionView.regression
-                  ? widget.data.regression?.title ?? widget.data.title
-                  : widget.data.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+      title: compactHeader
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [title, const SizedBox(height: 10), viewSelector],
+            )
+          : Row(
+              children: [
+                Expanded(child: title),
+                const SizedBox(width: 16),
+                viewSelector,
+              ],
             ),
-          ),
-          const SizedBox(width: 16),
-          SegmentedButton<_DistributionView>(
-            segments: [
-              ButtonSegment<_DistributionView>(
-                value: _DistributionView.histogram,
-                enabled: canShowDistribution,
-                icon: const Icon(Icons.bar_chart),
-                label: const Text('Fordeling'),
-              ),
-              ButtonSegment<_DistributionView>(
-                value: _DistributionView.regression,
-                enabled: canShowRegression,
-                icon: const Icon(Icons.show_chart),
-                label: const Text('Regresjon'),
-              ),
-            ],
-            selected: {activeView},
-            onSelectionChanged: (selection) {
-              setState(() => view = selection.first);
-            },
-          ),
-        ],
-      ),
       content: SizedBox(
         width: 760,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (activeView == _DistributionView.regression)
-              _RegressionView(data: widget.data.regression!)
-            else
-              _buildHistogramView(context),
-          ],
+        child: SingleChildScrollView(
+          child: switch (activeView) {
+            _DistributionView.regression => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (regressionTargets.length > 1 ||
+                    widget.onChooseFromResultsList != null) ...[
+                  OutlinedButton.icon(
+                    key: const Key('regression-target-button'),
+                    onPressed: widget.onChooseFromResultsList == null
+                        ? _chooseRegressionTarget
+                        : () {
+                            Navigator.of(context).pop();
+                            widget.onChooseFromResultsList!();
+                          },
+                    icon: const Icon(Icons.swap_horiz),
+                    label: Text(
+                      AppLocalizations.of(context).regressionCompareWith(
+                        selectedRegressionTarget?.label ??
+                            (regressionTargets.isNotEmpty
+                                ? regressionTargets.first.label
+                                : regression!.xLabel),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _RegressionView(data: regression!),
+              ],
+            ),
+            _DistributionView.splits => _SplitAnalysisView(
+              data: widget.data.splitAnalysis!,
+              onSplitSelected: widget.onSplitSelected,
+            ),
+            _DistributionView.histogram => _buildHistogramView(context),
+          },
         ),
       ),
       actions: [
@@ -464,9 +670,351 @@ class _DistributionDialogState extends State<_DistributionDialog> {
   }
 }
 
-enum _DistributionView { histogram, regression }
+enum _DistributionView { histogram, regression, splits }
 
 enum _DraggedMarker { first, second }
+
+class _SplitAnalysisView extends StatefulWidget {
+  const _SplitAnalysisView({required this.data, this.onSplitSelected});
+
+  final ResultSplitAnalysisData data;
+  final ValueChanged<String>? onSplitSelected;
+
+  @override
+  State<_SplitAnalysisView> createState() => _SplitAnalysisViewState();
+}
+
+class _SplitAnalysisViewState extends State<_SplitAnalysisView> {
+  int? hoveredIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Hver splitt vurderes for seg. Linjene viser hvor godt splittiden og '
+          'splitplasseringen samsvarer med sluttresultatet.',
+          style: TextStyle(
+            color: palette.mutedText,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 18,
+          runSpacing: 6,
+          children: [
+            _ChartLegend(color: palette.primary, label: 'Splittid ↔ sluttid'),
+            _ChartLegend(
+              color: palette.secondary,
+              label: 'Splitplassering ↔ sluttplassering',
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 400,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final size = Size(constraints.maxWidth, 400);
+              final chart = _splitChartRect(size);
+              final points = widget.data.points;
+              final activeIndex = hoveredIndex;
+              final activePoint = activeIndex == null
+                  ? null
+                  : points[activeIndex];
+              final activeOffset = activeIndex == null
+                  ? null
+                  : Offset(
+                      _splitPointX(activeIndex, points.length, chart),
+                      _splitPointY(activePoint!.timeCorrelation, chart),
+                    );
+
+              int nearestIndex(Offset position) {
+                if (points.length == 1) return 0;
+                final ratio = ((position.dx - chart.left) / chart.width).clamp(
+                  0.0,
+                  1.0,
+                );
+                return (ratio * (points.length - 1)).round();
+              }
+
+              void openSplit(int index) {
+                final callback = widget.onSplitSelected;
+                if (callback == null) return;
+                Navigator.of(context).pop();
+                callback(points[index].splitId);
+              }
+
+              return MouseRegion(
+                cursor: widget.onSplitSelected == null
+                    ? MouseCursor.defer
+                    : SystemMouseCursors.click,
+                onHover: (event) {
+                  final next = nearestIndex(event.localPosition);
+                  if (next != hoveredIndex) {
+                    setState(() => hoveredIndex = next);
+                  }
+                },
+                onExit: (_) => setState(() => hoveredIndex = null),
+                child: GestureDetector(
+                  key: const Key('split-analysis-chart'),
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (details) =>
+                      openSplit(nearestIndex(details.localPosition)),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: palette.panelAlt,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: palette.border),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: CustomPaint(
+                              painter: _SplitAnalysisPainter(
+                                points: points,
+                                palette: palette,
+                                hoveredIndex: activeIndex,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (activePoint != null && activeOffset != null)
+                        Positioned(
+                          left: (activeOffset.dx - 92).clamp(
+                            4.0,
+                            math.max(4.0, size.width - 188),
+                          ),
+                          top: (activeOffset.dy - 94).clamp(4.0, 286.0),
+                          child: IgnorePointer(
+                            child: _SplitPointTooltip(point: activePoint),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.onSplitSelected == null
+              ? 'Hold over et punkt for detaljer.'
+              : 'Hold over for detaljer. Klikk på et punkt for å åpne splitten.',
+          style: TextStyle(
+            color: palette.mutedText,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChartLegend extends StatelessWidget {
+  const _ChartLegend({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 20,
+          height: 3,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ],
+    );
+  }
+}
+
+class _SplitPointTooltip extends StatelessWidget {
+  const _SplitPointTooltip({required this.point});
+
+  final ResultSplitAnalysisPoint point;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      width: 184,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: palette.panel,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: palette.border),
+        boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 12)],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            point.label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text('Splittid mot sluttid ${_percent(point.timeCorrelation)}'),
+          Text(
+            'Splitplassering mot sluttplassering '
+            '${_percent(point.rankCorrelation)}',
+          ),
+          Text('${point.sampleSize} resultater'),
+        ],
+      ),
+    );
+  }
+}
+
+class _SplitAnalysisPainter extends CustomPainter {
+  const _SplitAnalysisPainter({
+    required this.points,
+    required this.palette,
+    required this.hoveredIndex,
+  });
+
+  final List<ResultSplitAnalysisPoint> points;
+  final AppPalette palette;
+  final int? hoveredIndex;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final chart = _splitChartRect(size);
+    final gridPaint = Paint()
+      ..color = palette.border
+      ..strokeWidth = 1;
+    final labelStyle = TextStyle(color: palette.mutedText, fontSize: 10);
+
+    for (var step = 0; step <= 4; step++) {
+      final value = step * 25;
+      final y = _splitPointY(value / 100, chart);
+      canvas.drawLine(Offset(chart.left, y), Offset(chart.right, y), gridPaint);
+      _paintChartText(canvas, '$value%', Offset(5, y - 6), labelStyle);
+    }
+
+    void drawSeries(
+      Color color,
+      double Function(ResultSplitAnalysisPoint) read,
+    ) {
+      final path = Path();
+      for (var index = 0; index < points.length; index++) {
+        final offset = Offset(
+          _splitPointX(index, points.length, chart),
+          _splitPointY(read(points[index]), chart),
+        );
+        if (index == 0) {
+          path.moveTo(offset.dx, offset.dy);
+        } else {
+          path.lineTo(offset.dx, offset.dy);
+        }
+      }
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = color
+          ..strokeWidth = 2.5
+          ..style = PaintingStyle.stroke,
+      );
+      for (var index = 0; index < points.length; index++) {
+        final offset = Offset(
+          _splitPointX(index, points.length, chart),
+          _splitPointY(read(points[index]), chart),
+        );
+        canvas.drawCircle(
+          offset,
+          hoveredIndex == index ? 5 : 3.5,
+          Paint()..color = color,
+        );
+      }
+    }
+
+    drawSeries(palette.primary, (point) => point.timeCorrelation);
+    drawSeries(palette.secondary, (point) => point.rankCorrelation);
+
+    final labelStep = math.max(1, (points.length / 7).ceil());
+    for (var index = 0; index < points.length; index++) {
+      if (index % labelStep != 0 && index != points.length - 1) continue;
+      final label = points[index].label;
+      final shortLabel = label.length > 11
+          ? '${label.substring(0, 10)}…'
+          : label;
+      final painter = TextPainter(
+        text: TextSpan(text: shortLabel, style: labelStyle),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout(maxWidth: 86);
+      final x = _splitPointX(index, points.length, chart);
+      painter.paint(
+        canvas,
+        Offset(
+          (x - painter.width / 2).clamp(0.0, size.width - painter.width),
+          chart.bottom + 9,
+        ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SplitAnalysisPainter oldDelegate) {
+    return oldDelegate.points != points ||
+        oldDelegate.palette != palette ||
+        oldDelegate.hoveredIndex != hoveredIndex;
+  }
+}
+
+Rect _splitChartRect(Size size) => Rect.fromLTWH(
+  42,
+  18,
+  math.max(1, size.width - 58),
+  math.max(1, size.height - 70),
+);
+
+double _splitPointX(int index, int length, Rect chart) {
+  if (length <= 1) return chart.center.dx;
+  return chart.left + chart.width * index / (length - 1);
+}
+
+double _splitPointY(double value, Rect chart) {
+  final normalized = value.clamp(0.0, 1.0);
+  return chart.bottom - chart.height * normalized;
+}
+
+String _percent(double value) => '${(value * 100).round()}%';
+
+void _paintChartText(
+  Canvas canvas,
+  String text,
+  Offset offset,
+  TextStyle style,
+) {
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  painter.paint(canvas, offset);
+}
 
 class _RegressionView extends StatelessWidget {
   const _RegressionView({required this.data});
@@ -554,7 +1102,7 @@ class _RegressionSummary extends StatelessWidget {
                   label: 'Forklart variasjon',
                   value: '$explainedPercent%',
                   tooltip:
-                      'Viser hvor mye av variasjonen i sluttresultatet som kan forklares av ${data.subjectLabel.toLowerCase()}.',
+                      'Viser hvor mye av variasjonen i ${data.yLabel.toLowerCase()} som kan forklares av ${data.xLabel.toLowerCase()}.',
                 ),
               ),
               const SizedBox(width: 10),

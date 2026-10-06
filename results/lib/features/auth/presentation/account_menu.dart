@@ -16,31 +16,28 @@ class AccountMenu extends ConsumerWidget {
       data: (user) {
         if (user == null) return const LoginButton();
         final l10n = AppLocalizations.of(context);
+        final compact = MediaQuery.sizeOf(context).width < 480;
         return PopupMenuButton<String>(
           tooltip: l10n.account,
           onSelected: (value) {
-            if (value == 'me' || value == 'link-athlete') {
-              context.go('/me');
-            }
+            if (value == 'me') context.go('/me');
             if (value == 'logout') ref.read(authRepositoryProvider).signOut();
           },
           itemBuilder: (context) => [
-            PopupMenuItem(
-              enabled: false,
-              child: Text(user.email ?? user.displayName ?? user.uid),
-            ),
             const PopupMenuItem(value: 'me', child: Text('Min side')),
-            const PopupMenuItem(
-              value: 'link-athlete',
-              child: Text('Koble til utøver'),
-            ),
             PopupMenuItem(value: 'logout', child: Text(l10n.logout)),
           ],
-          child: OutlinedButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.person_outline),
-            label: Text(l10n.account),
-          ),
+          child: compact
+              ? IconButton.outlined(
+                  tooltip: l10n.account,
+                  onPressed: null,
+                  icon: const Icon(Icons.person_outline),
+                )
+              : OutlinedButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.person_outline),
+                  label: Text(l10n.account),
+                ),
         );
       },
       loading: () => const SizedBox(

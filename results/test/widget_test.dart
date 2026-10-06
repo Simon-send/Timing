@@ -9,10 +9,14 @@ import 'package:results/features/profile/domain/athlete_profile.dart';
 import 'package:results/features/settings/data/settings_repository.dart';
 import 'package:results/features/settings/domain/user_settings.dart';
 import 'package:results/features/results/presentation/results_split_graph.dart';
+import 'package:results/features/results/presentation/result_distribution_button.dart';
 import 'package:results/features/results/presentation/results_table.dart';
+import 'package:results/features/results/presentation/result_locations.dart';
+import 'package:results/features/results/presentation/results_page.dart';
 import 'package:results/features/results/presentation/relay_leg_selector.dart';
 import 'package:results/features/athlete/presentation/relay_team_panel.dart';
 import 'package:results/features/athlete/presentation/biathlon_result_panel.dart';
+import 'package:results/features/events/presentation/event_card.dart';
 import 'package:results/features/results/presentation/split_selector.dart';
 import 'package:results/l10n/app_localizations.dart';
 import 'package:results/results_app.dart';
@@ -20,6 +24,63 @@ import 'package:results/results_data.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets('participated events use a highlighted card background', (
+    WidgetTester tester,
+  ) async {
+    const participated = ResultEvent(
+      id: 'event-participated',
+      name: 'Deltatt renn',
+      sportName: 'Langrenn',
+      date: null,
+      place: '',
+    );
+    const ordinary = ResultEvent(
+      id: 'event-ordinary',
+      name: 'Annet renn',
+      sportName: 'Langrenn',
+      date: null,
+      place: '',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(AppThemeVariant.nordicDark),
+        locale: const Locale('nb'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Row(
+            children: [
+              SizedBox(
+                width: 300,
+                height: 220,
+                child: EventCard(
+                  event: participated,
+                  participated: true,
+                  onTap: () {},
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 300,
+                height: 220,
+                child: EventCard(event: ordinary, onTap: () {}),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final highlighted = tester.widget<Card>(
+      find.byKey(const ValueKey('event-card-event-participated')),
+    );
+    final normal = tester.widget<Card>(
+      find.byKey(const ValueKey('event-card-event-ordinary')),
+    );
+    expect(highlighted.color, isNot(normal.color));
+  });
+
   testWidgets(
     'load-more state fills the bottom fifth and blocks repeat loads',
     (WidgetTester tester) async {
@@ -602,11 +663,16 @@ void main() {
   testWidgets('split graph calculates missing ranks from split times', (
     WidgetTester tester,
   ) async {
-    RaceResult result(String id, String name, int timeMs) {
+    RaceResult result(
+      String id,
+      String name,
+      int timeMs, {
+      String status = 'TIME',
+    }) {
       return RaceResult.fromMap(id, {
         'name': name,
         'totalMs': timeMs,
-        'status': 'TIME',
+        'status': status,
         'rawPasses': [
           {'setupUid': 'split-1', 'code': 'MT1', 'cumMs': timeMs},
         ],
@@ -627,6 +693,13 @@ void main() {
         className: 'Testklasse',
         color: null,
         originalPlacementLabel: '2',
+      ),
+      ResultTableRow(
+        result: result('dnf', 'Brutt utøver', 1, status: 'DNF'),
+        classId: 'class-1',
+        className: 'Testklasse',
+        color: null,
+        originalPlacementLabel: 'DNF',
       ),
     ];
 
@@ -659,6 +732,7 @@ void main() {
     expect(find.text('Ingen splitgrafdata'), findsNothing);
     expect(find.text('Første utøver'), findsOneWidget);
     expect(find.text('Andre utøver'), findsOneWidget);
+    expect(find.text('Brutt utøver'), findsNothing);
   });
 
   testWidgets('sprint stages reuse the ordinary result table', (tester) async {
@@ -725,6 +799,57 @@ void main() {
       find.byKey(const Key('show-athlete-stage-result-lists')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('class clicks open each class primary stage and show its count', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final repository = _PerClassStageRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          eventsRepositoryProvider.overrideWithValue(_FakeEventsRepository()),
+          resultsRepositoryProvider.overrideWithValue(repository),
+          authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+          settingsRepositoryProvider.overrideWithValue(
+            _FakeSettingsRepository(),
+          ),
+        ],
+        child: const ResultsApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('AKSA Cup 7'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Klasse A'));
+    await tester.pumpAndSettle();
+    expect(repository.stageRequests.last, (
+      classId: 'other-class',
+      stageId: 'stage-a',
+    ));
+    expect(
+      find.descendant(of: find.byType(ListView), matching: find.text('50')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Klasse B'));
+    await tester.pumpAndSettle();
+    expect(repository.stageRequests.last, (
+      classId: '1292218',
+      stageId: 'stage-b',
+    ));
+    expect(
+      find.descendant(of: find.byType(ListView), matching: find.text('30')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Klasse A'));
+    await tester.pumpAndSettle();
+    // Returning to a class reuses Riverpod's cached stream.
+    expect(find.text('Klasse A · Ledd A'), findsOneWidget);
   });
 
   testWidgets('relay details add runners and leg times', (tester) async {
@@ -843,6 +968,9 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: buildAppTheme(AppThemeVariant.nordicDark),
+        locale: const Locale('nb'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: const Scaffold(
           body: SingleChildScrollView(
             child: BiathlonResultPanel(analysis: analysis),
@@ -852,8 +980,8 @@ void main() {
     );
 
     expect(find.text('Skiskytinganalyse'), findsOneWidget);
-    expect(find.text('Skyting 3 · liggende'), findsOneWidget);
-    expect(find.text('Skyting 4 · stående'), findsOneWidget);
+    expect(find.text('Inn skyting 3'), findsOneWidget);
+    expect(find.text('Inn skyting 4'), findsOneWidget);
     expect(find.textContaining('1 bom'), findsOneWidget);
   });
 
@@ -1015,22 +1143,86 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('AKSA Cup 7'), findsOneWidget);
+    final eventsScroll = find.byKey(const Key('events-page-scroll'));
+    expect(
+      find.descendant(
+        of: eventsScroll,
+        matching: find.byKey(const Key('event-filters-toggle')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: eventsScroll,
+        matching: find.byKey(const ValueKey('event-card-83078')),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('AKSA Cup 7'));
     await tester.pumpAndSettle();
 
     expect(
       resultsRepository.watchedRequests,
-      contains((classId: '1292218', limit: 37)),
+      contains((classId: '1292218', limit: 50)),
     );
-    expect(find.text('Sprint / Fellesstart'), findsOneWidget);
-    expect(find.text('J11-12, 5 x 400 m'), findsWidgets);
-    expect(find.text('CLUB/TEAM'), findsOneWidget);
+    expect(
+      tester.widget<Text>(find.byKey(const Key('result-body-heading'))).data,
+      'J11-12, 5 x 400 m · Sprint jenter',
+    );
+    final mobileClassArrow = find.byKey(const Key('mobile-class-menu-button'));
+    final bodyHeading = find.byKey(const Key('result-body-heading'));
+    expect(
+      tester.getTopRight(mobileClassArrow).dx,
+      lessThanOrEqualTo(tester.getTopLeft(bodyHeading).dx),
+    );
+
+    final originalPhysicalSize = tester.view.physicalSize;
+    final devicePixelRatio = tester.view.devicePixelRatio;
+    addTearDown(tester.view.resetPhysicalSize);
+    tester.view.physicalSize = Size(
+      1200 * devicePixelRatio,
+      800 * devicePixelRatio,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('classes-collapse-toggle')));
+    await tester.pumpAndSettle();
+    final inlineClassArrow = find.byKey(const Key('classes-expand-inline'));
+    expect(inlineClassArrow, findsOneWidget);
+    expect(find.byKey(const Key('classes-collapse-toggle')), findsNothing);
+    expect(
+      tester.getTopRight(inlineClassArrow).dx,
+      lessThanOrEqualTo(tester.getTopLeft(bodyHeading).dx),
+    );
+    await tester.tap(inlineClassArrow);
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = originalPhysicalSize;
+    await tester.pumpAndSettle();
+
+    expect(find.text('CLUB/TEAM'), findsNothing);
     expect(find.text('Elle Simensen'), findsOneWidget);
-    expect(find.text('Alta Skiskytterlag'), findsOneWidget);
+    expect(find.text('Alta Skiskytterlag'), findsNothing);
     expect(find.text('Team Alta'), findsNothing);
     expect(find.text('Maal'), findsOneWidget);
-    expect(tester.widget<DataTable>(find.byType(DataTable)).sortColumnIndex, 5);
+    final resultTable = find.byType(DataTable);
+    final resultTableContext = tester.element(resultTable);
+    expect(
+      Theme.of(resultTableContext).dataTableTheme.headingTextStyle?.color,
+      Theme.of(resultTableContext).colorScheme.onSurface,
+    );
+    expect(tester.widget<DataTable>(resultTable).sortColumnIndex, 2);
+
+    final pageScroll = find.byKey(const Key('results-page-scroll'));
+    final infoCard = find.byKey(const Key('results-info-card'));
+    expect(
+      find.descendant(of: pageScroll, matching: find.byType(DataTable)),
+      findsOneWidget,
+    );
+    expect(find.descendant(of: pageScroll, matching: infoCard), findsOneWidget);
+    expect(
+      tester.getTopLeft(infoCard).dy,
+      greaterThan(tester.getBottomLeft(find.byType(DataTable)).dy),
+    );
 
     final resultSearch = find.byKey(const Key('result-search-field'));
     expect(resultSearch, findsOneWidget);
@@ -1044,8 +1236,8 @@ void main() {
     await tester.pumpAndSettle();
 
     final selectors = find.byType(DropdownButtonFormField<String>);
-    expect(selectors, findsNWidgets(2));
-    await tester.tap(selectors.last);
+    expect(selectors, findsOneWidget);
+    await tester.tap(selectors.first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Mellomtid').last);
     await tester.pumpAndSettle();
@@ -1055,19 +1247,40 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.tap(find.byKey(const Key('mobile-class-menu-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('G10, 3 x 400 m (1)').last);
+    expect(find.byKey(const Key('mobile-class-panel')), findsOneWidget);
+    expect(find.byKey(const Key('classes-collapse-toggle')), findsNothing);
+    final mobileDisciplineHeading = find.text('Sprint / Fellesstart').last;
+    final mobileHeadingDefaults = DefaultTextStyle.of(
+      tester.element(mobileDisciplineHeading),
+    ).style;
+    expect(mobileHeadingDefaults.color, isNot(Colors.red));
+    expect(mobileHeadingDefaults.decoration, isNot(TextDecoration.underline));
+    final logicalWidth =
+        tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    await tester.tapAt(Offset(logicalWidth - 4, 100));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('mobile-class-panel')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('mobile-class-menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('G10, 3 x 400 m').last);
     await tester.pumpAndSettle();
 
     expect(find.text('Mellomtid'), findsOneWidget);
     expect(tester.widget<DataTable>(find.byType(DataTable)).sortColumnIndex, 4);
 
-    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.tap(find.byKey(const Key('mobile-class-menu-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('J11-12, 5 x 400 m (1)').last);
+    await tester.tap(find.text('J11-12, 5 x 400 m').last);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Next split'));
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = Size(
+      1200 * devicePixelRatio,
+      900 * devicePixelRatio,
+    );
     await tester.pumpAndSettle();
     tester.widget<DataTable>(find.byType(DataTable)).columns[5].onSort!(
       5,
@@ -1090,6 +1303,259 @@ void main() {
     expect(find.text('Split breakdown'), findsOneWidget);
     expect(find.text('Head to head'), findsNothing);
   });
+
+  testWidgets('a shared independent split URL opens the matching selection', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final uri = Uri.parse(
+      resultsLocation(
+        eventId: '83078',
+        classId: '1292218',
+        stageId: '337936',
+        splitRange: const SplitRangeSelection(
+          fromSplitId: null,
+          toSplitId: 'finish',
+          includedSplitIds: ['mid', 'finish'],
+          isIndependent: true,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          eventsRepositoryProvider.overrideWithValue(_FakeEventsRepository()),
+          resultsRepositoryProvider.overrideWithValue(_FakeResultsRepository()),
+          authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+          settingsRepositoryProvider.overrideWithValue(
+            _FakeSettingsRepository(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildAppTheme(AppThemeVariant.nordicDark),
+          locale: const Locale('nb'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: ResultsPage(
+              eventId: '83078',
+              selectedClassId: '1292218',
+              selectedStageId: '337936',
+              selectedSplitId: resultSplitQueryValue(uri.queryParameters),
+              selectedSplitRange: resultSplitRangeQueryValue(
+                uri.queryParameters,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final checkbox = tester.widget<CheckboxListTile>(
+      find.byKey(const Key('independent-splits-checkbox')),
+    );
+    expect(checkbox.value, isTrue);
+    expect(find.byKey(const Key('independent-splits-picker')), findsOneWidget);
+  });
+
+  testWidgets('first split regression pairs each athlete with total ski time', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          eventsRepositoryProvider.overrideWithValue(_FakeEventsRepository()),
+          resultsRepositoryProvider.overrideWithValue(
+            _RegressionResultsRepository(),
+          ),
+          authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+          settingsRepositoryProvider.overrideWithValue(
+            _FakeSettingsRepository(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildAppTheme(AppThemeVariant.nordicDark),
+          locale: Locale('nb'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: ResultsPage(
+              eventId: '83078',
+              selectedClassId: '1292218',
+              selectedStageId: '337936',
+              selectedSplitId: 'mid',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final data = tester
+        .widget<ResultDistributionButton>(
+          find.byType(ResultDistributionButton).first,
+        )
+        .data!;
+    final ski = data.regressionTargets
+        .firstWhere((target) => target.key == 'ski')
+        .regression;
+    expect(ski.title, 'Regresjon: Rangert tid mot Skitid');
+    expect(ski.xLabel, 'Skitid');
+    expect(ski.yLabel, 'Rangert tid');
+    expect(ski.points.map((point) => (point.label, point.x, point.y)), [
+      ('Ada', 80000, 30000),
+      ('Grace', 90000, 40000),
+    ]);
+  });
+
+  testWidgets('regression target can be chosen from the results list', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1500, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          eventsRepositoryProvider.overrideWithValue(_FakeEventsRepository()),
+          resultsRepositoryProvider.overrideWithValue(
+            _RegressionResultsRepository(),
+          ),
+          authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+          settingsRepositoryProvider.overrideWithValue(
+            _FakeSettingsRepository(),
+          ),
+        ],
+        child: const ResultsApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('AKSA Cup 7'));
+    await tester.pumpAndSettle();
+    final comparisonTile = find
+        .ancestor(
+          of: find.text('J11-12, 5 x 400 m').first,
+          matching: find.byType(InkWell),
+        )
+        .first;
+    final comparisonCheckbox = find.descendant(
+      of: comparisonTile,
+      matching: find.byType(Checkbox),
+    );
+    await tester.tap(comparisonCheckbox);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Checkbox>(comparisonCheckbox).value, isTrue);
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mellomtid').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Fordeling, regresjon og splittanalyse'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Regresjon'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('regression-target-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('regression-list-selection')), findsOneWidget);
+    expect(tester.widget<Checkbox>(comparisonCheckbox).value, isTrue);
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Skiskytinganalyse').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('regression-list-apply')));
+    await tester.pumpAndSettle();
+    expect(find.text('Regresjon: Mellomtid mot Skitid'), findsOneWidget);
+    expect(find.text('Compare with: Skitid'), findsOneWidget);
+    expect(find.byKey(const Key('regression-list-selection')), findsNothing);
+    expect(tester.widget<Checkbox>(comparisonCheckbox).value, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('regression target supports independent split selection', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1500, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          eventsRepositoryProvider.overrideWithValue(_FakeEventsRepository()),
+          resultsRepositoryProvider.overrideWithValue(
+            _RegressionResultsRepository(),
+          ),
+          authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+          settingsRepositoryProvider.overrideWithValue(
+            _FakeSettingsRepository(),
+          ),
+        ],
+        child: const ResultsApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('AKSA Cup 7'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mellomtid').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Fordeling, regresjon og splittanalyse'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Regresjon'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('regression-target-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Velg intervall'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('independent-splits-checkbox')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('independent-splits-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('independent-split-finish')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Bruk'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    await tester.tap(find.byKey(const Key('regression-list-apply')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Regresjon: Mellomtid mot Valgte splittider'),
+      findsOneWidget,
+    );
+    expect(find.text('Compare with: Valgte splittider'), findsOneWidget);
+    expect(find.byKey(const Key('independent-splits-checkbox')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('regression-target-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Velg intervall'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Maal').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('regression-list-apply')));
+    await tester.pumpAndSettle();
+    expect(find.text('Regresjon: Mellomtid mot Start–Maal'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _FakeEventsRepository implements EventsRepository {
@@ -1104,6 +1570,67 @@ class _FakeEventsRepository implements EventsRepository {
         place: 'Alta',
       ),
     ]);
+  }
+}
+
+class _PerClassStageRepository extends _FakeResultsRepository {
+  _PerClassStageRepository()
+    : super(
+        stages: const [
+          CompetitionStage(
+            id: 'stage-a',
+            name: 'Ledd A',
+            type: 'interval',
+            level: 1,
+            order: 0,
+            classIds: ['other-class', '1292218'],
+            profile: ResultProfile.standard,
+            profileSource: ResultProfileSource.eq,
+          ),
+          CompetitionStage(
+            id: 'stage-b',
+            name: 'Ledd B',
+            type: 'interval',
+            level: 2,
+            order: 1,
+            classIds: ['other-class', '1292218'],
+            profile: ResultProfile.standard,
+            profileSource: ResultProfileSource.eq,
+          ),
+        ],
+      );
+
+  final stageRequests = <({String classId, String stageId})>[];
+
+  @override
+  Stream<List<ResultClass>> watchClasses(String eventId) => Stream.value(const [
+    ResultClass(
+      id: 'other-class',
+      name: 'Klasse A',
+      resultCount: 45,
+      participantCount: 50,
+      etappeUid: 1,
+      primaryStageId: 'stage-a',
+    ),
+    ResultClass(
+      id: '1292218',
+      name: 'Klasse B',
+      resultCount: 25,
+      participantCount: 30,
+      etappeUid: 2,
+      primaryStageId: 'stage-b',
+    ),
+  ]);
+
+  @override
+  Stream<List<RaceResult>> watchStageResults(
+    String eventId,
+    String stageId,
+    String classId, {
+    int limit = initialResultsLimit,
+  }) {
+    stageRequests.add((classId: classId, stageId: stageId));
+    return super.watchStageResults(eventId, stageId, classId, limit: limit);
   }
 }
 
@@ -1273,6 +1800,80 @@ class _FakeResultsRepository implements ResultsRepository {
       ),
     },
   );
+}
+
+class _RegressionResultsRepository extends _FakeResultsRepository {
+  static RaceResult row(String name, int totalMs, int splitMs, int? skiMs) =>
+      RaceResult(
+        id: name,
+        rank: 1,
+        bib: '1',
+        name: name,
+        club: '',
+        totalMs: totalMs,
+        totalText: '',
+        shooting: '',
+        status: 'TIME',
+        splitValues: {
+          'mid': SplitValue(
+            id: 'mid',
+            label: 'Mellomtid',
+            sort: 10,
+            cumRank: null,
+            legRank: null,
+            cumMs: splitMs,
+            legMs: splitMs,
+            cumText: '',
+            legText: '',
+            status: 'TIME',
+            addition: '',
+            additionParts: const [],
+          ),
+          'finish': SplitValue(
+            id: 'finish',
+            label: 'Maal',
+            sort: 50,
+            cumRank: null,
+            legRank: null,
+            cumMs: totalMs,
+            legMs: totalMs - splitMs,
+            cumText: '',
+            legText: '',
+            status: 'TIME',
+            addition: '',
+            additionParts: const [],
+          ),
+        },
+        biathlon: BiathlonAnalysis(
+          skiTimeMs: skiMs,
+          netSkiTimeMs: null,
+          shootingTimeMs: null,
+          penaltyTimeMs: null,
+          missesTotal: null,
+          skiRank: null,
+          netSkiRank: null,
+          shootingRank: null,
+          penaltyRank: null,
+          passes: const [],
+        ),
+      );
+
+  static final rows = [
+    row('Ada', 110000, 30000, 80000),
+    row('Grace', 120000, 40000, 90000),
+    row('Lin', 130000, 50000, null),
+  ];
+
+  @override
+  Stream<List<RaceResult>> watchResults(
+    String eventId,
+    String classId, {
+    int limit = initialResultsLimit,
+  }) => Stream.value(rows);
+
+  @override
+  Future<List<RaceResult>> fetchResults(String eventId, String classId) async =>
+      rows;
 }
 
 class _FakeRelayResultsRepository extends _FakeResultsRepository {
@@ -1530,7 +2131,12 @@ class _FakeAuthRepository implements AuthRepository {
   }) async {}
 
   @override
-  Future<void> signInWithGoogle() async {}
+  Future<GoogleSignInOutcome> signInWithGoogle() async {
+    return GoogleSignInOutcome.signedIn;
+  }
+
+  @override
+  Future<User?> completeGoogleRedirect() async => null;
 
   @override
   Future<void> signOut() async {}

@@ -1,6 +1,15 @@
 {
-  "indexes": [],
+  "indexes": [
+    {"collectionGroup": "rundeanalyseUsage", "queryScope": "COLLECTION", "fields": [{"fieldPath": "uid", "order": "ASCENDING"}, {"fieldPath": "createdAtMs", "order": "DESCENDING"}]},
+    {"collectionGroup": "rundeanalyseUsage", "queryScope": "COLLECTION", "fields": [{"fieldPath": "codeId", "order": "ASCENDING"}, {"fieldPath": "createdAtMs", "order": "DESCENDING"}]},
+    {"collectionGroup": "rundeanalyseUsage", "queryScope": "COLLECTION", "fields": [{"fieldPath": "eventId", "order": "ASCENDING"}, {"fieldPath": "createdAtMs", "order": "DESCENDING"}]}
+  ],
   "fieldOverrides": [
+    {
+      "collectionGroup": "sourceFragments",
+      "fieldPath": "payload",
+      "indexes": []
+    },
     {
       "collectionGroup": "results",
       "fieldPath": "athleteId",
@@ -10,22 +19,30 @@
           "queryScope": "COLLECTION"
         },
         {
-          "order": "DESCENDING",
-          "queryScope": "COLLECTION"
-        },
-        {
-          "arrayConfig": "CONTAINS",
-          "queryScope": "COLLECTION"
-        },
-        {
           "order": "ASCENDING",
-          "queryScope": "COLLECTION_GROUP"
-        },
-        {
-          "order": "DESCENDING",
           "queryScope": "COLLECTION_GROUP"
         }
       ]
+    },
+    {
+      "collectionGroup": "results",
+      "fieldPath": "timingPoints",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "results",
+      "fieldPath": "analysisSummary",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "athletes",
+      "fieldPath": "events",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clubs",
+      "fieldPath": "athletes",
+      "indexes": []
     }
   ]
 }

@@ -166,11 +166,13 @@ enkelt testfil kjøres først, for eksempel
 - Aktiv runtime er CommonJS JavaScript i `functions/index.js` på Node 22.
 - `functions_ts_old/` er arkivert TypeScript og skal ikke holdes synkronisert.
 - Firebase-prosjektaliaset er `time-plotting`; Firestore-regionen er `eur3` og
-  funksjoner/Cloud Tasks bruker `us-central1`.
-- HTTP-endepunktene er `importFromEqTimingUrls`, `startImportEvent`,
-  `runImportEventChunk` og `getImportStatus`.
+  funksjoner/Cloud Tasks bruker `europe-west1`.
+- De deployede HTTP-endepunktene er `startImportEvent`,
+  `runImportEventChunk` og `getImportStatus`. URL-importhandleren er bare en
+  intern testhjelper og skal ikke eksporteres som Cloud Function.
 - Asynkron helimport oppretter `importJobs/{jobId}` og legger klasse-chunks i
-  Cloud Tasks-køen `imports`.
+  Cloud Tasks-køen `imports`. Worker-kall skal autentiseres med OIDC fra en egen
+  servicekonto; ingen av importendepunktene skal tillate `allUsers`.
 
 Importfunksjoner må avvise feil HTTP-metode og ugyldige parametere før nettverk
 eller Firestore-skriving. Behold retry-idempotens: dokument-ID-er skal være
@@ -227,9 +229,16 @@ arrangementsspesifikke unntak direkte i generell normaliseringskode.
 
 - Offentlige arrangement-, resultat-, klubb- og utøverdata er lesbare, men ikke
   skrivbare fra klienten.
+- Offentlige resultat- og utøverdokumenter skal ikke lagre registreringsstatus,
+  timing-ID-er, interne EQ-kilde-ID-er, kjønn, fødselsår eller alder. Detaljert
+  analyse som ikke er offentlig, skal ligge under `privateAnalysis` og avvises
+  av klientreglene.
 - Brukerdokumenter er bare tilgjengelige for samme, innloggede og
   e-postverifiserte UID.
 - `importJobs` er backend-intern og skal ikke åpnes i klientreglene.
+- Standard Compute-servicekontoen brukes av Cloud Build i dette prosjektet og
+  skal ha `roles/cloudbuild.builds.builder`, men ikke `roles/editor` eller
+  runtime-tilgang til Firestore/Cloud Tasks.
 - Ikke logg tokens, private brukerdata eller hele råpayloads ukritisk.
 - Ikke deploy funksjoner eller regler, start masseimport, reimporter produksjon
   eller kjør opprydding uten at oppgaven eksplisitt ber om det.
@@ -237,6 +246,53 @@ arrangementsspesifikke unntak direkte i generell normaliseringskode.
   eksplisitt destruktiv nødrutine. Kjør den aldri som del av testing eller setup.
 - `cleanup-legacy-results.js` skal bare brukes etter at tilsvarende v3-data er
   kontrollert. Skriptets sikkerhetssjekker skal ikke omgås.
+
+### Importdrift og statuskontroll
+
+- `getImportStatus` er et GET-endepunkt. Ikke bruk
+  `gcloud functions call getImportStatus`, fordi den kommandoen sender POST og
+  gir `405 Method Not Allowed`. Bruk det lesende operatørverktøyet fra
+  `eq-importer/`:
+
+  ```zsh
+  node functions/scripts/import-operations.js \
+    --project=time-plotting \
+    --event=<eventId>
+  ```
+
+- En Cloud Tasks-oppgave og `importJobs/{jobId}` er to forskjellige
+  driftstilstander. Å slette oppgaven fra køen fjerner ikke Firestore-jobben,
+  og en jobb kan derfor fortsatt stå som `queued` uten at noe kan kjøre den.
+  Pause eller sletting av køoppgaver sletter ikke allerede importerte
+  resultater.
+- Nye jobber har `runId`, manifest og målstatus. De kan gjenopptas med
+  `import-operations.js --resume --run=<runId>` bare når status er `partial`,
+  `blocked` eller `error`, og bare med run-ID-en som nettopp ble lest.
+- Eldre jobber uten `runId` eller `manifestVersion` kan ikke gjenopptas med
+  `--resume`. `unresolved: []` betyr da at jobben mangler den nye arbeidslisten,
+  ikke at komplettheten er kontrollert. Hvis en slik jobb står fast, les
+  `nextClassIndex`, kontroller at køen er tom og opprett høyst én autentisert
+  erstatningsoppgave for nøyaktig denne indeksen. Ikke start en ny parallell
+  jobb for samme event.
+- `status: done` på en eldre jobb bekrefter at den gamle chunk-kjeden nådde
+  slutten. Det bekrefter ikke de nye manifest- og dekningskontrollene. Kontroller
+  derfor konkurranseledd, klasser og deltakerantall i appen etterpå.
+- Cloud Tasks-køen `imports` skal bruke OIDC-servicekontoen
+  `import-tasks@time-plotting.iam.gserviceaccount.com`. Den skal ha
+  `roles/run.invoker` på bare Cloud Run-tjenesten bak `runImportEventChunk`.
+  Worker-policyen skal ikke inneholde `allUsers` eller
+  `allAuthenticatedUsers`. Verifiser policyen og en ekte køprobe med:
+
+  ```zsh
+  node functions/scripts/verify-import-access.js time-plotting
+  ```
+
+- Tilgangsproben oppretter en ufarlig Cloud Tasks-oppgave og krever derfor at
+  køen er `RUNNING`. Den importerer ikke konkurransedata.
+- `configure-production.sh` endrer IAM og aktiverer nødvendige API-er. Prosjektet
+  har betingede IAM-bindinger, så nye ubetingede bindinger må bruke
+  `--condition=None`; ellers stopper `gcloud` og ber interaktivt om en
+  betingelse. Kjør skriptet bare som en eksplisitt produksjonsoperasjon.
 
 ### Importørkommandoer
 
@@ -246,15 +302,47 @@ Kjør fra `eq-importer/functions/`:
 npm ci
 npm run lint
 npm test
+npm run verify:deploy
+npm run verify:rules
 npm run serve
 ```
 
-Kjør deploy fra `eq-importer/` eller med riktig Firebase-konfigurasjon:
+Kjør deploy fra `eq-importer/` eller med riktig Firebase-konfigurasjon. Bruk
+codebase-filteret når bare importøren skal oppdateres, slik at den separate
+`rundeanalyse`-codebasen ikke deployes samtidig:
 
-```powershell
-firebase deploy --only functions
+```zsh
+./functions/node_modules/.bin/firebase deploy \
+  --only functions:default \
+  --project time-plotting
+```
+
+Regler og indekser deployes separat:
+
+```zsh
 firebase deploy --only firestore:rules,firestore:indexes
 ```
+
+For web-deploy fra macOS/zsh brukes `eq-importer/deploy-web.sh`. Skriptet
+stopper ved feil, krever offentlig reCAPTCHA v3-site key, kjører tester og
+bygger til ren staging før preview publiseres. Ikke bruk secret key.
+
+Produksjonsdomenet er `results.plotting.live`. Ved senere domenebytte skal
+domenet oppdateres i Firebase Hosting, reCAPTCHA-domenelisten, Firebase
+Authentication sine autoriserte domener, Google OAuth redirect-URL og
+`results/lib/core/firebase/firebase_options.dart` (`authDomain`). Bruk alltid
+HTTPS, og legg til redirect-adressen `https://<offentlig-domene>/__/auth/handler`.
+Ikke betrakt deployblokkens prosjektalias som det endelige offentlige domenet.
+
+```zsh
+cd "/Users/simon/Documents/Projekter/Data/EQ_converter/eq-importer" || exit 1
+EQ_APP_CHECK_SITE_KEY='6Le26VktAAAAAOzH8s-AX-y0uvJDAScv4pi80_qa' bash deploy-web.sh preview
+```
+
+Kontroller preview først (inkludert reCAPTCHA-godkjent previewdomene).
+Publiser deretter nøyaktig den kontrollerte versjonen med
+`bash deploy-web.sh publish`. Dette endrer bare Hosting, ikke funksjoner,
+IAM eller Firestore-regler. Behold tidligere Hosting-versjon for rollback.
 
 Deploy- og importkommandoene er eksterne sideeffekter og krever eksplisitt
 oppdrag. `start-import-events.ps1` peker som standard på produksjonsfunksjonen
@@ -324,16 +412,16 @@ Denne delen avledes deterministisk fra arbeidsomradet. Oppdater den med `tools/u
 
 | Arbeidsomrade | Oppdagede filer | Manifest/runtime |
 | --- | ---: | --- |
-| `results/` | 219 | results (Dart SDK ^3.11.0) |
-| `eq-importer/` | 24 | Node 22 |
-| `eq/` | 0 | ikke versjonert |
-| `webScraper/` | 0 | Python-prototyper uten manifest |
-| `AI/` | 0 | Referansemateriale |
+| `results/` | 261 | results (Dart SDK ^3.11.0) |
+| `eq-importer/` | 116 | Node 22 |
+| `eq/` | 140 | eq (Dart SDK ^3.11.0) |
+| `webScraper/` | 9 | Python-prototyper uten manifest |
+| `AI/` | 3 | Referansemateriale |
 
-- Flutter-kilde: 70 Dart-filer under `results/lib`.
-- Flutter-tester: 10 testfiler med 51 oppdagede `test`/`testWidgets`-tilfeller.
-- Importortester: 1 Jest-fil med 39 oppdagede testtilfeller.
+- Flutter-kilde: 75 Dart-filer under `results/lib`.
+- Flutter-tester: 23 testfiler med 91 oppdagede `test`/`testWidgets`-tilfeller.
+- Importortester: 13 Jest-fil med 102 oppdagede testtilfeller.
 - Lokaler: de, en, es, et, fi, fr, it, nb, ru, sv.
-- Deklarerte rutesegmenter: /, /login, /forgot-password, /register, /me, /events, :eventId/results, :classId/athletes/:resultId.
-- Eksporterte Cloud Functions: getImportStatus, importFromEqTimingUrls, runImportEventChunk, startImportEvent.
+- Deklarerte rutesegmenter: /, /login, /forgot-password, /register, /connect-athlete, /me, /events, :eventId/results, :classId/athletes/:resultId.
+- Eksporterte Cloud Functions: getImportStatus, repairImportDispatches, runImportEventChunk, startImportEvent.
 <!-- END AUTO-GENERATED PROJECT FACTS -->
