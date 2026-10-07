@@ -1,0 +1,76 @@
+{
+  "entrant": {
+    "kind": "team",
+    "name": "Local relay fixture"
+  },
+  "team": {
+    "members": [
+      {
+        "legNumber": 1,
+        "name": "First"
+      },
+      {
+        "legNumber": 2,
+        "name": "Second"
+      },
+      {
+        "legNumber": 3,
+        "name": "Third"
+      }
+    ],
+    "legs": [
+      {
+        "legNumber": 3,
+        "biathlon": {
+          "version": 1,
+          "metrics": {
+            "shootingTimeMs": 6000,
+            "missesTotal": 2
+          },
+          "passes": {
+            "shoot1": {
+              "index": 1,
+              "rangeMs": 6000,
+              "misses": 2
+            }
+          }
+        }
+      }
+    ]
+  },
+  "timingPoints": [
+    {
+      "setupUid": "exchange1",
+      "code": "Veksling",
+      "kind": "finish",
+      "sort": 3,
+      "legNumber": 1,
+      "cumMs": 30000
+    },
+    {
+      "setupUid": "in3",
+      "code": "INS1",
+      "kind": "rangeIn",
+      "sort": 7,
+      "legNumber": 3,
+      "cumMs": 190000,
+      "legMs": 12000
+    },
+    {
+      "setupUid": "out3",
+      "code": "UTS1",
+      "kind": "rangeOut",
+      "sort": 8,
+      "legNumber": 3,
+      "cumMs": 196000
+    },
+    {
+      "setupUid": "finish3",
+      "code": "Veksling",
+      "kind": "finish",
+      "sort": 9,
+      "legNumber": 3,
+      "cumMs": 210000
+    }
+  ]
+}
