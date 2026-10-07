@@ -2208,20 +2208,32 @@ function buildRelayLegBiathlon(splits) {
   const legNumbers = Array.from(new Set(entries.map((split) =>
     relaySplitLegNumber(split)))).sort((a, b) => a - b);
   const legs = [];
-  let previousEndMs = 0;
-  let previousEndWithoutAdditionMs = 0;
+  let previousLegNumber = null;
+  let previousEndMs = null;
+  let previousEndWithoutAdditionMs = null;
 
   for (const legNumber of legNumbers) {
     const legEntries = entries
       .filter((split) => relaySplitLegNumber(split) === legNumber)
       .sort(compareSplitRows);
     const timedEntries = legEntries.filter((split) =>
-      typeof split.cumMs === "number");
+      Number.isFinite(split.cumMs));
     if (timedEntries.length === 0) continue;
-    const endpoint = timedEntries.reduce((latest, split) =>
-      split.cumMs >= latest.cumMs ? split : latest);
-    const totalMs = endpoint.cumMs - previousEndMs;
-    if (totalMs < 0) continue;
+    // A shooting/mid-course passing is not proof of an exchange. The
+    // preceding numbered leg, not the preceding available row, owns the start.
+    const endpoints = timedEntries.filter((split) =>
+      split.cumMs >= 0 && (split.kind === "finish" || split.isStop === true ||
+      classifySplitKind(split.code, split) === "finish" ||
+      /^(?:\d+[.\s-]*)?(?:veksling|exchange)(?:[.\s-]*\d+)?$/i
+        .test(String(split.code || "").trim())));
+    const endpoint = endpoints.length ? endpoints.reduce((latest, split) =>
+      split.cumMs >= latest.cumMs ? split : latest) : null;
+    const startMs = legNumber === 1 ? 0 :
+      previousLegNumber === legNumber - 1 ? previousEndMs : null;
+    const startWithoutAdditionMs = legNumber === 1 ? 0 :
+      previousLegNumber === legNumber - 1 ? previousEndWithoutAdditionMs : null;
+    const totalMs = endpoint && startMs != null ? endpoint.cumMs - startMs : null;
+    if (totalMs != null && totalMs < 0) continue;
 
     const originalShotIndexes = [];
     for (const split of legEntries) {
@@ -2255,29 +2267,52 @@ function buildRelayLegBiathlon(splits) {
       );
       localSplits[split.setupUid] = Object.assign({}, split, {
         code,
-        cumMs: typeof split.cumMs === "number" ?
-          split.cumMs - previousEndMs : null,
-        cumMsWithoutAddition: typeof split.cumMsWithoutAddition === "number" &&
-          previousEndWithoutAdditionMs != null ?
-          split.cumMsWithoutAddition - previousEndWithoutAdditionMs : null,
+        cumMs: Number.isFinite(split.cumMs) ?
+          split.cumMs - (startMs == null ? 0 : startMs) : null,
+        cumMsWithoutAddition: Number.isFinite(split.cumMsWithoutAddition) &&
+          startMs != null && startWithoutAdditionMs != null ?
+          split.cumMsWithoutAddition - startWithoutAdditionMs : null,
         additionParts,
         addition: additionParts == null ? null : additionParts.join("+"),
       });
+      if (split === endpoint) localSplits[split.setupUid].kind = "finish";
     }
 
     const derived = buildDerivedResultMetrics(localSplits, totalMs);
+    if (totalMs == null) {
+      // Partial laps are useful, but cannot stand in for the full leg.
+      derived.analysis.courseTimeMs = null;
+      derived.analysis.netSkiTimeMs = null;
+      derived.analysis.skiTimeMs = null;
+    }
+    if (startMs == null) {
+      // Absolute team times still yield valid within-leg differences. Do not
+      // persist them as cumulative times relative to an unknown leg start.
+      for (const pass of Object.values(derived.shooting)) {
+        for (const key of ["approachCumMs", "inCumMs", "shootingCumMs",
+          "outCumMs", "rangeExitCumMs"]) pass[key] = null;
+      }
+      for (const [key, lap] of Object.entries(derived.laps)) {
+        if (lap.startCode === "start") {
+          delete derived.laps[key];
+        } else {
+          lap.startCumMs = null;
+          lap.endCumMs = null;
+        }
+      }
+    }
     const biathlon = withoutHitFields(derived.analysis, derived.shooting, derived.laps);
     legs.push({
       legNumber,
       totalMs,
       biathlon: Object.assign({version: 1}, biathlon),
     });
-    previousEndMs = endpoint.cumMs;
-    if (typeof endpoint.cumMsWithoutAddition === "number") {
-      previousEndWithoutAdditionMs = endpoint.cumMsWithoutAddition;
-    } else {
-      previousEndWithoutAdditionMs = null;
-    }
+    previousLegNumber = legNumber;
+    previousEndMs = endpoint ? endpoint.cumMs : null;
+    previousEndWithoutAdditionMs = endpoint &&
+      Number.isFinite(endpoint.cumMsWithoutAddition) &&
+      endpoint.cumMsWithoutAddition >= 0 ?
+      endpoint.cumMsWithoutAddition : null;
   }
   return legs;
 }
