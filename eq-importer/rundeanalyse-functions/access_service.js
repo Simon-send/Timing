@@ -457,7 +457,12 @@ class RundeanalyseAccessService {
   _requireVerifiedAccount(request) {
     const actor = this._requireAuthenticated(request);
     if (!isVerifiedRundeanalyseAccount(actor)) {
-      throw new AccessError("failed-precondition", "A verified Rundeanalyse account is required.");
+      // details.reason is additive: older clients still see the same code.
+      throw new AccessError(
+        "failed-precondition",
+        "A verified Rundeanalyse account is required.",
+        {reason: "account-not-verified"},
+      );
     }
     return actor;
   }
@@ -558,8 +563,10 @@ class RundeanalyseAccessService {
         // the sign-in provider field, without rewriting unrelated balances.
         const provider = signInProviderFor(actor);
         const identity = {};
-        if (provider && existing.signInProvider !== provider) identity.signInProvider = provider;
-        if (typeof actor.email === "string" && existing.email !== actor.email) identity.email = actor.email;
+        // Backfill only missing fields so alternating providers never turn a
+        // status read into a write on every call.
+        if (provider && typeof existing.signInProvider !== "string") identity.signInProvider = provider;
+        if (typeof actor.email === "string" && typeof existing.email !== "string") identity.email = actor.email;
         if (Object.keys(identity).length) {
           identity.updatedAtMs = nowMs;
           transaction.set(userRef, identity, {merge: true});
@@ -997,7 +1004,8 @@ class RundeanalyseAccessService {
     const summary = codeSummary(codeId, safeData(codeSnapshot), nowMs);
     const code = shareSnapshot.exists ?
       openCodeShare(safeData(shareSnapshot), codeId, this.codePepper) : undefined;
-    await this._adminAuditRef(`code_share_viewed_${codeId}_${nowMs}`).set({
+    const auditSuffix = crypto.randomBytes(6).toString("hex");
+    await this._adminAuditRef(`code_share_viewed_${codeId}_${nowMs}_${auditSuffix}`).set({
       action: "code-share-viewed",
       actorUid: actor.uid,
       codeId,

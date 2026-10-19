@@ -674,7 +674,7 @@ describe("RundeanalyseAccessService", () => {
         .rejects.toMatchObject({code: "unauthenticated"});
       await expect(service.linkCode(verifiedRequest("athlete-2", {code: "RA-INVITE-0000-0001"}, {
         email_verified: false,
-      }))).rejects.toBeInstanceOf(AccessError);
+      }))).rejects.toMatchObject({code: "failed-precondition", details: {reason: "account-not-verified"}});
 
       await service.updateCode(adminRequest({codeId: created.codeId, active: false, reason: "T"}));
       await expect(service.linkCode(verifiedRequest("athlete-3", {code: "RA-INVITE-0000-0001"})))
@@ -691,7 +691,7 @@ describe("RundeanalyseAccessService", () => {
     });
 
     test("records sign-in provider and email for every verified user in the admin list", async () => {
-      const {service} = makeService({
+      const {db, service} = makeService({
         "rundeanalyseUsers/old-user": {createdAtMs: NOW_MS - DAY_MS, updatedAtMs: NOW_MS - DAY_MS},
       });
       await service.getAccessStatus(verifiedRequest("email-user", {}, {firebase: {sign_in_provider: "password"}}));
@@ -702,6 +702,11 @@ describe("RundeanalyseAccessService", () => {
       expect(byUid["email-user"]).toMatchObject({email: "email-user@example.com", signInProvider: "password", totalAnalyses: 0});
       expect(byUid["google-user"]).toMatchObject({signInProvider: "google.com"});
       expect(byUid["old-user"]).toMatchObject({email: "old-user@example.com", signInProvider: "password"});
+
+      // A later sign-in with another provider does not rewrite the stored identity.
+      const before = db.data("rundeanalyseUsers/email-user");
+      await service.getAccessStatus(verifiedRequest("email-user", {}, {firebase: {sign_in_provider: "google.com"}}));
+      expect(db.data("rundeanalyseUsers/email-user")).toEqual(before);
     });
   });
 });
