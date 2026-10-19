@@ -195,6 +195,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Encrypted admin-only share copies of analysis codes (issue 16).
+    match /rundeanalyseCodeShares/{document=**} {
+      allow read, write: if false;
+    }
+
     match /rundeanalyseAdminGrants/{document=**} {
       allow read, write: if false;
     }

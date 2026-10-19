@@ -597,4 +597,111 @@ describe("RundeanalyseAccessService", () => {
   test("uses the Norwegian calendar date for dashboard day statistics", () => {
     expect(dateKeyFor(Date.UTC(2026, 0, 1, 23, 30))).toBe("2026-01-02");
   });
+
+  describe("persistent code sharing (issue 16)", () => {
+    test("stores an encrypted share for new codes and lets only admins reopen it", async () => {
+      const {db, service} = makeService();
+      const code = "RA-SHARE-NEW-000001";
+      const created = await service.createCode(adminRequest({code, credits: 3, reason: "Test"}));
+      expect(created.shareAvailable).toBe(true);
+      const share = db.data(`rundeanalyseCodeShares/${created.codeId}`);
+      expect(share).toEqual(expect.objectContaining({version: 1, createdByUid: "admin-1"}));
+      expect(JSON.stringify(share)).not.toContain("SHARE-NEW");
+      expect(JSON.stringify(db.data(`rundeanalyseCodes/${created.codeId}`))).not.toContain("SHARE-NEW");
+
+      await expect(service.getCodeShare(verifiedRequest("athlete-1", {codeId: created.codeId})))
+        .rejects.toMatchObject({code: "permission-denied"});
+      await expect(service.getCodeShare({data: {codeId: created.codeId}}))
+        .rejects.toMatchObject({code: "unauthenticated"});
+      await expect(service.getCodeShare(verifiedRequest("athlete-1", {codeId: created.codeId}, {
+        email_verified: false, rundeanalyseAdmin: true,
+      }))).rejects.toBeInstanceOf(AccessError);
+
+      const reopened = await service.getCodeShare(adminRequest({codeId: created.codeId}));
+      expect(reopened).toEqual(expect.objectContaining({codeId: created.codeId, available: true, code}));
+      expect(Array.from(db.documents.values()).some((doc) => doc.action === "code-share-viewed")).toBe(true);
+
+      const overview = await service.getAdminOverview(adminRequest());
+      expect(overview.codes).toEqual([expect.objectContaining({id: created.codeId, shareAvailable: true})]);
+      expect(JSON.stringify(overview)).not.toContain("SHARE-NEW");
+    });
+
+    test("reports legacy codes without plaintext honestly and never invents a code", async () => {
+      const legacyPath = codeDocumentPath("RA-LEGACY-OLD-0001");
+      const legacyId = legacyPath.split("/")[1];
+      const {db, service} = makeService({
+        [legacyPath]: {label: "Gammel", remainingAnalyses: 4, initialAnalyses: 4, active: true},
+      });
+      const before = db.data(legacyPath);
+      const share = await service.getCodeShare(adminRequest({codeId: legacyId}));
+      expect(share).toEqual(expect.objectContaining({
+        codeId: legacyId, available: false, reason: "legacy-plaintext-not-stored",
+      }));
+      expect(share.code).toBeUndefined();
+      expect(db.data(legacyPath)).toEqual(before);
+      const overview = await service.getAdminOverview(adminRequest());
+      expect(overview.codes).toEqual([expect.objectContaining({id: legacyId, shareAvailable: false})]);
+
+      // The legacy code itself still links and keeps its balance untouched.
+      const linked = await service.linkCode(verifiedRequest("athlete-1", {code: "ra-legacy-old-0001"}));
+      expect(linked).toMatchObject({linked: true, alreadyLinked: false, code: {remainingAnalyses: 4}});
+    });
+
+    test("rejects a share copied onto another code ID and unknown codes", async () => {
+      const {db, service} = makeService();
+      const a = await service.createCode(adminRequest({code: "RA-SHARE-AAAA-0001", credits: 1, reason: "T"}));
+      const b = await service.createCode(adminRequest({code: "RA-SHARE-BBBB-0002", credits: 1, reason: "T"}));
+      await db.collection("rundeanalyseCodeShares").doc(b.codeId)
+        .set(db.data(`rundeanalyseCodeShares/${a.codeId}`));
+      await expect(service.getCodeShare(adminRequest({codeId: b.codeId})))
+        .resolves.toMatchObject({available: false, reason: "share-unreadable"});
+      await expect(service.getCodeShare(adminRequest({codeId: "missing"})))
+        .rejects.toMatchObject({code: "not-found"});
+    });
+
+    test("invitation linking is idempotent, enforces state and the link limit", async () => {
+      const {db, service} = makeService();
+      const created = await service.createCode(adminRequest({code: "RA-INVITE-0000-0001", credits: 2, reason: "T"}));
+      const first = await service.linkCode(verifiedRequest("athlete-1", {code: "RA-INVITE-0000-0001"}));
+      const retry = await service.linkCode(verifiedRequest("athlete-1", {code: "RA-INVITE-0000-0001"}));
+      expect(first.alreadyLinked).toBe(false);
+      expect(retry.alreadyLinked).toBe(true);
+      const code = db.data(`rundeanalyseCodes/${created.codeId}`);
+      expect(code.linkedUsersCount).toBe(1);
+      expect(code.remainingAnalyses).toBe(2);
+
+      await expect(service.linkCode({data: {code: "RA-INVITE-0000-0001"}}))
+        .rejects.toMatchObject({code: "unauthenticated"});
+      await expect(service.linkCode(verifiedRequest("athlete-2", {code: "RA-INVITE-0000-0001"}, {
+        email_verified: false,
+      }))).rejects.toBeInstanceOf(AccessError);
+
+      await service.updateCode(adminRequest({codeId: created.codeId, active: false, reason: "T"}));
+      await expect(service.linkCode(verifiedRequest("athlete-3", {code: "RA-INVITE-0000-0001"})))
+        .rejects.toMatchObject({code: "failed-precondition"});
+      await expect(service.linkCode(verifiedRequest("athlete-3", {code: "RA-NOT-A-REAL-CODE"})))
+        .rejects.toMatchObject({code: "not-found"});
+
+      const ids = Array.from({length: 20}, (_, i) => `full-${i}`);
+      db.documents.set("rundeanalyseUsers/athlete-9", {linkedCodeIds: ids});
+      const other = await service.createCode(adminRequest({code: "RA-INVITE-0000-0002", credits: 1, reason: "T"}));
+      await expect(service.linkCode(verifiedRequest("athlete-9", {code: "RA-INVITE-0000-0002"})))
+        .rejects.toMatchObject({code: "resource-exhausted"});
+      expect(db.data(`rundeanalyseCodes/${other.codeId}`).linkedUsersCount).toBe(0);
+    });
+
+    test("records sign-in provider and email for every verified user in the admin list", async () => {
+      const {service} = makeService({
+        "rundeanalyseUsers/old-user": {createdAtMs: NOW_MS - DAY_MS, updatedAtMs: NOW_MS - DAY_MS},
+      });
+      await service.getAccessStatus(verifiedRequest("email-user", {}, {firebase: {sign_in_provider: "password"}}));
+      await service.getAccessStatus(verifiedRequest("google-user", {}));
+      await service.getAccessStatus(verifiedRequest("old-user", {}, {firebase: {sign_in_provider: "password"}}));
+      const overview = await service.getAdminOverview(adminRequest());
+      const byUid = Object.fromEntries(overview.users.map((user) => [user.uid, user]));
+      expect(byUid["email-user"]).toMatchObject({email: "email-user@example.com", signInProvider: "password", totalAnalyses: 0});
+      expect(byUid["google-user"]).toMatchObject({signInProvider: "google.com"});
+      expect(byUid["old-user"]).toMatchObject({email: "old-user@example.com", signInProvider: "password"});
+    });
+  });
 });

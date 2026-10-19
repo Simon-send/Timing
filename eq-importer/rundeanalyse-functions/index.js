@@ -131,6 +131,11 @@ exports.createRundeanalyseCode = callable(
   (service, request) => service.createCode(request),
 );
 
+exports.getRundeanalyseCodeShare = callable(
+  "getRundeanalyseCodeShare",
+  (service, request) => service.getCodeShare(request),
+);
+
 exports.setRundeanalyseConfig = callable(
   "setRundeanalyseConfig",
   (service, request) => service.setConfig(request),

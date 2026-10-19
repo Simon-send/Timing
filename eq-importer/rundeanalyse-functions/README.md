@@ -8,8 +8,12 @@ does not import, export, or modify the existing EQ importer functions.
 1. Add this directory as the `rundeanalyse` codebase in the parent
    `eq-importer/firebase.json`; deploy it with `--only functions:rundeanalyse`.
 2. Create the Firebase Secret `RUNDEANALYSE_CODE_PEPPER` with a random value of
-   at least 32 characters. Code values are HMACed with this secret and are
-   never written to Firestore.
+   at least 32 characters. Code IDs are HMACed with this secret. Codes created
+   after issue 16 also get an AES-256-GCM encrypted share copy (key derived
+   from the same secret with HKDF, bound to the code ID) in the admin-only
+   `rundeanalyseCodeShares` collection so an administrator can reopen the
+   link/QR. Plaintext codes are never written to Firestore. Rotating the
+   pepper makes both existing code IDs and share copies unusable.
 3. Use the dedicated `rundeanalyse-runtime` service account with only these
    runtime roles:
    - `roles/datastore.user`, limited to the default Firestore database when
@@ -50,10 +54,11 @@ Flutter must never update code balances, grants, events, or usage directly.
 | `consumeRundeanalyseAnalysis` | `{idempotencyKey, code?, linkedCodeId?, useFreeAllowance?, eventCandidate?}` | `{allowed, idempotencyKey?, analysisAccessId?, access?, reason?, nextStep?}`. `eventCandidate` is `{eventId, capturedAtMs, latitude, longitude}` and is checked again by the server. |
 | `linkRundeanalyseCode` | `{code}` | `{linked, alreadyLinked, code}`. |
 | `createRundeanalyseCode` | `{code?, label?, credits, expiresAtMs?, active?}` | The new plaintext `code` once, its opaque `codeId`, and code metadata. Administrator only. |
+| `getRundeanalyseCodeShare` | `{codeId}` | `{codeId, available, code?, reason?, summary}`. Administrator only and audited. Codes created before shares existed return `available: false, reason: "legacy-plaintext-not-stored"`; their plaintext cannot be recovered. |
 | `setRundeanalyseConfig` | Any of `{freeAnalysisLimit, freePeriodDays, offerEnabled}` | `{config}`. Administrator only. |
 | `upsertRundeanalyseEvent` | `{eventId?, name, startAtMs, endAtMs, goalLatitude, goalLongitude, radiusMeters, active?}` | `{event}`. Administrator only. |
 | `grantRundeanalyseAnnualAccess` | `{uid? \| email?, accessUntilMs}` | `{uid, email, annualAccessUntilMs}`. Administrator only. |
-| `getRundeanalyseAdminOverview` | `{limit?}` | Configuration, total/today source counts and recent code, event, and user summaries. Administrator only. |
+| `getRundeanalyseAdminOverview` | `{limit?}` | Configuration, total/today source counts and recent code (with `shareAvailable`), event, and user (with `email` and `signInProvider`) summaries. Every verified account that opens Rundeanalyse is enrolled, not only accounts with saved analyses. Administrator only. |
 
 `code`, `linkedCodeId` and `useFreeAllowance` are mutually exclusive. A successful explicitly
 entered code use links its opaque `codeId` to the signed-in account when there
