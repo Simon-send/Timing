@@ -224,5 +224,13 @@
   "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
   "couldNotReadAthleteLink": "Kunne ikke lese utøverkoblingen",
   "settingsSyncFailed": "Kunne ikke lagre eller synkronisere innstillingene. Valget ditt er fortsatt valgt.",
-  "settingsRetry": "Prøv igjen"
+  "settingsRetry": "Prøv igjen",
+  "seasonTitle": "Sesonger",
+  "seasonAll": "Alle sesonger",
+  "seasonUnknown": "Ukjent sesong",
+  "seasonRaceCount": "{count} løp",
+  "seasonCompletedCount": "{count} fullførte løp",
+  "seasonObservationCount": "{count} gyldige observasjoner",
+  "seasonUnassignedNotice": "{count} løp har ukjent sesong. De vises i listen; velg Alle sesonger for å ta dem med i statistikken.",
+  "seasonStatisticsHint": "Statistikk utelater ikke-fullførte løp og manglende målinger."
 }

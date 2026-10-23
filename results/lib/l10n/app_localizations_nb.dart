@@ -444,4 +444,37 @@ class AppLocalizationsNb extends AppLocalizations {
 
   @override
   String get settingsRetry => 'Prøv igjen';
+
+  @override
+  String get seasonTitle => 'Sesonger';
+
+  @override
+  String get seasonAll => 'Alle sesonger';
+
+  @override
+  String get seasonUnknown => 'Ukjent sesong';
+
+  @override
+  String seasonRaceCount(int count) {
+    return '$count løp';
+  }
+
+  @override
+  String seasonCompletedCount(int count) {
+    return '$count fullførte løp';
+  }
+
+  @override
+  String seasonObservationCount(int count) {
+    return '$count gyldige observasjoner';
+  }
+
+  @override
+  String seasonUnassignedNotice(int count) {
+    return '$count løp har ukjent sesong. De vises i listen; velg Alle sesonger for å ta dem med i statistikken.';
+  }
+
+  @override
+  String get seasonStatisticsHint =>
+      'Statistikk utelater ikke-fullførte løp og manglende målinger.';
 }

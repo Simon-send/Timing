@@ -3,6 +3,7 @@
 /* eslint-disable require-jsdoc */
 
 const crypto = require("node:crypto");
+const {isNonFinishStatus} = require("./result-status");
 
 // Public, comparable performance fields only. All *Ms values are milliseconds;
 // ranks, misses, and percentages are dimensionless.
@@ -21,11 +22,6 @@ const PASS_FIELDS = [
 const LAP_FIELDS = ["skiMs", "startCumMs", "endCumMs"];
 const isFiniteNumber = (value) =>
   typeof value === "number" && Number.isFinite(value);
-const nonFinish = (status) => {
-  const text = String(status || "");
-  return /\b(?:DNS|DNF|DSQ|DQ)\b|DID NOT|IKKE STARTET|STARTET IKKE/i
-      .test(text) || /BRUTT|IKKE FULLF|DISQUAL/i.test(text);
-};
 
 function positive(value) {
   return isFiniteNumber(value) && value > 0;
@@ -146,7 +142,7 @@ function buildOne(kind, finishers, cohort, splitDefs, expectedShootingCount) {
 function buildBiathlonAggregates(results, splitDefs = {}) {
   const finishers = results.filter((row) => row.isBiathlon === true &&
       row.isRelay !== true && row.entrant?.kind !== "team" &&
-      !nonFinish(row.status) && positive(row.totalMs))
+      !isNonFinishStatus(row.status) && positive(row.totalMs))
       .slice().sort((left, right) => left.totalMs - right.totalMs ||
         String(left.id).localeCompare(String(right.id)));
   if (!finishers.length) return null;

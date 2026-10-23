@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../app/app_theme.dart';
+import '../../../l10n/app_localizations.dart';
 
 enum ResultHistoryMetric { topPercent, rank }
 
@@ -106,6 +107,10 @@ class _ResultHistoryPanelState extends State<ResultHistoryPanel> {
           ],
         ),
         const SizedBox(height: 12),
+        Text(
+          AppLocalizations.of(context).seasonObservationCount(points.length),
+        ),
+        const SizedBox(height: 8),
         if (points.isEmpty)
           Container(
             height: 190,

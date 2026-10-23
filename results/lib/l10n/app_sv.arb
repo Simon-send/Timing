@@ -224,5 +224,13 @@
   "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
   "couldNotReadAthleteLink": "Could not read the athlete link",
   "settingsSyncFailed": "Det gick inte att spara eller synkronisera inställningarna. Ditt val finns kvar.",
-  "settingsRetry": "Försök igen"
+  "settingsRetry": "Försök igen",
+  "seasonTitle": "Säsonger",
+  "seasonAll": "Alla säsonger",
+  "seasonUnknown": "Okänd säsong",
+  "seasonRaceCount": "{count} lopp",
+  "seasonCompletedCount": "{count} fullföljda lopp",
+  "seasonObservationCount": "{count} giltiga observationer",
+  "seasonUnassignedNotice": "{count} lopp saknar säsong. De visas i listan; välj Alla säsonger för att ta med dem i statistiken.",
+  "seasonStatisticsHint": "Statistiken utesluter ej fullföljda lopp och saknade mätvärden."
 }

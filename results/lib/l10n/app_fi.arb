@@ -224,5 +224,13 @@
   "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
   "couldNotReadAthleteLink": "Could not read the athlete link",
   "settingsSyncFailed": "Asetuksia ei voitu tallentaa tai synkronoida. Valintasi säilyy.",
-  "settingsRetry": "Yritä uudelleen"
+  "settingsRetry": "Yritä uudelleen",
+  "seasonTitle": "Kaudet",
+  "seasonAll": "Kaikki kaudet",
+  "seasonUnknown": "Tuntematon kausi",
+  "seasonRaceCount": "{count} kilpailua",
+  "seasonCompletedCount": "{count} loppuun suoritettua kilpailua",
+  "seasonObservationCount": "{count} kelvollista havaintoa",
+  "seasonUnassignedNotice": "{count} kilpailulla ei ole kautta. Ne näkyvät luettelossa; sisällytä ne tilastoihin valitsemalla Kaikki kaudet.",
+  "seasonStatisticsHint": "Tilastot eivät sisällä keskeytettyjä kilpailuja eivätkä puuttuvia mittauksia."
 }

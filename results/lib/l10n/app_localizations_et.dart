@@ -444,4 +444,37 @@ class AppLocalizationsEt extends AppLocalizations {
 
   @override
   String get settingsRetry => 'Proovi uuesti';
+
+  @override
+  String get seasonTitle => 'Hooajad';
+
+  @override
+  String get seasonAll => 'Kõik hooajad';
+
+  @override
+  String get seasonUnknown => 'Teadmata hooaeg';
+
+  @override
+  String seasonRaceCount(int count) {
+    return '$count võistlust';
+  }
+
+  @override
+  String seasonCompletedCount(int count) {
+    return '$count lõpetatud võistlust';
+  }
+
+  @override
+  String seasonObservationCount(int count) {
+    return '$count kehtivat vaatlust';
+  }
+
+  @override
+  String seasonUnassignedNotice(int count) {
+    return '$count võistlusel puudub hooaeg. Need jäävad nimekirja; statistikas kaasamiseks vali Kõik hooajad.';
+  }
+
+  @override
+  String get seasonStatisticsHint =>
+      'Statistika ei hõlma lõpetamata võistlusi ega puuduvaid mõõtmisi.';
 }

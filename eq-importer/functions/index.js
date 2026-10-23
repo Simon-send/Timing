@@ -4,6 +4,7 @@ const admin = require("firebase-admin");
 const firestoreModule = require("firebase-admin/firestore");
 const axios = require("axios");
 const crypto = require("node:crypto");
+const {resultStatusSortOrder, isNonFinishStatus} = require("./result-status");
 const {normalizeParticipants, timingPage, sourceError} = require("./import-source");
 const {LEASE_MS, claimDecision, ownsLease} = require("./import-job-state");
 const {execution, assertWriteLease, assertExecutionBudget} = require("./import-execution");
@@ -2568,20 +2569,6 @@ function addShootingPassRanks(results) {
   }
 }
 
-function isNonFinishStatus(status) {
-  const text = String(status || "").trim().toUpperCase();
-  return text.includes("DNF") ||
-    text.includes("DNS") ||
-    text.includes("DSQ") ||
-    text.includes("DQ") ||
-    text.includes("DID NOT FINISH") ||
-    text.includes("DID NOT START") ||
-    text.includes("IKKE STARTET") ||
-    text.includes("STARTET IKKE") ||
-    text.includes("DISQUAL") ||
-    text.includes("BRUTT") ||
-    text.includes("IKKE FULLF");
-}
 
 function addClassRanks(results) {
   for (const result of results) {
@@ -3940,13 +3927,8 @@ const result = await importEqTimingFromUrls({
 }
 
 function resultStatusOrder(result) {
-  const status = String(result && result.status || "").trim().toUpperCase();
-  if (status.includes("DNS") || status.includes("DID NOT START") ||
-    status.includes("IKKE STARTET") || status.includes("STARTET IKKE")) return 3;
-  if (status.includes("DNF") || status.includes("DID NOT FINISH") ||
-    status.includes("BRUTT") || status.includes("IKKE FULLF")) return 2;
-  if (status.includes("DSQ") || status.includes("DQ") ||
-    status.includes("DISQUAL")) return 1;
+  const statusOrder = resultStatusSortOrder(result && result.status);
+  if (statusOrder > 0) return statusOrder;
   const finished = typeof result.totalMs === "number" && result.totalMs > 0 ||
     typeof result.rank === "number";
   return finished ? 0 : 1;

@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:results/app/app_theme.dart';
+import 'package:results/l10n/app_localizations.dart';
 import 'package:results/features/profile/presentation/result_history_panel.dart';
 
 void main() {
@@ -23,6 +24,9 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('nb'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: buildAppTheme(AppThemeVariant.alpineLight),
         home: const Scaffold(
           body: ResultHistoryPanel(
@@ -88,6 +92,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('nb'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: buildAppTheme(AppThemeVariant.alpineLight),
         home: Scaffold(
           body: ResultHistoryPanel(

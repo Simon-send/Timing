@@ -1700,6 +1700,7 @@ await ref.collection("runs").doc("run").collection("targets").doc("target")
       {status: "TIME", analysis: {skiTimeMs: 100000}},
       {status: "TIME", analysis: {skiTimeMs: 200000}},
       {status: "DNF", analysis: {skiTimeMs: 50000}},
+      {status: "DFQ", analysis: {skiTimeMs: 10000}},
       {status: "TIME", analysis: {skiTimeMs: null}},
     ];
 
@@ -1711,6 +1712,7 @@ await ref.collection("runs").doc("run").collection("targets").doc("target")
       1,
       1,
       3,
+      null,
       null,
       null,
     ]);

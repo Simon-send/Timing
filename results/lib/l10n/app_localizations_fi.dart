@@ -446,4 +446,37 @@ class AppLocalizationsFi extends AppLocalizations {
 
   @override
   String get settingsRetry => 'Yritä uudelleen';
+
+  @override
+  String get seasonTitle => 'Kaudet';
+
+  @override
+  String get seasonAll => 'Kaikki kaudet';
+
+  @override
+  String get seasonUnknown => 'Tuntematon kausi';
+
+  @override
+  String seasonRaceCount(int count) {
+    return '$count kilpailua';
+  }
+
+  @override
+  String seasonCompletedCount(int count) {
+    return '$count loppuun suoritettua kilpailua';
+  }
+
+  @override
+  String seasonObservationCount(int count) {
+    return '$count kelvollista havaintoa';
+  }
+
+  @override
+  String seasonUnassignedNotice(int count) {
+    return '$count kilpailulla ei ole kautta. Ne näkyvät luettelossa; sisällytä ne tilastoihin valitsemalla Kaikki kaudet.';
+  }
+
+  @override
+  String get seasonStatisticsHint =>
+      'Tilastot eivät sisällä keskeytettyjä kilpailuja eivätkä puuttuvia mittauksia.';
 }

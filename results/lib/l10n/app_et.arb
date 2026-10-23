@@ -224,5 +224,13 @@
   "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
   "couldNotReadAthleteLink": "Could not read the athlete link",
   "settingsSyncFailed": "Seadeid ei saanud salvestada ega sünkroonida. Sinu valik jääb kehtima.",
-  "settingsRetry": "Proovi uuesti"
+  "settingsRetry": "Proovi uuesti",
+  "seasonTitle": "Hooajad",
+  "seasonAll": "Kõik hooajad",
+  "seasonUnknown": "Teadmata hooaeg",
+  "seasonRaceCount": "{count} võistlust",
+  "seasonCompletedCount": "{count} lõpetatud võistlust",
+  "seasonObservationCount": "{count} kehtivat vaatlust",
+  "seasonUnassignedNotice": "{count} võistlusel puudub hooaeg. Need jäävad nimekirja; statistikas kaasamiseks vali Kõik hooajad.",
+  "seasonStatisticsHint": "Statistika ei hõlma lõpetamata võistlusi ega puuduvaid mõõtmisi."
 }

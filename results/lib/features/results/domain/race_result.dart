@@ -1,6 +1,7 @@
 import '../../../core/firebase/firestore_mappers.dart';
 import '../../../core/formatting/time_formatters.dart';
 import 'split_def.dart';
+import 'result_status.dart';
 
 const relayLegFinishSplitId = '__relay_leg_finish__';
 
@@ -384,7 +385,7 @@ class RaceResult {
   }
 
   bool get isFinished {
-    if (_resultStatusSortOrder(status) > 0) return false;
+    if (resultStatusSortOrder(status) > 0) return false;
     if (totalMs != null && totalMs! > 0) return true;
     return rank != null && totalText.trim().isNotEmpty;
   }
@@ -392,12 +393,13 @@ class RaceResult {
   /// Fullførte løpere kommer først. DNF og DNS får de to høyeste
   /// verdiene slik at de alltid havner helt nederst i resultatlister.
   int get statusSortOrder {
-    final statusOrder = _resultStatusSortOrder(status);
+    final statusOrder = resultStatusSortOrder(status);
     if (statusOrder > 0) return statusOrder;
     return isFinished ? 0 : 1;
   }
 
   String get placementLabel {
+    if (isExcludedResultStatus(status)) return status.trim();
     if (finishRank != null && finishRank! > 0) return finishRank.toString();
     if (rank != null && rank! > 0) return rank.toString();
     final normalizedStatus = status.trim();
@@ -648,7 +650,9 @@ RaceResult? relayLegRaceResult(RaceResult teamResult, int legNumber) {
             .whereType<int>()
             .join('+') ??
         '',
-    status: totalMs == null ? teamResult.status : '',
+    status: isExcludedResultStatus(teamResult.status) || totalMs == null
+        ? teamResult.status
+        : '',
     splitValues: rebasedSplits,
     entrant: ResultEntrant(
       kind: ResultEntrantKind.athlete,
@@ -1057,31 +1061,9 @@ String? _resultStatusFromSplitMaps(List<Map<String, dynamic>> splitMaps) {
         asNonEmptyString(split['statusText']);
     if (status == null) continue;
     latestStatus = status;
-    if (_resultStatusSortOrder(status) > 0) return status;
+    if (resultStatusSortOrder(status) > 0) return status;
   }
   return latestStatus;
-}
-
-int _resultStatusSortOrder(String status) {
-  final normalized = status.trim().toUpperCase();
-  if (normalized.contains('DNS') ||
-      normalized.contains('DID NOT START') ||
-      normalized.contains('IKKE STARTET') ||
-      normalized.contains('STARTET IKKE')) {
-    return 3;
-  }
-  if (normalized.contains('DNF') ||
-      normalized.contains('DID NOT FINISH') ||
-      normalized.contains('BRUTT') ||
-      normalized.contains('IKKE FULLF')) {
-    return 2;
-  }
-  if (normalized.contains('DSQ') ||
-      normalized.contains('DQ') ||
-      normalized.contains('DISQUAL')) {
-    return 1;
-  }
-  return 0;
 }
 
 int? _indexFromShootingKey(String key) {

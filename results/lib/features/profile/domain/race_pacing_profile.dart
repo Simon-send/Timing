@@ -46,6 +46,7 @@ RacePacingProfile buildRacePacingProfile(
       excludedRelayCount++;
       continue;
     }
+    if (!race.isFinished) continue;
     final curve = _curveFor(race);
     if (curve == null) continue;
     curves.add(curve);
