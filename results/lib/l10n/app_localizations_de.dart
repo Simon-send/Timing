@@ -479,4 +479,59 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get seasonStatisticsHint =>
       'Nicht beendete Rennen und fehlende Messwerte fließen nicht in die Statistik ein.';
+
+  @override
+  String get shootingSelectionTitle => 'Ausgewählte Schießeinlagen';
+
+  @override
+  String get shootingMetric => 'Messgröße';
+
+  @override
+  String get shootingSelection => 'Schießeinlagen';
+
+  @override
+  String get shootingAll => 'Alle Schießeinlagen';
+
+  @override
+  String get shootingFirstProne => '1. Liegendschießen';
+
+  @override
+  String get shootingSecondProne => '2. Liegendschießen';
+
+  @override
+  String get shootingFirstStanding => '1. Stehendschießen';
+
+  @override
+  String get shootingSecondStanding => '2. Stehendschießen';
+
+  @override
+  String get shootingHits => 'Treffer';
+
+  @override
+  String shootingValidCount(int valid, int count) {
+    return '$valid von $count Schießeinlagen mit Messwert';
+  }
+
+  @override
+  String get shootingNoMatch => 'Keine passende Schießeinlage erfasst.';
+
+  @override
+  String get shootingAmbiguous =>
+      'Fehlende frühere Schießeinlagen oder unbekannte Anschläge verhindern diese Nummerierung.';
+
+  @override
+  String get shootingIncomplete =>
+      'Einige Schießeinlagen, Anschläge oder Messwerte fehlen.';
+
+  @override
+  String get shootingRelayUnavailable =>
+      'Treffer und Fehlschüsse sind nicht verfügbar: Staffeldaten unterscheiden Nachlader nicht von Strafrunden. Schießstandzeit wird angezeigt, wenn erfasst.';
+
+  @override
+  String get shootingExcluded =>
+      'Dieses Ergebnis ist von der Statistik ausgeschlossen.';
+
+  @override
+  String get shootingRelayPositionsUnavailable =>
+      'Anschläge sind für ganze Staffelteams nicht verfügbar. Wähle Alle Schießeinlagen für erfasste Schießstandzeiten.';
 }

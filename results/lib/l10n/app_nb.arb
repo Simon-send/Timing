@@ -232,5 +232,31 @@
   "seasonCompletedCount": "{count} fullførte løp",
   "seasonObservationCount": "{count} gyldige observasjoner",
   "seasonUnassignedNotice": "{count} løp har ukjent sesong. De vises i listen; velg Alle sesonger for å ta dem med i statistikken.",
-  "seasonStatisticsHint": "Statistikk utelater ikke-fullførte løp og manglende målinger."
+  "seasonStatisticsHint": "Statistikk utelater ikke-fullførte løp og manglende målinger.",
+  "shootingSelectionTitle": "Valgte skytinger",
+  "shootingMetric": "Måltall",
+  "shootingSelection": "Skytinger",
+  "shootingAll": "Alle skytinger",
+  "shootingFirstProne": "1. ligg",
+  "shootingSecondProne": "2. ligg",
+  "shootingFirstStanding": "1. stå",
+  "shootingSecondStanding": "2. stå",
+  "shootingHits": "Treff",
+  "shootingValidCount": "{valid} av {count} skytinger har en måling",
+  "@shootingValidCount": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shootingNoMatch": "Ingen tilsvarende skyting er registrert.",
+  "shootingAmbiguous": "Tidligere skytinger mangler eller har ukjent stilling. Nummeret kan ikke fastslås.",
+  "shootingIncomplete": "Noen skytinger, stillinger eller målinger mangler.",
+  "shootingRelayUnavailable": "Treff og bom er utilgjengelig: stafettdata skiller ikke reserveskudd fra strafferunder. Standplasstid vises når den er registrert.",
+  "shootingExcluded": "Dette resultatet er utelukket fra statistikken.",
+  "shootingRelayPositionsUnavailable": "Skytestillinger er utilgjengelig for hele stafettlag. Velg Alle skytinger for registrerte standplasstider."
 }

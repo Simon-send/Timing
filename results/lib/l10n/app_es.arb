@@ -232,5 +232,31 @@
   "seasonCompletedCount": "{count} carreras completadas",
   "seasonObservationCount": "{count} observaciones válidas",
   "seasonUnassignedNotice": "{count} carreras no tienen temporada asignada. Siguen en la lista; elige Todas las temporadas para incluirlas en las estadísticas.",
-  "seasonStatisticsHint": "Las estadísticas excluyen las carreras no completadas y las mediciones ausentes."
+  "seasonStatisticsHint": "Las estadísticas excluyen las carreras no completadas y las mediciones ausentes.",
+  "shootingSelectionTitle": "Tandas de tiro seleccionadas",
+  "shootingMetric": "Medida",
+  "shootingSelection": "Tandas de tiro",
+  "shootingAll": "Todas las tandas",
+  "shootingFirstProne": "1.ª tumbado",
+  "shootingSecondProne": "2.ª tumbado",
+  "shootingFirstStanding": "1.ª de pie",
+  "shootingSecondStanding": "2.ª de pie",
+  "shootingHits": "Aciertos",
+  "shootingValidCount": "{valid} de {count} tandas tienen una medición",
+  "@shootingValidCount": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shootingNoMatch": "No hay ninguna tanda correspondiente registrada.",
+  "shootingAmbiguous": "Faltan tandas anteriores o se desconoce su posición. No se puede determinar este número.",
+  "shootingIncomplete": "Faltan algunas tandas, posiciones o mediciones.",
+  "shootingRelayUnavailable": "Aciertos y fallos no disponibles: los datos de relevos no distinguen las balas de reserva de las vueltas de penalización. Se muestra el tiempo en el campo de tiro si está registrado.",
+  "shootingExcluded": "Este resultado se excluye de las estadísticas.",
+  "shootingRelayPositionsUnavailable": "Las posiciones de tiro no están disponibles para equipos de relevos completos. Elige Todas las tandas para ver los tiempos registrados en el campo de tiro."
 }

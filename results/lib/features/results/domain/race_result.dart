@@ -207,6 +207,7 @@ class RaceResult {
     this.entrant,
     this.relayMembers = const [],
     this.biathlon,
+    this.isRelay = false,
   });
 
   factory RaceResult.fromMap(String id, Map<String, dynamic> data) {
@@ -338,6 +339,9 @@ class RaceResult {
       ),
       relayMembers: relayMembers,
       relayLegBiathlon: relayLegBiathlon,
+      isRelay:
+          asBool(data['isRelay']) == true ||
+          entrantKind == ResultEntrantKind.team,
       biathlon: hasBiathlon
           ? BiathlonAnalysis.fromMaps(analysis, shootingData, biathlonLaps)
           : null,
@@ -367,6 +371,7 @@ class RaceResult {
   final ResultEntrant? entrant;
   final List<RelayMember> relayMembers;
   final BiathlonAnalysis? biathlon;
+  final bool isRelay;
 
   String get detailResultId => sourceResultId ?? id;
 
@@ -632,6 +637,7 @@ RaceResult? relayLegRaceResult(RaceResult teamResult, int legNumber) {
     id: viewId,
     sourceResultId: teamResult.detailResultId,
     relayLegNumber: legNumber,
+    isRelay: true,
     relayOverallRank: teamResult.finishRank ?? teamResult.rank,
     relayTeamName: teamName,
     stageId: teamResult.stageId,
@@ -703,6 +709,19 @@ BiathlonAnalysis? _relayLegBiathlon(
   final indexes = shootingIndexes.toSet();
   final passes = teamAnalysis.passes
       .where((pass) => indexes.contains(pass.index))
+      // Legacy team positions were synthesized from global shooting indices.
+      // Keep the measurements without trusting those positions inside a leg.
+      // Persisted, locally scoped leg analysis is selected before this fallback.
+      .map(
+        (pass) => ShootingPass(
+          index: pass.index,
+          rangeMs: pass.rangeMs,
+          misses: pass.misses,
+          position: '',
+          penaltyMs: pass.penaltyMs,
+          rangeRank: pass.rangeRank,
+        ),
+      )
       .toList(growable: false);
   if (passes.isEmpty) return null;
 
@@ -880,6 +899,7 @@ class BiathlonAnalysis {
     required this.penaltyRank,
     required this.passes,
     this.laps = const [],
+    this.expectedShootingCount,
   });
 
   const BiathlonAnalysis.empty()
@@ -893,7 +913,8 @@ class BiathlonAnalysis {
       shootingRank = null,
       penaltyRank = null,
       passes = const [],
-      laps = const [];
+      laps = const [],
+      expectedShootingCount = null;
 
   factory BiathlonAnalysis.fromMaps(
     Map<String, dynamic> analysis,
@@ -908,7 +929,8 @@ class BiathlonAnalysis {
               return ShootingPass.fromMap(entry.key, data);
             })
             .whereType<ShootingPass>()
-            .where((pass) => pass.index > 0 && pass.hasData)
+            // A pass with missing measurements still fixes the race order.
+            .where((pass) => pass.index > 0)
             .toList()
           ..sort((a, b) => a.index - b.index);
     final parsedLaps =
@@ -947,6 +969,7 @@ class BiathlonAnalysis {
           asInt(analysis['rangeRank']) ??
           asInt(analysis['shootingRank']),
       penaltyRank: asInt(analysis['penaltyRank']),
+      expectedShootingCount: asInt(analysis['shootingCount']),
       passes: passes,
       laps: parsedLaps,
     );
@@ -963,6 +986,7 @@ class BiathlonAnalysis {
   final int? penaltyRank;
   final List<ShootingPass> passes;
   final List<BiathlonLap> laps;
+  final int? expectedShootingCount;
 
   bool get hasData {
     return skiTimeMs != null ||

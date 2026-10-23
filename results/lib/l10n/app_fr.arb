@@ -232,5 +232,31 @@
   "seasonCompletedCount": "{count} courses terminées",
   "seasonObservationCount": "{count} observations valides",
   "seasonUnassignedNotice": "{count} courses n’ont pas de saison attribuée. Elles restent dans la liste ; choisissez Toutes les saisons pour les inclure dans les statistiques.",
-  "seasonStatisticsHint": "Les statistiques excluent les courses non terminées et les mesures manquantes."
+  "seasonStatisticsHint": "Les statistiques excluent les courses non terminées et les mesures manquantes.",
+  "shootingSelectionTitle": "Tirs sélectionnés",
+  "shootingMetric": "Mesure",
+  "shootingSelection": "Tirs",
+  "shootingAll": "Tous les tirs",
+  "shootingFirstProne": "1er couché",
+  "shootingSecondProne": "2e couché",
+  "shootingFirstStanding": "1er debout",
+  "shootingSecondStanding": "2e debout",
+  "shootingHits": "Cibles touchées",
+  "shootingValidCount": "{valid} tirs sur {count} ont une mesure",
+  "@shootingValidCount": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shootingNoMatch": "Aucun tir correspondant enregistré.",
+  "shootingAmbiguous": "Des tirs précédents manquent ou leur position est inconnue. Ce numéro ne peut pas être déterminé.",
+  "shootingIncomplete": "Certains tirs, positions ou mesures manquent.",
+  "shootingRelayUnavailable": "Les touches et les ratés sont indisponibles : les données de relais ne distinguent pas les balles de pioche des tours de pénalité. Le temps au pas de tir est affiché si enregistré.",
+  "shootingExcluded": "Ce résultat est exclu des statistiques.",
+  "shootingRelayPositionsUnavailable": "Les positions de tir sont indisponibles pour une équipe de relais entière. Choisissez Tous les tirs pour les temps au pas de tir enregistrés."
 }

@@ -1,5 +1,6 @@
 import '../../../core/firebase/firestore_mappers.dart';
 import '../../results/domain/result_status.dart';
+import '../../results/domain/shooting_selection.dart';
 import 'biathlon_aggregate_profile.dart';
 import 'biathlon_comparison.dart';
 
@@ -124,6 +125,18 @@ class AthleteRace {
   final BiathlonTopHalfBenchmark? biathlonBenchmark;
   final BiathlonAggregateProfile? biathlonAllProfile;
   final BiathlonAggregateProfile? biathlonTopHalfProfile;
+
+  /// Call on the selected season scope; nonfinishers never supply observations.
+  ShootingSelectionResult? shootingSelection(
+    ShootingMetric metric,
+    ShootingSelection selection,
+  ) => isFinished
+      ? biathlonMetrics?.shootingSelection(
+          metric,
+          selection,
+          isRelay: isRelay || (biathlonMetrics?.isRelay ?? false),
+        )
+      : null;
 
   BiathlonAggregateProfile? referenceFor(BiathlonReferenceGroup group) {
     if (group == BiathlonReferenceGroup.all) return biathlonAllProfile;

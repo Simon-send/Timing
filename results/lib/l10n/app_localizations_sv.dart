@@ -478,4 +478,58 @@ class AppLocalizationsSv extends AppLocalizations {
   @override
   String get seasonStatisticsHint =>
       'Statistiken utesluter ej fullföljda lopp och saknade mätvärden.';
+
+  @override
+  String get shootingSelectionTitle => 'Valda skjutningar';
+
+  @override
+  String get shootingMetric => 'Mått';
+
+  @override
+  String get shootingSelection => 'Skjutningar';
+
+  @override
+  String get shootingAll => 'Alla skjutningar';
+
+  @override
+  String get shootingFirstProne => '1:a liggande';
+
+  @override
+  String get shootingSecondProne => '2:a liggande';
+
+  @override
+  String get shootingFirstStanding => '1:a stående';
+
+  @override
+  String get shootingSecondStanding => '2:a stående';
+
+  @override
+  String get shootingHits => 'Träffar';
+
+  @override
+  String shootingValidCount(int valid, int count) {
+    return '$valid av $count skjutningar har ett mätvärde';
+  }
+
+  @override
+  String get shootingNoMatch => 'Ingen motsvarande skjutning är registrerad.';
+
+  @override
+  String get shootingAmbiguous =>
+      'Tidigare skjutningar saknas eller har okänd ställning. Numret kan inte fastställas.';
+
+  @override
+  String get shootingIncomplete =>
+      'Vissa skjutningar, ställningar eller mätvärden saknas.';
+
+  @override
+  String get shootingRelayUnavailable =>
+      'Träffar och bom är inte tillgängliga: stafettdata skiljer inte extraskott från straffrundor. Skjutvallstid visas när den finns.';
+
+  @override
+  String get shootingExcluded => 'Detta resultat ingår inte i statistiken.';
+
+  @override
+  String get shootingRelayPositionsUnavailable =>
+      'Skjutställningar är inte tillgängliga för hela stafettlag. Välj Alla skjutningar för registrerade skjutvallstider.';
 }

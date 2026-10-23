@@ -232,5 +232,31 @@
   "seasonCompletedCount": "{count} loppuun suoritettua kilpailua",
   "seasonObservationCount": "{count} kelvollista havaintoa",
   "seasonUnassignedNotice": "{count} kilpailulla ei ole kautta. Ne näkyvät luettelossa; sisällytä ne tilastoihin valitsemalla Kaikki kaudet.",
-  "seasonStatisticsHint": "Tilastot eivät sisällä keskeytettyjä kilpailuja eivätkä puuttuvia mittauksia."
+  "seasonStatisticsHint": "Tilastot eivät sisällä keskeytettyjä kilpailuja eivätkä puuttuvia mittauksia.",
+  "shootingSelectionTitle": "Valitut ammunnat",
+  "shootingMetric": "Mittari",
+  "shootingSelection": "Ammunnat",
+  "shootingAll": "Kaikki ammunnat",
+  "shootingFirstProne": "1. makuu",
+  "shootingSecondProne": "2. makuu",
+  "shootingFirstStanding": "1. pysty",
+  "shootingSecondStanding": "2. pysty",
+  "shootingHits": "Osumat",
+  "shootingValidCount": "{valid} ammunnalla {count}:sta on mittaustulos",
+  "@shootingValidCount": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shootingNoMatch": "Vastaavaa ammuntaa ei ole kirjattu.",
+  "shootingAmbiguous": "Aikaisempia ammuntoja puuttuu tai niiden asento on tuntematon. Järjestysnumeroa ei voi määrittää.",
+  "shootingIncomplete": "Joitakin ammuntoja, asentoja tai mittauksia puuttuu.",
+  "shootingRelayUnavailable": "Osumia ja ohilaukauksia ei ole saatavilla: viestitiedot eivät erota varapatruunoita sakkokierroksista. Ampumapaikka-aika näytetään, jos se on kirjattu.",
+  "shootingExcluded": "Tämä tulos on jätetty tilastojen ulkopuolelle.",
+  "shootingRelayPositionsUnavailable": "Ampuma-asentoja ei ole saatavilla koko viestijoukkueelle. Valitse Kaikki ammunnat nähdäksesi kirjatut ampumapaikka-ajat."
 }

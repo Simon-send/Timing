@@ -478,4 +478,58 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get seasonStatisticsHint =>
       'Les statistiques excluent les courses non terminées et les mesures manquantes.';
+
+  @override
+  String get shootingSelectionTitle => 'Tirs sélectionnés';
+
+  @override
+  String get shootingMetric => 'Mesure';
+
+  @override
+  String get shootingSelection => 'Tirs';
+
+  @override
+  String get shootingAll => 'Tous les tirs';
+
+  @override
+  String get shootingFirstProne => '1er couché';
+
+  @override
+  String get shootingSecondProne => '2e couché';
+
+  @override
+  String get shootingFirstStanding => '1er debout';
+
+  @override
+  String get shootingSecondStanding => '2e debout';
+
+  @override
+  String get shootingHits => 'Cibles touchées';
+
+  @override
+  String shootingValidCount(int valid, int count) {
+    return '$valid tirs sur $count ont une mesure';
+  }
+
+  @override
+  String get shootingNoMatch => 'Aucun tir correspondant enregistré.';
+
+  @override
+  String get shootingAmbiguous =>
+      'Des tirs précédents manquent ou leur position est inconnue. Ce numéro ne peut pas être déterminé.';
+
+  @override
+  String get shootingIncomplete =>
+      'Certains tirs, positions ou mesures manquent.';
+
+  @override
+  String get shootingRelayUnavailable =>
+      'Les touches et les ratés sont indisponibles : les données de relais ne distinguent pas les balles de pioche des tours de pénalité. Le temps au pas de tir est affiché si enregistré.';
+
+  @override
+  String get shootingExcluded => 'Ce résultat est exclu des statistiques.';
+
+  @override
+  String get shootingRelayPositionsUnavailable =>
+      'Les positions de tir sont indisponibles pour une équipe de relais entière. Choisissez Tous les tirs pour les temps au pas de tir enregistrés.';
 }

@@ -477,4 +477,58 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get seasonStatisticsHint =>
       'Статистика не включает незавершённые гонки и отсутствующие измерения.';
+
+  @override
+  String get shootingSelectionTitle => 'Выбранные стрельбы';
+
+  @override
+  String get shootingMetric => 'Показатель';
+
+  @override
+  String get shootingSelection => 'Стрельбы';
+
+  @override
+  String get shootingAll => 'Все стрельбы';
+
+  @override
+  String get shootingFirstProne => '1-я лёжа';
+
+  @override
+  String get shootingSecondProne => '2-я лёжа';
+
+  @override
+  String get shootingFirstStanding => '1-я стоя';
+
+  @override
+  String get shootingSecondStanding => '2-я стоя';
+
+  @override
+  String get shootingHits => 'Попадания';
+
+  @override
+  String shootingValidCount(int valid, int count) {
+    return 'Из $count стрельб измерения есть для $valid';
+  }
+
+  @override
+  String get shootingNoMatch => 'Соответствующая стрельба не записана.';
+
+  @override
+  String get shootingAmbiguous =>
+      'Предыдущие стрельбы отсутствуют или их положение неизвестно. Порядковый номер определить нельзя.';
+
+  @override
+  String get shootingIncomplete =>
+      'Некоторые стрельбы, положения или измерения отсутствуют.';
+
+  @override
+  String get shootingRelayUnavailable =>
+      'Попадания и промахи недоступны: данные эстафеты не отличают дополнительные патроны от штрафных кругов. Время на рубеже показано, если записано.';
+
+  @override
+  String get shootingExcluded => 'Этот результат исключён из статистики.';
+
+  @override
+  String get shootingRelayPositionsUnavailable =>
+      'Положения стрельбы недоступны для всей эстафетной команды. Выберите «Все стрельбы», чтобы увидеть записанное время на рубеже.';
 }
