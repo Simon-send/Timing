@@ -17,6 +17,8 @@ import '../../results/presentation/result_locations.dart';
 import '../../settings/presentation/settings_menu.dart';
 import '../data/athlete_profile_repository.dart';
 import '../domain/athlete_profile.dart';
+import '../domain/athlete_season.dart';
+import 'athlete_season_selector.dart';
 import 'biathlon_comparison_panel.dart';
 import 'race_pacing_profile_panel.dart';
 import 'result_history_panel.dart';
@@ -122,6 +124,7 @@ class _LoggedInMeContent extends ConsumerWidget {
             );
             final events = ref.watch(eventsProvider).asData?.value ?? const [];
             return _LinkedAthleteContent(
+              key: ValueKey(profile.athleteId),
               user: user,
               profile: profile,
               races: races,
@@ -162,6 +165,7 @@ class _SignedOutPanel extends StatelessWidget {
 
 class _LinkedAthleteContent extends ConsumerWidget {
   const _LinkedAthleteContent({
+    super.key,
     required this.user,
     required this.profile,
     required this.races,
@@ -224,53 +228,11 @@ class _LinkedAthleteContent extends ConsumerWidget {
                 ),
               ),
             ),
-            data: (races) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (races.isNotEmpty) ...[
-                  ShellPanel(
-                    child: ResultHistoryPanel(
-                      entries: _historyEntries(profile, races, events),
-                      onEntryTap: (entry) {
-                        if (entry.eventId.isEmpty ||
-                            entry.classId.isEmpty ||
-                            entry.resultId.isEmpty) {
-                          return;
-                        }
-                        context.go(
-                          athleteLocation(
-                            eventId: entry.eventId,
-                            classId: entry.classId,
-                            resultId: entry.resultId,
-                            stageId: entry.stageId,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  if (races.any(
-                    (race) => race.isCompletedIndividualBiathlonRace,
-                  )) ...[
-                    ShellPanel(
-                      child: BiathlonComparisonPanel(
-                        races: races,
-                        events: events,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
-                  ShellPanel(child: RacePacingProfilePanel(races: races)),
-                  const SizedBox(height: 14),
-                ],
-                ShellPanel(
-                  child: _RaceList(
-                    profile: profile,
-                    races: races,
-                    events: events,
-                  ),
-                ),
-              ],
+            data: (races) => AthleteSeasonResults(
+              key: ValueKey(profile.athleteId),
+              profile: profile,
+              races: races,
+              events: events,
             ),
           ),
         ],
@@ -489,6 +451,99 @@ class _ProfileFact extends StatelessWidget {
   }
 }
 
+/// Owns one selection for the complete history, shared by rows and analysis.
+class AthleteSeasonResults extends StatefulWidget {
+  const AthleteSeasonResults({
+    super.key,
+    required this.profile,
+    required this.races,
+    required this.events,
+  });
+
+  final AthleteProfile profile;
+  final List<AthleteRace> races;
+  final List<ResultEvent> events;
+
+  @override
+  State<AthleteSeasonResults> createState() => _AthleteSeasonResultsState();
+}
+
+class _AthleteSeasonResultsState extends State<AthleteSeasonResults> {
+  AthleteSeasonSelection _selection = const AthleteSeasonSelection.all();
+
+  @override
+  Widget build(BuildContext context) {
+    final dataset = AthleteSeasonDataset(
+      races: widget.races,
+      events: widget.events,
+    );
+    final scope = dataset.select(_selection);
+    final selectedRaces = scope.races;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ShellPanel(
+          child: AthleteSeasonSelector(
+            dataset: dataset,
+            selection: _selection,
+            onChanged: (selection) => setState(() => _selection = selection),
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (selectedRaces.isNotEmpty) ...[
+          ShellPanel(
+            child: ResultHistoryPanel(
+              entries: _historyEntries(
+                widget.profile,
+                scope.statisticalRaces,
+                widget.events,
+              ),
+              onEntryTap: (entry) {
+                if (entry.eventId.isEmpty ||
+                    entry.classId.isEmpty ||
+                    entry.resultId.isEmpty) {
+                  return;
+                }
+                context.go(
+                  athleteLocation(
+                    eventId: entry.eventId,
+                    classId: entry.classId,
+                    resultId: entry.resultId,
+                    stageId: entry.stageId,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (scope.statisticalRaces.any(
+            (race) => race.isCompletedIndividualBiathlonRace,
+          )) ...[
+            ShellPanel(
+              child: BiathlonComparisonPanel(
+                races: scope.statisticalRaces,
+                events: widget.events,
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+          ShellPanel(
+            child: RacePacingProfilePanel(races: scope.statisticalRaces),
+          ),
+          const SizedBox(height: 14),
+        ],
+        ShellPanel(
+          child: _RaceList(
+            profile: widget.profile,
+            races: selectedRaces,
+            events: widget.events,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _RaceList extends StatelessWidget {
   const _RaceList({
     required this.profile,
@@ -523,7 +578,15 @@ class _RaceList extends StatelessWidget {
         const SizedBox(height: 12),
         for (var index = 0; index < displayedRaces.length; index++) ...[
           if (index > 0) const SizedBox(height: 8),
-          _RaceTile(displayedRace: displayedRaces[index]),
+          _RaceTile(
+            key: ValueKey<(String, String, String?, String)>((
+              displayedRaces[index].race.eventId,
+              displayedRaces[index].race.classId,
+              displayedRaces[index].race.stageId,
+              displayedRaces[index].race.resultId,
+            )),
+            displayedRace: displayedRaces[index],
+          ),
         ],
       ],
     );
@@ -531,7 +594,7 @@ class _RaceList extends StatelessWidget {
 }
 
 class _RaceTile extends StatelessWidget {
-  const _RaceTile({required this.displayedRace});
+  const _RaceTile({super.key, required this.displayedRace});
 
   final _DisplayedRace displayedRace;
 
@@ -595,6 +658,15 @@ class _RaceTile extends StatelessWidget {
                       displayedRace.subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.mutedText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      displayedRace.season?.label ??
+                          AppLocalizations.of(context).seasonUnknown,
                       style: TextStyle(
                         color: palette.mutedText,
                         fontWeight: FontWeight.w700,
@@ -972,12 +1044,14 @@ class _DisplayedRace {
     required this.eventName,
     required this.subtitle,
     required this.eventDate,
+    required this.season,
   });
 
   final AthleteRace race;
   final String eventName;
   final String subtitle;
   final DateTime? eventDate;
+  final AthleteSeason? season;
 }
 
 List<_DisplayedRace> _displayedRaces(
@@ -1018,6 +1092,7 @@ List<_DisplayedRace> _displayedRaces(
           eventName: eventName,
           subtitle: subtitleParts.join(' - '),
           eventDate: event?.date,
+          season: seasonFor(sportName: event?.sportName, date: event?.date),
         );
       }(),
   ]..sort(_compareDisplayedRaces);

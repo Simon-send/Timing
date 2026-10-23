@@ -177,7 +177,8 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
       (path) =>
           _firestore.collection(path).where('athleteId', isEqualTo: athleteId),
     );
-    await for (final docs in _combineResultQueries(queries.toList())) {
+    // Delegate cancellation to the live queries, including during disposal.
+    yield* _combineResultQueries(queries.toList()).asyncMap((docs) async {
       final classMetadata = await _classMetadataFor(docs);
       final races =
           docs
@@ -201,8 +202,8 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
               )
               .toList()
             ..sort(_compareRacesDesc);
-      yield races;
-    }
+      return races;
+    });
   }
 
   Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>

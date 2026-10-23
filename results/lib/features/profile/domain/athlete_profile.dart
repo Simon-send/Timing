@@ -1,4 +1,5 @@
 import '../../../core/firebase/firestore_mappers.dart';
+import '../../results/domain/result_status.dart';
 import 'biathlon_aggregate_profile.dart';
 import 'biathlon_comparison.dart';
 
@@ -140,13 +141,16 @@ class AthleteRace {
     if (isRelay || biathlonMetrics == null || (totalMs ?? 0) <= 0) {
       return false;
     }
-    final upperStatus = status.trim().toUpperCase();
-    return !RegExp(
-      r'\b(DNS|DNF|DSQ|DQ|NC|NQ|DID NOT START|DID NOT FINISH|DISQUALIFIED|BRUTT|IKKE STARTET|IKKE FULLFØRT|DISKVALIFISERT)\b',
-    ).hasMatch(upperStatus);
+    return isFinished;
   }
 
+  bool get isFinished =>
+      !isExcludedResultStatus(status) &&
+      ((totalMs ?? 0) > 0 ||
+          ((finishRank ?? rank ?? 0) > 0 && totalText.trim().isNotEmpty));
+
   String get placementLabel {
+    if (isExcludedResultStatus(status)) return status.trim();
     if (finishRank != null && finishRank! > 0) return finishRank.toString();
     if (rank != null && rank! > 0) return rank.toString();
     final statusText = status.trim();

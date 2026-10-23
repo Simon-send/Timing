@@ -224,5 +224,13 @@
   "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
   "couldNotReadAthleteLink": "Could not read the athlete link",
   "settingsSyncFailed": "Не удалось сохранить или синхронизировать настройки. Ваш выбор остаётся выбранным.",
-  "settingsRetry": "Повторить"
+  "settingsRetry": "Повторить",
+  "seasonTitle": "Сезоны",
+  "seasonAll": "Все сезоны",
+  "seasonUnknown": "Неизвестный сезон",
+  "seasonRaceCount": "Гонок: {count}",
+  "seasonCompletedCount": "Завершённых гонок: {count}",
+  "seasonObservationCount": "Достоверных наблюдений: {count}",
+  "seasonUnassignedNotice": "У {count} гонок не определён сезон. Они остаются в списке; выберите Все сезоны, чтобы включить их в статистику.",
+  "seasonStatisticsHint": "Статистика не включает незавершённые гонки и отсутствующие измерения."
 }

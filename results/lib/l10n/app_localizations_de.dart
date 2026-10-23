@@ -446,4 +446,37 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsRetry => 'Erneut versuchen';
+
+  @override
+  String get seasonTitle => 'Saisons';
+
+  @override
+  String get seasonAll => 'Alle Saisons';
+
+  @override
+  String get seasonUnknown => 'Saison unbekannt';
+
+  @override
+  String seasonRaceCount(int count) {
+    return '$count Rennen';
+  }
+
+  @override
+  String seasonCompletedCount(int count) {
+    return '$count beendete Rennen';
+  }
+
+  @override
+  String seasonObservationCount(int count) {
+    return '$count gültige Beobachtungen';
+  }
+
+  @override
+  String seasonUnassignedNotice(int count) {
+    return '$count Rennen haben keine zugeordnete Saison. Sie bleiben in der Liste; wählen Sie Alle Saisons, um sie in die Statistik aufzunehmen.';
+  }
+
+  @override
+  String get seasonStatisticsHint =>
+      'Nicht beendete Rennen und fehlende Messwerte fließen nicht in die Statistik ein.';
 }

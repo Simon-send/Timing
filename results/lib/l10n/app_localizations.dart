@@ -899,6 +899,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Try again'**
   String get settingsRetry;
+
+  /// No description provided for @seasonTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Seasons'**
+  String get seasonTitle;
+
+  /// No description provided for @seasonAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All seasons'**
+  String get seasonAll;
+
+  /// No description provided for @seasonUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned season'**
+  String get seasonUnknown;
+
+  /// No description provided for @seasonRaceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} races'**
+  String seasonRaceCount(int count);
+
+  /// No description provided for @seasonCompletedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} completed races'**
+  String seasonCompletedCount(int count);
+
+  /// No description provided for @seasonObservationCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} valid observations'**
+  String seasonObservationCount(int count);
+
+  /// No description provided for @seasonUnassignedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} races have no assigned season. They stay in the list; select All seasons to include them in statistics.'**
+  String seasonUnassignedNotice(int count);
+
+  /// No description provided for @seasonStatisticsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Statistics exclude non-finishers and missing measurements.'**
+  String get seasonStatisticsHint;
 }
 
 class _AppLocalizationsDelegate

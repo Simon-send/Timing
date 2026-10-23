@@ -8,6 +8,23 @@ import 'package:results/features/profile/domain/race_pacing_profile.dart';
 import 'package:results/features/profile/presentation/race_pacing_profile_panel.dart';
 
 void main() {
+  for (final status in ['DNF', 'DNS', 'DFQ', 'DSQ', 'DQ']) {
+    test('excludes all partial splits from $status races', () {
+      final profile = buildRacePacingProfile([
+        _race(resultId: 'valid', ranks: const [(500, 10)], finishRank: 5),
+        _race(
+          resultId: 'excluded',
+          ranks: const [(250, 90), (500, 95)],
+          finishRank: 99,
+          status: status,
+        ),
+      ], intervalCount: 2);
+      expect(profile.raceCount, 1);
+      expect(profile.splitCount, 1);
+      expect(profile.samples.first.averageRankFraction, 0.1);
+    });
+  }
+
   test('normalizes all splits and averages races on a common time axis', () {
     final profile = buildRacePacingProfile([
       _race(
@@ -117,6 +134,7 @@ AthleteRace _race({
   required int finishRank,
   List<int?>? splitParticipantCounts,
   bool isRelay = false,
+  String status = '',
 }) {
   return AthleteRace(
     eventId: 'event',
@@ -132,7 +150,7 @@ AthleteRace _race({
     finishRank: finishRank,
     totalText: '16:40',
     shooting: '',
-    status: '',
+    status: status,
     participantCount: 100,
     totalMs: 1000,
     isRelay: isRelay,

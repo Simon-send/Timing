@@ -46,7 +46,7 @@ void main() {
     });
   }
 
-  for (final status in ['DNF', 'DNS', 'DSQ']) {
+  for (final status in ['DNF', 'DNS', 'DFQ', 'DSQ', 'DQ']) {
     test('nonfinishers have no finish-rank comparison: $status', () {
       final own = BiathlonRaceMetrics.fromResult(
         RaceResult.fromMap('nonfinisher', {
@@ -163,7 +163,8 @@ void main() {
             withBenchmark: false,
             ownMetrics: const BiathlonRaceMetrics(totalHitPercent: 40),
           ),
-          _race('dns', status: 'DNS'),
+          for (final status in ['DNF', 'DNS', 'DFQ', 'DSQ', 'DQ'])
+            _race(status.toLowerCase(), status: status),
           _race('relay', isRelay: true),
         ]),
       );

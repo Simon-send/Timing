@@ -449,6 +449,19 @@ void main() {
     expect(leg.shooting, '1+1');
   });
 
+  for (final status in ['DNF', 'DNS', 'DFQ', 'DSQ', 'DQ']) {
+    test('$status cannot become finished through partial times or ranks', () {
+      final result = RaceResult.fromMap('partial', {
+        'status': status,
+        'rank': 1,
+        'totalMs': 60000,
+        'totalText': '1:00',
+      });
+      expect(result.isFinished, isFalse);
+      expect(result.placementLabel, status);
+    });
+  }
+
   test('reads DNF and DNS from split data and sorts them last', () {
     final finished = RaceResult.fromMap('finished', {
       'rank': 3,

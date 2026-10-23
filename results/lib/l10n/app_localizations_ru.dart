@@ -444,4 +444,37 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get settingsRetry => 'Повторить';
+
+  @override
+  String get seasonTitle => 'Сезоны';
+
+  @override
+  String get seasonAll => 'Все сезоны';
+
+  @override
+  String get seasonUnknown => 'Неизвестный сезон';
+
+  @override
+  String seasonRaceCount(int count) {
+    return 'Гонок: $count';
+  }
+
+  @override
+  String seasonCompletedCount(int count) {
+    return 'Завершённых гонок: $count';
+  }
+
+  @override
+  String seasonObservationCount(int count) {
+    return 'Достоверных наблюдений: $count';
+  }
+
+  @override
+  String seasonUnassignedNotice(int count) {
+    return 'У $count гонок не определён сезон. Они остаются в списке; выберите Все сезоны, чтобы включить их в статистику.';
+  }
+
+  @override
+  String get seasonStatisticsHint =>
+      'Статистика не включает незавершённые гонки и отсутствующие измерения.';
 }

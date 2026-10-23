@@ -224,5 +224,13 @@
   "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
   "couldNotReadAthleteLink": "Could not read the athlete link",
   "settingsSyncFailed": "Die Einstellungen konnten nicht gespeichert oder synchronisiert werden. Ihre Auswahl bleibt bestehen.",
-  "settingsRetry": "Erneut versuchen"
+  "settingsRetry": "Erneut versuchen",
+  "seasonTitle": "Saisons",
+  "seasonAll": "Alle Saisons",
+  "seasonUnknown": "Saison unbekannt",
+  "seasonRaceCount": "{count} Rennen",
+  "seasonCompletedCount": "{count} beendete Rennen",
+  "seasonObservationCount": "{count} gültige Beobachtungen",
+  "seasonUnassignedNotice": "{count} Rennen haben keine zugeordnete Saison. Sie bleiben in der Liste; wählen Sie Alle Saisons, um sie in die Statistik aufzunehmen.",
+  "seasonStatisticsHint": "Nicht beendete Rennen und fehlende Messwerte fließen nicht in die Statistik ein."
 }

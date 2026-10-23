@@ -445,4 +445,37 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get settingsRetry => 'Försök igen';
+
+  @override
+  String get seasonTitle => 'Säsonger';
+
+  @override
+  String get seasonAll => 'Alla säsonger';
+
+  @override
+  String get seasonUnknown => 'Okänd säsong';
+
+  @override
+  String seasonRaceCount(int count) {
+    return '$count lopp';
+  }
+
+  @override
+  String seasonCompletedCount(int count) {
+    return '$count fullföljda lopp';
+  }
+
+  @override
+  String seasonObservationCount(int count) {
+    return '$count giltiga observationer';
+  }
+
+  @override
+  String seasonUnassignedNotice(int count) {
+    return '$count lopp saknar säsong. De visas i listan; välj Alla säsonger för att ta med dem i statistiken.';
+  }
+
+  @override
+  String get seasonStatisticsHint =>
+      'Statistiken utesluter ej fullföljda lopp och saknade mätvärden.';
 }

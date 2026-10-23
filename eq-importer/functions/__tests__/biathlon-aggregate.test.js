@@ -61,10 +61,14 @@ test("finish placement is averaged without treating display order as a rank", ()
 test("invalid statuses and teams never enter the cohort", () => {
   const rows = [result("ok", 1000), result("dns", 0, {status: "DNS"}),
     result("dnf", 300, {status: "DNF"}),
+    result("dfq", 250, {status: "DFQ"}),
     result("dsq", 200, {status: "DSQ"}),
     result("dq", 100, {status: "DQ"}),
     result("team", 50, {isRelay: true})];
   expect(buildBiathlonAggregates(rows, defs).all.finishersCount).toBe(1);
+  expect(buildBiathlonAggregates(rows, defs).all.metrics.finishTimeMs)
+      .toEqual({mean: 1000, count: 1});
+  expect(buildBiathlonAggregates(rows, defs).topHalf.cohortCount).toBe(1);
   expect(buildBiathlonAggregates(rows.slice(1), defs)).toBeNull();
 });
 

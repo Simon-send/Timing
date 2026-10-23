@@ -224,5 +224,41 @@
   "@athleteLinked": {"placeholders": {"name": {"type": "String"}}},
   "couldNotReadAthleteLink": "Could not read the athlete link",
   "settingsSyncFailed": "Could not save or sync your settings. Your choice is still selected.",
-  "settingsRetry": "Try again"
+  "settingsRetry": "Try again",
+  "seasonTitle": "Seasons",
+  "seasonAll": "All seasons",
+  "seasonUnknown": "Unassigned season",
+  "seasonRaceCount": "{count} races",
+  "seasonCompletedCount": "{count} completed races",
+  "seasonObservationCount": "{count} valid observations",
+  "seasonUnassignedNotice": "{count} races have no assigned season. They stay in the list; select All seasons to include them in statistics.",
+  "seasonStatisticsHint": "Statistics exclude non-finishers and missing measurements.",
+  "@seasonRaceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@seasonCompletedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@seasonObservationCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@seasonUnassignedNotice": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }
