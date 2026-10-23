@@ -709,6 +709,19 @@ BiathlonAnalysis? _relayLegBiathlon(
   final indexes = shootingIndexes.toSet();
   final passes = teamAnalysis.passes
       .where((pass) => indexes.contains(pass.index))
+      // Legacy team positions were synthesized from global shooting indices.
+      // Keep the measurements without trusting those positions inside a leg.
+      // Persisted, locally scoped leg analysis is selected before this fallback.
+      .map(
+        (pass) => ShootingPass(
+          index: pass.index,
+          rangeMs: pass.rangeMs,
+          misses: pass.misses,
+          position: '',
+          penaltyMs: pass.penaltyMs,
+          rangeRank: pass.rangeRank,
+        ),
+      )
       .toList(growable: false);
   if (passes.isEmpty) return null;
 

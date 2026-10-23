@@ -18,6 +18,77 @@ ShootingPass pass(
 
 void main() {
   test(
+    'older relay fallback keeps range times without synthesized positions',
+    () {
+      final team = RaceResult.fromMap('old-relay', {
+        'totalMs': 120000,
+        'isRelay': true,
+        'entrant': {'kind': 'team'},
+        'team': {
+          'members': [
+            {'legNumber': 1, 'name': 'A'},
+            {'legNumber': 2, 'name': 'B'},
+          ],
+        },
+        'timingPoints': [
+          for (var i = 1; i <= 4; i++)
+            {
+              'id': 's$i',
+              'label': 'S$i',
+              'code': 'S$i',
+              'sort': i,
+              'legNumber': i <= 2 ? 1 : 2,
+              'cumMs': i * 30000,
+            },
+        ],
+        'analysis': {
+          'biathlon': {
+            'metrics': {'shootingCount': 4},
+            'passes': {
+              for (var i = 1; i <= 4; i++)
+                'shoot$i': {
+                  'index': i,
+                  'position': i <= 2 ? 'prone' : 'standing',
+                  'rangeMs': i * 10000,
+                  'misses': 0,
+                },
+            },
+          },
+        },
+      });
+      final leg = relayLegRaceResult(team, 1)!;
+      final metrics = BiathlonRaceMetrics.fromResult(leg)!;
+      final secondProne = metrics.shootingSelection(
+        ShootingMetric.rangeTime,
+        ShootingSelection.secondProne,
+      );
+      final firstStanding = metrics.shootingSelection(
+        ShootingMetric.rangeTime,
+        ShootingSelection.firstStanding,
+      );
+      expect(secondProne.validObservations, isEmpty);
+      expect(firstStanding.validObservations, isEmpty);
+      expect(leg.biathlon!.passes.map((pass) => pass.position), ['', '']);
+      expect(
+        metrics
+            .shootingSelection(ShootingMetric.rangeTime, ShootingSelection.all)
+            .validObservations
+            .map((pass) => pass.value),
+        [10000, 20000],
+      );
+      for (final selection in ShootingSelection.values.where(
+        (value) => value.position != null,
+      )) {
+        expect(
+          metrics
+              .shootingSelection(ShootingMetric.rangeTime, selection)
+              .validObservations,
+          isEmpty,
+        );
+      }
+    },
+  );
+  test(
     'real team versus persisted leg mapping does not trust global relay positions',
     () {
       Map<String, Object> shooting(int index, String position) => {
