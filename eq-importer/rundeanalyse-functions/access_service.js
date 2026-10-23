@@ -13,7 +13,12 @@ const COLLECTIONS = Object.freeze({
   guestSessions: "rundeanalyseGuestSessions",
   stats: "rundeanalyseStats",
   adminAudit: "rundeanalyseAdminAudit",
+  // Admin-only, encrypted copies of newly created shareable codes. Kept out of
+  // rundeanalyseCodes so code summaries and linked-code reads never touch them.
+  codeShares: "rundeanalyseCodeShares",
 });
+
+const CODE_SHARE_VERSION = 1;
 
 const DEFAULT_CONFIG = Object.freeze({
   freeAnalysisLimit: 5,
@@ -109,6 +114,65 @@ function codeIdFor(normalizedCode, pepper = process.env.RUNDEANALYSE_CODE_PEPPER
     );
   }
   return crypto.createHmac("sha256", pepper).update(normalizedCode).digest("hex");
+}
+
+function codeShareKey(pepper) {
+  return Buffer.from(crypto.hkdfSync(
+    "sha256",
+    Buffer.from(pepper, "utf8"),
+    Buffer.from("rundeanalyse-code-share", "utf8"),
+    Buffer.from(`v${CODE_SHARE_VERSION}`, "utf8"),
+    32,
+  ));
+}
+
+// The plaintext is encrypted with a key derived from the server-side pepper and
+// bound to the HMAC code ID, so a copied share document cannot be replayed for
+// another code and a database export alone does not reveal the code.
+function sealCodeShare(displayCode, codeId, pepper) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", codeShareKey(pepper), iv);
+  cipher.setAAD(Buffer.from(codeId, "utf8"));
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify({code: displayCode}), "utf8"),
+    cipher.final(),
+  ]);
+  return {
+    version: CODE_SHARE_VERSION,
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+    ciphertext: ciphertext.toString("base64"),
+  };
+}
+
+function openCodeShare(share, codeId, pepper) {
+  if (!share || share.version !== CODE_SHARE_VERSION) return undefined;
+  try {
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      codeShareKey(pepper),
+      Buffer.from(share.iv, "base64"),
+    );
+    decipher.setAAD(Buffer.from(codeId, "utf8"));
+    decipher.setAuthTag(Buffer.from(share.tag, "base64"));
+    const plain = Buffer.concat([
+      decipher.update(Buffer.from(share.ciphertext, "base64")),
+      decipher.final(),
+    ]).toString("utf8");
+    const code = JSON.parse(plain).code;
+    if (typeof code !== "string" || codeIdFor(normaliseCode(code), pepper) !== codeId) {
+      return undefined;
+    }
+    return code;
+  } catch (error) {
+    return undefined;
+  }
+}
+
+function signInProviderFor(actor) {
+  const provider = actor && actor.token && actor.token.firebase &&
+    actor.token.firebase.sign_in_provider;
+  return typeof provider === "string" && provider ? provider : undefined;
 }
 
 function randomCode() {
@@ -344,6 +408,10 @@ class RundeanalyseAccessService {
     return codeIdFor(normaliseCode(rawCode), this.codePepper);
   }
 
+  _codeShareRef(codeId) {
+    return this.db.collection(COLLECTIONS.codeShares).doc(codeId);
+  }
+
   _statsRef(id) {
     return this.db.collection(COLLECTIONS.stats).doc(id);
   }
@@ -389,7 +457,12 @@ class RundeanalyseAccessService {
   _requireVerifiedAccount(request) {
     const actor = this._requireAuthenticated(request);
     if (!isVerifiedRundeanalyseAccount(actor)) {
-      throw new AccessError("failed-precondition", "A verified Rundeanalyse account is required.");
+      // details.reason is additive: older clients still see the same code.
+      throw new AccessError(
+        "failed-precondition",
+        "A verified Rundeanalyse account is required.",
+        {reason: "account-not-verified"},
+      );
     }
     return actor;
   }
@@ -419,6 +492,8 @@ class RundeanalyseAccessService {
     if (Number.isInteger(current.annualAccessUntilMs)) user.annualAccessUntilMs = current.annualAccessUntilMs;
     if (typeof actor.email === "string") user.email = actor.email;
     if (typeof actor.displayName === "string") user.displayName = actor.displayName;
+    const provider = signInProviderFor(actor);
+    if (provider) user.signInProvider = provider;
     return user;
   }
 
@@ -482,7 +557,23 @@ class RundeanalyseAccessService {
     const userRef = this._userRef(actor.uid);
     const user = await this.db.runTransaction(async (transaction) => {
       const userSnapshot = await transaction.get(userRef);
-      if (userSnapshot.exists) return safeData(userSnapshot);
+      if (userSnapshot.exists) {
+        const existing = safeData(userSnapshot);
+        // Keep the admin user list complete for older enrolments that predate
+        // the sign-in provider field, without rewriting unrelated balances.
+        const provider = signInProviderFor(actor);
+        const identity = {};
+        // Backfill only missing fields so alternating providers never turn a
+        // status read into a write on every call.
+        if (provider && typeof existing.signInProvider !== "string") identity.signInProvider = provider;
+        if (typeof actor.email === "string" && typeof existing.email !== "string") identity.email = actor.email;
+        if (Object.keys(identity).length) {
+          identity.updatedAtMs = nowMs;
+          transaction.set(userRef, identity, {merge: true});
+          return Object.assign({}, existing, identity);
+        }
+        return existing;
+      }
       const enrolledUser = this._buildUserDocument({}, actor, nowMs, nowMs);
       transaction.set(userRef, enrolledUser);
       return enrolledUser;
@@ -872,6 +963,10 @@ class RundeanalyseAccessService {
       };
       if (expiresAtMs != null) code.expiresAtMs = expiresAtMs;
       transaction.set(codeRef, code);
+      transaction.set(this._codeShareRef(codeId), Object.assign(
+        sealCodeShare(rawCode, codeId, this.codePepper),
+        {createdAtMs: nowMs, createdByUid: actor.uid},
+      ));
       transaction.set(this._adminAuditRef(`code_created_${codeId}_${nowMs}`), {
         action: "code-created",
         actorUid: actor.uid,
@@ -888,8 +983,44 @@ class RundeanalyseAccessService {
         remainingAnalyses: credits,
         active,
         expiresAtMs: expiresAtMs || null,
+        shareAvailable: true,
       };
     });
+  }
+
+  // Lets an administrator re-open the link/QR for a code created after shares
+  // were introduced. Legacy codes only have an HMAC ID; their plaintext was
+  // never stored and cannot be recovered, so they are reported honestly.
+  async getCodeShare(request) {
+    const actor = this._requireAdmin(request);
+    const data = requireObject(request && request.data || {}, "data");
+    const codeId = requireId(data.codeId, "codeId");
+    const nowMs = this.nowMs();
+    const [codeSnapshot, shareSnapshot] = await Promise.all([
+      this._codeRef(codeId).get(),
+      this._codeShareRef(codeId).get(),
+    ]);
+    if (!codeSnapshot.exists) throw new AccessError("not-found", "The analysis code was not found.");
+    const summary = codeSummary(codeId, safeData(codeSnapshot), nowMs);
+    const code = shareSnapshot.exists ?
+      openCodeShare(safeData(shareSnapshot), codeId, this.codePepper) : undefined;
+    const auditSuffix = crypto.randomBytes(6).toString("hex");
+    await this._adminAuditRef(`code_share_viewed_${codeId}_${nowMs}_${auditSuffix}`).set({
+      action: "code-share-viewed",
+      actorUid: actor.uid,
+      codeId,
+      available: code !== undefined,
+      occurredAtMs: nowMs,
+    });
+    if (code === undefined) {
+      return {
+        codeId,
+        available: false,
+        reason: shareSnapshot.exists ? "share-unreadable" : "legacy-plaintext-not-stored",
+        summary,
+      };
+    }
+    return {codeId, available: true, code, summary};
   }
 
   async setConfig(request) {
@@ -1209,6 +1340,9 @@ class RundeanalyseAccessService {
       getRecent(COLLECTIONS.events, "updatedAtMs"),
       getRecent(COLLECTIONS.users, "updatedAtMs"),
     ]);
+    const shareSnapshots = codeSnapshot.docs.length && typeof this.db.getAll === "function" ?
+      await this.db.getAll(...codeSnapshot.docs.map((snapshot) => this._codeShareRef(snapshot.id))) : [];
+    const sharedCodeIds = new Set(shareSnapshots.filter((s) => s.exists).map((s) => s.id));
     const codes = codeSnapshot.docs.map((snapshot) => Object.assign(
       {id: snapshot.id},
       codeSummary(snapshot.id, safeData(snapshot), nowMs),
@@ -1216,6 +1350,7 @@ class RundeanalyseAccessService {
         initialAnalyses: safeData(snapshot).initialAnalyses || 0,
         usedAnalyses: safeData(snapshot).usedAnalyses || 0,
         linkedUsersCount: safeData(snapshot).linkedUsersCount || 0,
+        shareAvailable: sharedCodeIds.has(snapshot.id),
       },
     ));
     const eventStatsSnapshots = eventSnapshot.docs.length && typeof this.db.getAll === "function" ?
@@ -1235,6 +1370,7 @@ class RundeanalyseAccessService {
         uid: snapshot.id,
         email: typeof user.email === "string" ? user.email : null,
         displayName: typeof user.displayName === "string" ? user.displayName : null,
+        signInProvider: typeof user.signInProvider === "string" ? user.signInProvider : null,
         totalAnalyses: Number.isInteger(user.totalAnalyses) ? user.totalAnalyses : 0,
         usageBySource: sourceCounts(user.usageBySource),
         freeAnalysesUsed: Number.isInteger(user.freeAnalysesUsed) ? user.freeAnalysesUsed : 0,
