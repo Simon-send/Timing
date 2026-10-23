@@ -477,4 +477,58 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get seasonStatisticsHint =>
       'Statistics exclude non-finishers and missing measurements.';
+
+  @override
+  String get shootingSelectionTitle => 'Selected shootings';
+
+  @override
+  String get shootingMetric => 'Metric';
+
+  @override
+  String get shootingSelection => 'Shootings';
+
+  @override
+  String get shootingAll => 'All shootings';
+
+  @override
+  String get shootingFirstProne => '1st prone';
+
+  @override
+  String get shootingSecondProne => '2nd prone';
+
+  @override
+  String get shootingFirstStanding => '1st standing';
+
+  @override
+  String get shootingSecondStanding => '2nd standing';
+
+  @override
+  String get shootingHits => 'Hits';
+
+  @override
+  String shootingValidCount(int valid, int count) {
+    return '$valid of $count shootings have a measurement';
+  }
+
+  @override
+  String get shootingNoMatch => 'No matching shooting is recorded.';
+
+  @override
+  String get shootingAmbiguous =>
+      'Missing or unknown earlier shootings prevent this numbered selection.';
+
+  @override
+  String get shootingIncomplete =>
+      'Some shootings, positions or measurements are missing.';
+
+  @override
+  String get shootingRelayUnavailable =>
+      'Hits and misses are unavailable: relay data does not distinguish reserve shots from penalty loops. Range time is available when recorded.';
+
+  @override
+  String get shootingExcluded => 'This result is excluded from statistics.';
+
+  @override
+  String get shootingRelayPositionsUnavailable =>
+      'Shooting positions are unavailable for whole-team relays. Choose All shootings for recorded range times.';
 }

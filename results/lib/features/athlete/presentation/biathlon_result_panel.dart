@@ -5,6 +5,8 @@ import '../../../core/formatting/time_formatters.dart';
 import '../../../core/widgets/app_shell.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../results/domain/race_result.dart';
+import '../../profile/domain/biathlon_comparison.dart';
+import '../../results/presentation/shooting_selection_panel.dart';
 
 class BiathlonResultPanel extends StatelessWidget {
   const BiathlonResultPanel({
@@ -23,8 +25,9 @@ class BiathlonResultPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+    final rankEligible = result?.isFinished ?? true;
     final comparisonAnalyses = classResults
-        .where((result) => result.isFinished)
+        .where((result) => rankEligible && result.isFinished)
         .map((result) => result.biathlon)
         .whereType<BiathlonAnalysis>()
         .toList(growable: false);
@@ -94,11 +97,30 @@ class BiathlonResultPanel extends StatelessWidget {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
+          ShootingSelectionPanel(
+            entries: [
+              ShootingSelectionEntry(
+                id: result?.id ?? 'race',
+                label: '',
+                contributes: rankEligible,
+                metrics:
+                    (result == null
+                        ? null
+                        : BiathlonRaceMetrics.fromResult(result!)) ??
+                    BiathlonRaceMetrics(
+                      shootingSeries: analysis.passes,
+                      expectedShootingCount: analysis.expectedShootingCount,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              for (final metric in metrics) _AnalysisMetric(metric: metric),
+              for (final metric in metrics)
+                _AnalysisMetric(metric: metric, rankEligible: rankEligible),
             ],
           ),
           if (analysis.laps.isNotEmpty) ...[
@@ -119,6 +141,7 @@ class BiathlonResultPanel extends StatelessWidget {
                 comparisonAnalyses: comparisonAnalyses,
                 splitId: _shootingSplitId(result, analysis.passes[index].index),
                 onSplitSelected: onSplitSelected,
+                rankEligible: rankEligible,
               ),
               if (index < analysis.passes.length - 1)
                 Divider(height: 1, color: palette.border),
@@ -207,9 +230,10 @@ class _AnalysisMetricData {
 }
 
 class _AnalysisMetric extends StatelessWidget {
-  const _AnalysisMetric({required this.metric});
+  const _AnalysisMetric({required this.metric, required this.rankEligible});
 
   final _AnalysisMetricData metric;
+  final bool rankEligible;
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +262,7 @@ class _AnalysisMetric extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w900),
           ),
           Text(
-            _rankLabel(metric.rank),
+            _rankLabel(rankEligible ? metric.rank : null),
             key: ValueKey('biathlon-${metric.id}-rank'),
             style: TextStyle(
               color: palette.mutedText,
@@ -258,12 +282,14 @@ class _ShootingPassRow extends StatelessWidget {
     required this.comparisonAnalyses,
     required this.splitId,
     required this.onSplitSelected,
+    required this.rankEligible,
   });
 
   final ShootingPass pass;
   final List<BiathlonAnalysis> comparisonAnalyses;
   final String? splitId;
   final ValueChanged<String>? onSplitSelected;
+  final bool rankEligible;
 
   @override
   Widget build(BuildContext context) {
@@ -271,11 +297,13 @@ class _ShootingPassRow extends StatelessWidget {
         .map((analysis) => analysis.passAt(pass.index))
         .whereType<ShootingPass>()
         .toList(growable: false);
-    final rangeRank = _metricRank(
-      pass.rangeMs,
-      pass.rangeRank,
-      comparisonPasses.map((item) => item.rangeMs),
-    );
+    final rangeRank = !rankEligible
+        ? null
+        : _metricRank(
+            pass.rangeMs,
+            pass.rangeRank,
+            comparisonPasses.map((item) => item.rangeMs),
+          );
     final canOpenSplit = splitId != null && onSplitSelected != null;
     final content = Padding(
       padding: const EdgeInsets.symmetric(vertical: 9),

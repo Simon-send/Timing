@@ -477,4 +477,59 @@ class AppLocalizationsNb extends AppLocalizations {
   @override
   String get seasonStatisticsHint =>
       'Statistikk utelater ikke-fullførte løp og manglende målinger.';
+
+  @override
+  String get shootingSelectionTitle => 'Valgte skytinger';
+
+  @override
+  String get shootingMetric => 'Måltall';
+
+  @override
+  String get shootingSelection => 'Skytinger';
+
+  @override
+  String get shootingAll => 'Alle skytinger';
+
+  @override
+  String get shootingFirstProne => '1. ligg';
+
+  @override
+  String get shootingSecondProne => '2. ligg';
+
+  @override
+  String get shootingFirstStanding => '1. stå';
+
+  @override
+  String get shootingSecondStanding => '2. stå';
+
+  @override
+  String get shootingHits => 'Treff';
+
+  @override
+  String shootingValidCount(int valid, int count) {
+    return '$valid av $count skytinger har en måling';
+  }
+
+  @override
+  String get shootingNoMatch => 'Ingen tilsvarende skyting er registrert.';
+
+  @override
+  String get shootingAmbiguous =>
+      'Tidligere skytinger mangler eller har ukjent stilling. Nummeret kan ikke fastslås.';
+
+  @override
+  String get shootingIncomplete =>
+      'Noen skytinger, stillinger eller målinger mangler.';
+
+  @override
+  String get shootingRelayUnavailable =>
+      'Treff og bom er utilgjengelig: stafettdata skiller ikke reserveskudd fra strafferunder. Standplasstid vises når den er registrert.';
+
+  @override
+  String get shootingExcluded =>
+      'Dette resultatet er utelukket fra statistikken.';
+
+  @override
+  String get shootingRelayPositionsUnavailable =>
+      'Skytestillinger er utilgjengelig for hele stafettlag. Velg Alle skytinger for registrerte standplasstider.';
 }

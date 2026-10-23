@@ -232,5 +232,31 @@
   "seasonCompletedCount": "{count} fullföljda lopp",
   "seasonObservationCount": "{count} giltiga observationer",
   "seasonUnassignedNotice": "{count} lopp saknar säsong. De visas i listan; välj Alla säsonger för att ta med dem i statistiken.",
-  "seasonStatisticsHint": "Statistiken utesluter ej fullföljda lopp och saknade mätvärden."
+  "seasonStatisticsHint": "Statistiken utesluter ej fullföljda lopp och saknade mätvärden.",
+  "shootingSelectionTitle": "Valda skjutningar",
+  "shootingMetric": "Mått",
+  "shootingSelection": "Skjutningar",
+  "shootingAll": "Alla skjutningar",
+  "shootingFirstProne": "1:a liggande",
+  "shootingSecondProne": "2:a liggande",
+  "shootingFirstStanding": "1:a stående",
+  "shootingSecondStanding": "2:a stående",
+  "shootingHits": "Träffar",
+  "shootingValidCount": "{valid} av {count} skjutningar har ett mätvärde",
+  "@shootingValidCount": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shootingNoMatch": "Ingen motsvarande skjutning är registrerad.",
+  "shootingAmbiguous": "Tidigare skjutningar saknas eller har okänd ställning. Numret kan inte fastställas.",
+  "shootingIncomplete": "Vissa skjutningar, ställningar eller mätvärden saknas.",
+  "shootingRelayUnavailable": "Träffar och bom är inte tillgängliga: stafettdata skiljer inte extraskott från straffrundor. Skjutvallstid visas när den finns.",
+  "shootingExcluded": "Detta resultat ingår inte i statistiken.",
+  "shootingRelayPositionsUnavailable": "Skjutställningar är inte tillgängliga för hela stafettlag. Välj Alla skjutningar för registrerade skjutvallstider."
 }

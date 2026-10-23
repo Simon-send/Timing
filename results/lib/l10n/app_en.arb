@@ -260,5 +260,31 @@
         "type": "int"
       }
     }
-  }
+  },
+  "shootingSelectionTitle": "Selected shootings",
+  "shootingMetric": "Metric",
+  "shootingSelection": "Shootings",
+  "shootingAll": "All shootings",
+  "shootingFirstProne": "1st prone",
+  "shootingSecondProne": "2nd prone",
+  "shootingFirstStanding": "1st standing",
+  "shootingSecondStanding": "2nd standing",
+  "shootingHits": "Hits",
+  "shootingValidCount": "{valid} of {count} shootings have a measurement",
+  "@shootingValidCount": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shootingNoMatch": "No matching shooting is recorded.",
+  "shootingAmbiguous": "Missing or unknown earlier shootings prevent this numbered selection.",
+  "shootingIncomplete": "Some shootings, positions or measurements are missing.",
+  "shootingRelayUnavailable": "Hits and misses are unavailable: relay data does not distinguish reserve shots from penalty loops. Range time is available when recorded.",
+  "shootingExcluded": "This result is excluded from statistics.",
+  "shootingRelayPositionsUnavailable": "Shooting positions are unavailable for whole-team relays. Choose All shootings for recorded range times."
 }

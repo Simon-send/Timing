@@ -478,4 +478,60 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get seasonStatisticsHint =>
       'Las estadísticas excluyen las carreras no completadas y las mediciones ausentes.';
+
+  @override
+  String get shootingSelectionTitle => 'Tandas de tiro seleccionadas';
+
+  @override
+  String get shootingMetric => 'Medida';
+
+  @override
+  String get shootingSelection => 'Tandas de tiro';
+
+  @override
+  String get shootingAll => 'Todas las tandas';
+
+  @override
+  String get shootingFirstProne => '1.ª tumbado';
+
+  @override
+  String get shootingSecondProne => '2.ª tumbado';
+
+  @override
+  String get shootingFirstStanding => '1.ª de pie';
+
+  @override
+  String get shootingSecondStanding => '2.ª de pie';
+
+  @override
+  String get shootingHits => 'Aciertos';
+
+  @override
+  String shootingValidCount(int valid, int count) {
+    return '$valid de $count tandas tienen una medición';
+  }
+
+  @override
+  String get shootingNoMatch =>
+      'No hay ninguna tanda correspondiente registrada.';
+
+  @override
+  String get shootingAmbiguous =>
+      'Faltan tandas anteriores o se desconoce su posición. No se puede determinar este número.';
+
+  @override
+  String get shootingIncomplete =>
+      'Faltan algunas tandas, posiciones o mediciones.';
+
+  @override
+  String get shootingRelayUnavailable =>
+      'Aciertos y fallos no disponibles: los datos de relevos no distinguen las balas de reserva de las vueltas de penalización. Se muestra el tiempo en el campo de tiro si está registrado.';
+
+  @override
+  String get shootingExcluded =>
+      'Este resultado se excluye de las estadísticas.';
+
+  @override
+  String get shootingRelayPositionsUnavailable =>
+      'Las posiciones de tiro no están disponibles para equipos de relevos completos. Elige Todas las tandas para ver los tiempos registrados en el campo de tiro.';
 }

@@ -232,5 +232,31 @@
   "seasonCompletedCount": "Завершённых гонок: {count}",
   "seasonObservationCount": "Достоверных наблюдений: {count}",
   "seasonUnassignedNotice": "У {count} гонок не определён сезон. Они остаются в списке; выберите Все сезоны, чтобы включить их в статистику.",
-  "seasonStatisticsHint": "Статистика не включает незавершённые гонки и отсутствующие измерения."
+  "seasonStatisticsHint": "Статистика не включает незавершённые гонки и отсутствующие измерения.",
+  "shootingSelectionTitle": "Выбранные стрельбы",
+  "shootingMetric": "Показатель",
+  "shootingSelection": "Стрельбы",
+  "shootingAll": "Все стрельбы",
+  "shootingFirstProne": "1-я лёжа",
+  "shootingSecondProne": "2-я лёжа",
+  "shootingFirstStanding": "1-я стоя",
+  "shootingSecondStanding": "2-я стоя",
+  "shootingHits": "Попадания",
+  "shootingValidCount": "Из {count} стрельб измерения есть для {valid}",
+  "@shootingValidCount": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shootingNoMatch": "Соответствующая стрельба не записана.",
+  "shootingAmbiguous": "Предыдущие стрельбы отсутствуют или их положение неизвестно. Порядковый номер определить нельзя.",
+  "shootingIncomplete": "Некоторые стрельбы, положения или измерения отсутствуют.",
+  "shootingRelayUnavailable": "Попадания и промахи недоступны: данные эстафеты не отличают дополнительные патроны от штрафных кругов. Время на рубеже показано, если записано.",
+  "shootingExcluded": "Этот результат исключён из статистики.",
+  "shootingRelayPositionsUnavailable": "Положения стрельбы недоступны для всей эстафетной команды. Выберите «Все стрельбы», чтобы увидеть записанное время на рубеже."
 }

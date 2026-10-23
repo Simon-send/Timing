@@ -232,5 +232,31 @@
   "seasonCompletedCount": "{count} beendete Rennen",
   "seasonObservationCount": "{count} gültige Beobachtungen",
   "seasonUnassignedNotice": "{count} Rennen haben keine zugeordnete Saison. Sie bleiben in der Liste; wählen Sie Alle Saisons, um sie in die Statistik aufzunehmen.",
-  "seasonStatisticsHint": "Nicht beendete Rennen und fehlende Messwerte fließen nicht in die Statistik ein."
+  "seasonStatisticsHint": "Nicht beendete Rennen und fehlende Messwerte fließen nicht in die Statistik ein.",
+  "shootingSelectionTitle": "Ausgewählte Schießeinlagen",
+  "shootingMetric": "Messgröße",
+  "shootingSelection": "Schießeinlagen",
+  "shootingAll": "Alle Schießeinlagen",
+  "shootingFirstProne": "1. Liegendschießen",
+  "shootingSecondProne": "2. Liegendschießen",
+  "shootingFirstStanding": "1. Stehendschießen",
+  "shootingSecondStanding": "2. Stehendschießen",
+  "shootingHits": "Treffer",
+  "shootingValidCount": "{valid} von {count} Schießeinlagen mit Messwert",
+  "@shootingValidCount": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shootingNoMatch": "Keine passende Schießeinlage erfasst.",
+  "shootingAmbiguous": "Fehlende frühere Schießeinlagen oder unbekannte Anschläge verhindern diese Nummerierung.",
+  "shootingIncomplete": "Einige Schießeinlagen, Anschläge oder Messwerte fehlen.",
+  "shootingRelayUnavailable": "Treffer und Fehlschüsse sind nicht verfügbar: Staffeldaten unterscheiden Nachlader nicht von Strafrunden. Schießstandzeit wird angezeigt, wenn erfasst.",
+  "shootingExcluded": "Dieses Ergebnis ist von der Statistik ausgeschlossen.",
+  "shootingRelayPositionsUnavailable": "Anschläge sind für ganze Staffelteams nicht verfügbar. Wähle Alle Schießeinlagen für erfasste Schießstandzeiten."
 }

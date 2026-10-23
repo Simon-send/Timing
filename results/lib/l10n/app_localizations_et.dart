@@ -477,4 +477,58 @@ class AppLocalizationsEt extends AppLocalizations {
   @override
   String get seasonStatisticsHint =>
       'Statistika ei hõlma lõpetamata võistlusi ega puuduvaid mõõtmisi.';
+
+  @override
+  String get shootingSelectionTitle => 'Valitud laskmised';
+
+  @override
+  String get shootingMetric => 'Mõõdik';
+
+  @override
+  String get shootingSelection => 'Laskmised';
+
+  @override
+  String get shootingAll => 'Kõik laskmised';
+
+  @override
+  String get shootingFirstProne => '1. lamades';
+
+  @override
+  String get shootingSecondProne => '2. lamades';
+
+  @override
+  String get shootingFirstStanding => '1. püsti';
+
+  @override
+  String get shootingSecondStanding => '2. püsti';
+
+  @override
+  String get shootingHits => 'Tabamused';
+
+  @override
+  String shootingValidCount(int valid, int count) {
+    return '$valid laskmisel $count-st on mõõtmistulemus';
+  }
+
+  @override
+  String get shootingNoMatch => 'Vastavat laskmist pole salvestatud.';
+
+  @override
+  String get shootingAmbiguous =>
+      'Varasemad laskmised puuduvad või nende asend on teadmata. Järjekorranumbrit ei saa määrata.';
+
+  @override
+  String get shootingIncomplete =>
+      'Mõned laskmised, asendid või mõõtmised puuduvad.';
+
+  @override
+  String get shootingRelayUnavailable =>
+      'Tabamused ja möödalasud pole saadaval: teatevõistluse andmed ei erista varupadruneid trahviringidest. Lasketiiru aeg kuvatakse, kui see on salvestatud.';
+
+  @override
+  String get shootingExcluded => 'See tulemus on statistikast välja jäetud.';
+
+  @override
+  String get shootingRelayPositionsUnavailable =>
+      'Laskmisasendid pole terve teatevõistkonna kohta saadaval. Salvestatud lasketiiruaegade nägemiseks vali Kõik laskmised.';
 }

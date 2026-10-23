@@ -479,4 +479,59 @@ class AppLocalizationsFi extends AppLocalizations {
   @override
   String get seasonStatisticsHint =>
       'Tilastot eivät sisällä keskeytettyjä kilpailuja eivätkä puuttuvia mittauksia.';
+
+  @override
+  String get shootingSelectionTitle => 'Valitut ammunnat';
+
+  @override
+  String get shootingMetric => 'Mittari';
+
+  @override
+  String get shootingSelection => 'Ammunnat';
+
+  @override
+  String get shootingAll => 'Kaikki ammunnat';
+
+  @override
+  String get shootingFirstProne => '1. makuu';
+
+  @override
+  String get shootingSecondProne => '2. makuu';
+
+  @override
+  String get shootingFirstStanding => '1. pysty';
+
+  @override
+  String get shootingSecondStanding => '2. pysty';
+
+  @override
+  String get shootingHits => 'Osumat';
+
+  @override
+  String shootingValidCount(int valid, int count) {
+    return '$valid ammunnalla $count:sta on mittaustulos';
+  }
+
+  @override
+  String get shootingNoMatch => 'Vastaavaa ammuntaa ei ole kirjattu.';
+
+  @override
+  String get shootingAmbiguous =>
+      'Aikaisempia ammuntoja puuttuu tai niiden asento on tuntematon. Järjestysnumeroa ei voi määrittää.';
+
+  @override
+  String get shootingIncomplete =>
+      'Joitakin ammuntoja, asentoja tai mittauksia puuttuu.';
+
+  @override
+  String get shootingRelayUnavailable =>
+      'Osumia ja ohilaukauksia ei ole saatavilla: viestitiedot eivät erota varapatruunoita sakkokierroksista. Ampumapaikka-aika näytetään, jos se on kirjattu.';
+
+  @override
+  String get shootingExcluded =>
+      'Tämä tulos on jätetty tilastojen ulkopuolelle.';
+
+  @override
+  String get shootingRelayPositionsUnavailable =>
+      'Ampuma-asentoja ei ole saatavilla koko viestijoukkueelle. Valitse Kaikki ammunnat nähdäksesi kirjatut ampumapaikka-ajat.';
 }

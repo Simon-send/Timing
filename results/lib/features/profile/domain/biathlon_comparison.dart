@@ -1,5 +1,6 @@
 import '../../../core/firebase/firestore_mappers.dart';
 import '../../results/domain/race_result.dart';
+import '../../results/domain/shooting_selection.dart';
 
 enum BiathlonMetric {
   finishTime,
@@ -55,6 +56,10 @@ class BiathlonRaceMetrics {
     this.shootingPasses = const {},
     this.extraPassValues = const {},
     this.laps = const {},
+    this.isRelay = false,
+    this.isRelayLeg = false,
+    this.expectedShootingCount,
+    this.shootingSeries = const [],
   });
 
   static BiathlonRaceMetrics? fromResult(
@@ -68,6 +73,12 @@ class BiathlonRaceMetrics {
         ? result.finishRank!.toDouble()
         : null;
     final analysis = result.biathlon;
+    final isRelay =
+        result.isRelay ||
+        result.relayLegNumber != null ||
+        result.entrant?.kind == ResultEntrantKind.team ||
+        result.relayMembers.isNotEmpty ||
+        result.relayLegBiathlon.isNotEmpty;
     if (analysis == null || !analysis.hasData) {
       return result.totalMs != null && result.totalMs! > 0
           ? BiathlonRaceMetrics(
@@ -78,7 +89,8 @@ class BiathlonRaceMetrics {
     }
 
     final passes = analysis.passes;
-    final declaredShootingCount = asInt(publicMetrics['shootingCount']);
+    final declaredShootingCount =
+        asInt(publicMetrics['shootingCount']) ?? analysis.expectedShootingCount;
     final shootingCount =
         expectedShootingCount != null && expectedShootingCount > 0
         ? expectedShootingCount
@@ -101,7 +113,7 @@ class BiathlonRaceMetrics {
         );
     double? hitPercentFor(Iterable<ShootingPass> selected) {
       final values = selected.toList();
-      if (!completeShooting || values.isEmpty) return null;
+      if (isRelay || !completeShooting || values.isEmpty) return null;
       final hits = values.fold<int>(0, (sum, pass) => sum + 5 - pass.misses!);
       return hits * 100 / (values.length * 5);
     }
@@ -154,8 +166,12 @@ class BiathlonRaceMetrics {
       },
       timingPoints: result.splitValues,
       shootingPasses: {for (final pass in passes) pass.index: pass},
+      shootingSeries: passes,
       extraPassValues: _parsePublicPassValues(publicPasses),
       laps: {for (final lap in analysis.laps) lap.index: lap},
+      isRelay: isRelay,
+      isRelayLeg: result.relayLegNumber != null,
+      expectedShootingCount: shootingCount,
     );
   }
 
@@ -170,6 +186,25 @@ class BiathlonRaceMetrics {
   final Map<int, ShootingPass> shootingPasses;
   final Map<int, Map<String, double>> extraPassValues;
   final Map<int, BiathlonLap> laps;
+  final bool isRelay;
+  final bool isRelayLeg;
+  final int? expectedShootingCount;
+  // Keep duplicate source indices visible to ordinal validation; the lookup
+  // map above remains the legacy global-index comparison contract.
+  final List<ShootingPass> shootingSeries;
+
+  ShootingSelectionResult shootingSelection(
+    ShootingMetric metric,
+    ShootingSelection selection, {
+    bool? isRelay,
+  }) => selectShootingObservations(
+    shootingSeries.isNotEmpty ? shootingSeries : shootingPasses.values,
+    metric,
+    selection,
+    isRelay: isRelay == true || this.isRelay,
+    positionsReliable: !(isRelay == true || this.isRelay) || isRelayLeg,
+    expectedShootingCount: expectedShootingCount,
+  );
 
   double? valueFor(BiathlonMetric metric) => switch (metric) {
     BiathlonMetric.finishTime => finishTimeMs?.toDouble(),

@@ -14,6 +14,7 @@ import '../../auth/presentation/account_menu.dart';
 import '../../auth/presentation/login_button.dart';
 import '../../events/domain/result_event.dart';
 import '../../results/presentation/result_locations.dart';
+import '../../results/presentation/shooting_selection_panel.dart';
 import '../../settings/presentation/settings_menu.dart';
 import '../data/athlete_profile_repository.dart';
 import '../domain/athlete_profile.dart';
@@ -491,6 +492,30 @@ class _AthleteSeasonResultsState extends State<AthleteSeasonResults> {
         ),
         const SizedBox(height: 14),
         if (selectedRaces.isNotEmpty) ...[
+          if (scope.statisticalRaces.any(
+            (race) => race.biathlonMetrics != null,
+          )) ...[
+            ShellPanel(
+              child: ShootingSelectionPanel(
+                entries: [
+                  for (final race in scope.statisticalRaces)
+                    if (race.biathlonMetrics case final metrics?)
+                      ShootingSelectionEntry(
+                        id: '${race.key}/${race.resultId}',
+                        label: [
+                          dataset.eventsById[race.eventId]?.name ??
+                              race.eventId,
+                          dataset.eventsById[race.eventId]?.dateLabel ?? '',
+                          race.className,
+                        ].where((text) => text.isNotEmpty).join(' · '),
+                        metrics: metrics,
+                        isRelay: race.isRelay,
+                      ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
           ShellPanel(
             child: ResultHistoryPanel(
               entries: _historyEntries(

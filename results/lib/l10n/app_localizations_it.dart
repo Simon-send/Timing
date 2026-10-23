@@ -477,4 +477,59 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get seasonStatisticsHint =>
       'Le statistiche escludono le gare non completate e le misurazioni mancanti.';
+
+  @override
+  String get shootingSelectionTitle => 'Sessioni di tiro selezionate';
+
+  @override
+  String get shootingMetric => 'Misura';
+
+  @override
+  String get shootingSelection => 'Sessioni di tiro';
+
+  @override
+  String get shootingAll => 'Tutte le sessioni';
+
+  @override
+  String get shootingFirstProne => '1ª a terra';
+
+  @override
+  String get shootingSecondProne => '2ª a terra';
+
+  @override
+  String get shootingFirstStanding => '1ª in piedi';
+
+  @override
+  String get shootingSecondStanding => '2ª in piedi';
+
+  @override
+  String get shootingHits => 'Bersagli colpiti';
+
+  @override
+  String shootingValidCount(int valid, int count) {
+    return '$valid sessioni su $count hanno una misurazione';
+  }
+
+  @override
+  String get shootingNoMatch => 'Nessuna sessione corrispondente registrata.';
+
+  @override
+  String get shootingAmbiguous =>
+      'Sessioni precedenti mancanti o con posizione sconosciuta impediscono questa numerazione.';
+
+  @override
+  String get shootingIncomplete =>
+      'Mancano alcune sessioni, posizioni o misurazioni.';
+
+  @override
+  String get shootingRelayUnavailable =>
+      'Centri ed errori non disponibili: i dati della staffetta non distinguono i colpi di riserva dai giri di penalità. Il tempo al poligono è mostrato se registrato.';
+
+  @override
+  String get shootingExcluded =>
+      'Questo risultato è escluso dalle statistiche.';
+
+  @override
+  String get shootingRelayPositionsUnavailable =>
+      'Le posizioni di tiro non sono disponibili per le squadre di staffetta complete. Scegli Tutte le sessioni per i tempi al poligono registrati.';
 }

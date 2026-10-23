@@ -232,5 +232,31 @@
   "seasonCompletedCount": "{count} gare completate",
   "seasonObservationCount": "{count} osservazioni valide",
   "seasonUnassignedNotice": "{count} gare non hanno una stagione assegnata. Restano nell’elenco; scegli Tutte le stagioni per includerle nelle statistiche.",
-  "seasonStatisticsHint": "Le statistiche escludono le gare non completate e le misurazioni mancanti."
+  "seasonStatisticsHint": "Le statistiche escludono le gare non completate e le misurazioni mancanti.",
+  "shootingSelectionTitle": "Sessioni di tiro selezionate",
+  "shootingMetric": "Misura",
+  "shootingSelection": "Sessioni di tiro",
+  "shootingAll": "Tutte le sessioni",
+  "shootingFirstProne": "1ª a terra",
+  "shootingSecondProne": "2ª a terra",
+  "shootingFirstStanding": "1ª in piedi",
+  "shootingSecondStanding": "2ª in piedi",
+  "shootingHits": "Bersagli colpiti",
+  "shootingValidCount": "{valid} sessioni su {count} hanno una misurazione",
+  "@shootingValidCount": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shootingNoMatch": "Nessuna sessione corrispondente registrata.",
+  "shootingAmbiguous": "Sessioni precedenti mancanti o con posizione sconosciuta impediscono questa numerazione.",
+  "shootingIncomplete": "Mancano alcune sessioni, posizioni o misurazioni.",
+  "shootingRelayUnavailable": "Centri ed errori non disponibili: i dati della staffetta non distinguono i colpi di riserva dai giri di penalità. Il tempo al poligono è mostrato se registrato.",
+  "shootingExcluded": "Questo risultato è escluso dalle statistiche.",
+  "shootingRelayPositionsUnavailable": "Le posizioni di tiro non sono disponibili per le squadre di staffetta complete. Scegli Tutte le sessioni per i tempi al poligono registrati."
 }

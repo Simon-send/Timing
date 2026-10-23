@@ -947,6 +947,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Statistics exclude non-finishers and missing measurements.'**
   String get seasonStatisticsHint;
+
+  /// No description provided for @shootingSelectionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected shootings'**
+  String get shootingSelectionTitle;
+
+  /// No description provided for @shootingMetric.
+  ///
+  /// In en, this message translates to:
+  /// **'Metric'**
+  String get shootingMetric;
+
+  /// No description provided for @shootingSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Shootings'**
+  String get shootingSelection;
+
+  /// No description provided for @shootingAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All shootings'**
+  String get shootingAll;
+
+  /// No description provided for @shootingFirstProne.
+  ///
+  /// In en, this message translates to:
+  /// **'1st prone'**
+  String get shootingFirstProne;
+
+  /// No description provided for @shootingSecondProne.
+  ///
+  /// In en, this message translates to:
+  /// **'2nd prone'**
+  String get shootingSecondProne;
+
+  /// No description provided for @shootingFirstStanding.
+  ///
+  /// In en, this message translates to:
+  /// **'1st standing'**
+  String get shootingFirstStanding;
+
+  /// No description provided for @shootingSecondStanding.
+  ///
+  /// In en, this message translates to:
+  /// **'2nd standing'**
+  String get shootingSecondStanding;
+
+  /// No description provided for @shootingHits.
+  ///
+  /// In en, this message translates to:
+  /// **'Hits'**
+  String get shootingHits;
+
+  /// No description provided for @shootingValidCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{valid} of {count} shootings have a measurement'**
+  String shootingValidCount(int valid, int count);
+
+  /// No description provided for @shootingNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching shooting is recorded.'**
+  String get shootingNoMatch;
+
+  /// No description provided for @shootingAmbiguous.
+  ///
+  /// In en, this message translates to:
+  /// **'Missing or unknown earlier shootings prevent this numbered selection.'**
+  String get shootingAmbiguous;
+
+  /// No description provided for @shootingIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Some shootings, positions or measurements are missing.'**
+  String get shootingIncomplete;
+
+  /// No description provided for @shootingRelayUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Hits and misses are unavailable: relay data does not distinguish reserve shots from penalty loops. Range time is available when recorded.'**
+  String get shootingRelayUnavailable;
+
+  /// No description provided for @shootingExcluded.
+  ///
+  /// In en, this message translates to:
+  /// **'This result is excluded from statistics.'**
+  String get shootingExcluded;
+
+  /// No description provided for @shootingRelayPositionsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Shooting positions are unavailable for whole-team relays. Choose All shootings for recorded range times.'**
+  String get shootingRelayPositionsUnavailable;
 }
 
 class _AppLocalizationsDelegate
