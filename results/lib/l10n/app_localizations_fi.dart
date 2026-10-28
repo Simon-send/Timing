@@ -629,4 +629,94 @@ class AppLocalizationsFi extends AppLocalizations {
   @override
   String get seasonDistributionNoContributions =>
       'Tällä välillä ei ole sarjoja.';
+
+  @override
+  String get comparisonTitle => 'Vertaa kausia';
+
+  @override
+  String get comparisonSport => 'Ampumahiihto';
+
+  @override
+  String get comparisonProgram => 'Kilpailumuoto';
+
+  @override
+  String get comparisonSeasonA => 'Kausi A';
+
+  @override
+  String get comparisonSeasonB => 'Kausi B';
+
+  @override
+  String get comparisonNeedTwoSeasons =>
+      'Vertailuun tarvitaan kaksi ampumahiihtokautta, joiden päivämäärät tunnetaan.';
+
+  @override
+  String get comparisonNoProgram =>
+      'Yksiselitteistä vertailukelpoista kilpailumuotoa ei tunneta. Sarjan tai tapahtuman lajitiedot tarvitaan.';
+
+  @override
+  String comparisonUnknownCoverage(int unknownSeason, int unknownProgram) {
+    return 'Pois rajattu aineisto: $unknownSeason kilpailua ilman tunnettua ampumahiihtolajia/päivämäärää; $unknownProgram kilpailua, joiden kilpailumuoto on tuntematon tai epäselvä.';
+  }
+
+  @override
+  String comparisonRaceCoverage(int finished, int excluded) {
+    return '$finished maaliin tullutta kilpailua · $excluded keskeytettyä kilpailua rajattu pois';
+  }
+
+  @override
+  String get comparisonShowCounts => 'Näytä lukumäärät';
+
+  @override
+  String comparisonFilters(
+    String sport,
+    String program,
+    String metric,
+    String selection,
+  ) {
+    return 'Suodattimet: $sport · $program · $metric · $selection';
+  }
+
+  @override
+  String get comparisonPositionCaution =>
+      'Asentovalinnat eivät ole käytettävissä, jos historiallisia ampuma-asentoja ei voida varmistaa. Kaikki säilyttää tunnetut mitatut sarjat.';
+
+  @override
+  String comparisonDeltaPoints(String value) {
+    return 'Osumaprosentin ero (B − A): $value prosenttiyksikköä';
+  }
+
+  @override
+  String comparisonDeltaMisses(String value) {
+    return 'Keskimääräisten ohilaukausten ero (B − A): $value sarjaa kohti';
+  }
+
+  @override
+  String comparisonDeltaSeconds(String value) {
+    return 'Keskimääräisen ampumapaikka-ajan ero (B − A): $value s';
+  }
+
+  @override
+  String get comparisonCaution =>
+      'Erot kuvaavat kirjattuja sarjoja, eivät todistettua parannusta. Pienet otokset, osallistujaryhmät ja olosuhteet voivat erota.';
+
+  @override
+  String get comparisonSprint => 'Pikamatka';
+
+  @override
+  String get comparisonIndividual => 'Normaalimatka';
+
+  @override
+  String get comparisonShortIndividual => 'Lyhennetty normaalimatka';
+
+  @override
+  String get comparisonPursuit => 'Takaa-ajo';
+
+  @override
+  String get comparisonMassStart => 'Yhteislähtö';
+
+  @override
+  String get comparisonSuperSprint => 'Supersprintti';
+
+  @override
+  String get comparisonRelay => 'Viesti';
 }

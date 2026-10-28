@@ -86,7 +86,7 @@ class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
               DropdownMenuItem(
                 value: metric,
                 child: Text(
-                  _metricLabel(metric, l10n),
+                  shootingMetricLabel(metric, l10n),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -106,7 +106,7 @@ class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
               DropdownMenuItem(
                 value: selection,
                 child: Text(
-                  _selectionLabel(selection, l10n),
+                  shootingSelectionLabel(selection, l10n),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -122,7 +122,7 @@ class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
           SeasonShootingDistributionPanel(
             statistics: statistics.forMetric(_metric),
             metric: _metric,
-            metricLabel: _metricLabel(_metric, l10n),
+            metricLabel: shootingMetricLabel(_metric, l10n),
             raceLabel: raceLabel,
             onRaceSelected: widget.onRaceSelected,
           ),
@@ -347,23 +347,25 @@ class _Observations extends StatelessWidget {
   }
 }
 
-String _metricLabel(ShootingMetric metric, AppLocalizations l10n) =>
+String shootingMetricLabel(ShootingMetric metric, AppLocalizations l10n) =>
     switch (metric) {
       ShootingMetric.hits => l10n.shootingHits,
       ShootingMetric.misses => l10n.biathlonMissesLabel,
       ShootingMetric.rangeTime => l10n.biathlonRangeTime,
     };
 
-String _selectionLabel(ShootingSelection selection, AppLocalizations l10n) =>
-    switch (selection) {
-      ShootingSelection.all => l10n.shootingAll,
-      ShootingSelection.prone => l10n.biathlonPositionProne,
-      ShootingSelection.standing => l10n.biathlonPositionStanding,
-      ShootingSelection.firstProne => l10n.shootingFirstProne,
-      ShootingSelection.secondProne => l10n.shootingSecondProne,
-      ShootingSelection.firstStanding => l10n.shootingFirstStanding,
-      ShootingSelection.secondStanding => l10n.shootingSecondStanding,
-    };
+String shootingSelectionLabel(
+  ShootingSelection selection,
+  AppLocalizations l10n,
+) => switch (selection) {
+  ShootingSelection.all => l10n.shootingAll,
+  ShootingSelection.prone => l10n.biathlonPositionProne,
+  ShootingSelection.standing => l10n.biathlonPositionStanding,
+  ShootingSelection.firstProne => l10n.shootingFirstProne,
+  ShootingSelection.secondProne => l10n.shootingSecondProne,
+  ShootingSelection.firstStanding => l10n.shootingFirstStanding,
+  ShootingSelection.secondStanding => l10n.shootingSecondStanding,
+};
 
 String _positionLabel(String position, AppLocalizations l10n) =>
     switch (position) {

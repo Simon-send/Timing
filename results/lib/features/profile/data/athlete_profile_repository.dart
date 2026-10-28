@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/firebase/firestore_mappers.dart';
 import '../../../core/firebase/switch_latest.dart';
 import '../../results/domain/race_result.dart';
+import '../../results/domain/result_class.dart';
 import '../domain/athlete_link_state.dart';
 import '../domain/athlete_profile.dart';
 import '../domain/biathlon_aggregate_profile.dart';
@@ -185,6 +186,10 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
               .map(
                 (doc) => _athleteRaceFromDoc(
                   doc,
+                  programLabels:
+                      classMetadata[doc.reference.parent.parent?.path]
+                          ?.programLabels ??
+                      const [],
                   participantCount:
                       classMetadata[doc.reference.parent.parent?.path]
                           ?.participantCount ??
@@ -264,6 +269,10 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
       classDocs.entries.map((entry) async {
         try {
           final data = (await entry.value.get()).data();
+          final raceClass = ResultClass.fromMap(
+            entry.value.id,
+            data ?? const {},
+          );
           final participants = asInt(data?['participantCount']) ?? 0;
           final results = asInt(data?['resultCount']) ?? 0;
           final profiles = biathlonClassPaths.contains(entry.key)
@@ -282,6 +291,7 @@ class FirestoreAthleteProfileRepository implements AthleteProfileRepository {
             entry.key,
             _ClassRaceMetadata(
               participantCount: participants > results ? participants : results,
+              programLabels: [raceClass.name, ?raceClass.etappeName],
               biathlonBenchmark: BiathlonTopHalfBenchmark.fromMap(
                 data?['biathlonTopHalf'],
               ),
@@ -374,8 +384,10 @@ class _ClassRaceMetadata {
     this.biathlonBenchmark,
     this.biathlonAllProfile,
     this.biathlonTopHalfProfile,
+    this.programLabels = const [],
   });
 
+  final List<String> programLabels;
   final int participantCount;
   final BiathlonTopHalfBenchmark? biathlonBenchmark;
   final BiathlonAggregateProfile? biathlonAllProfile;
@@ -433,6 +445,7 @@ bool _isRecoverableProfileReadError(FirebaseException error) {
 AthleteRace _athleteRaceFromDoc(
   QueryDocumentSnapshot<Map<String, dynamic>> doc, {
   required int participantCount,
+  List<String> programLabels = const [],
   BiathlonTopHalfBenchmark? biathlonBenchmark,
   BiathlonAggregateProfile? biathlonAllProfile,
   BiathlonAggregateProfile? biathlonTopHalfProfile,
@@ -463,6 +476,8 @@ AthleteRace _athleteRaceFromDoc(
     classId: classId,
     resultId: doc.id,
     stageId: asNonEmptyString(data['stageId']),
+    relayLegNumber: parsedResult.relayLegNumber,
+    programLabels: programLabels,
     athleteId: asNonEmptyString(data['athleteId']) ?? '',
     name: asNonEmptyString(data['name']) ?? '',
     className: asNonEmptyString(data['className']) ?? '',

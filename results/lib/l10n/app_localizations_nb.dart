@@ -625,4 +625,94 @@ class AppLocalizationsNb extends AppLocalizations {
   @override
   String get seasonDistributionNoContributions =>
       'Ingen serier i dette intervallet.';
+
+  @override
+  String get comparisonTitle => 'Sammenlign sesonger';
+
+  @override
+  String get comparisonSport => 'Skiskyting';
+
+  @override
+  String get comparisonProgram => 'Program';
+
+  @override
+  String get comparisonSeasonA => 'Sesong A';
+
+  @override
+  String get comparisonSeasonB => 'Sesong B';
+
+  @override
+  String get comparisonNeedTwoSeasons =>
+      'Sammenligning krever to skiskyttersesonger med kjent dato.';
+
+  @override
+  String get comparisonNoProgram =>
+      'Ingen entydig sammenlignbare programmer er kjent. Eksplisitt disiplinmetadata for klasse eller arrangement kreves.';
+
+  @override
+  String comparisonUnknownCoverage(int unknownSeason, int unknownProgram) {
+    return 'Utelatt grunnlag: $unknownSeason løp uten kjent skiskytteridrett/dato; $unknownProgram med ukjent eller tvetydig program.';
+  }
+
+  @override
+  String comparisonRaceCoverage(int finished, int excluded) {
+    return '$finished fullførte løp · $excluded ufullførte løp utelatt';
+  }
+
+  @override
+  String get comparisonShowCounts => 'Vis antall';
+
+  @override
+  String comparisonFilters(
+    String sport,
+    String program,
+    String metric,
+    String selection,
+  ) {
+    return 'Filtre: $sport · $program · $metric · $selection';
+  }
+
+  @override
+  String get comparisonPositionCaution =>
+      'Stillingsvalg er utilgjengelige når historiske skytestillinger ikke kan bekreftes. Alle beholder kjente målte serier.';
+
+  @override
+  String comparisonDeltaPoints(String value) {
+    return 'Forskjell i treffprosent (B − A): $value prosentpoeng';
+  }
+
+  @override
+  String comparisonDeltaMisses(String value) {
+    return 'Forskjell i gjennomsnittlig bom (B − A): $value per serie';
+  }
+
+  @override
+  String comparisonDeltaSeconds(String value) {
+    return 'Forskjell i gjennomsnittlig standplasstid (B − A): $value s';
+  }
+
+  @override
+  String get comparisonCaution =>
+      'Forskjellene beskriver registrerte serier, ikke sikker forbedring. Små utvalg, deltakergrunnlag og forhold kan variere.';
+
+  @override
+  String get comparisonSprint => 'Sprint';
+
+  @override
+  String get comparisonIndividual => 'Normal';
+
+  @override
+  String get comparisonShortIndividual => 'Kort normal';
+
+  @override
+  String get comparisonPursuit => 'Jaktstart';
+
+  @override
+  String get comparisonMassStart => 'Fellesstart';
+
+  @override
+  String get comparisonSuperSprint => 'Supersprint';
+
+  @override
+  String get comparisonRelay => 'Stafett';
 }

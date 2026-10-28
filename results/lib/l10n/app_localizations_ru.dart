@@ -623,4 +623,94 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get seasonDistributionNoContributions => 'В этом интервале нет серий.';
+
+  @override
+  String get comparisonTitle => 'Сравнить сезоны';
+
+  @override
+  String get comparisonSport => 'Биатлон';
+
+  @override
+  String get comparisonProgram => 'Дисциплина';
+
+  @override
+  String get comparisonSeasonA => 'Сезон A';
+
+  @override
+  String get comparisonSeasonB => 'Сезон B';
+
+  @override
+  String get comparisonNeedTwoSeasons =>
+      'Для сравнения нужны два сезона биатлона с известными датами.';
+
+  @override
+  String get comparisonNoProgram =>
+      'Однозначно сопоставимая дисциплина неизвестна. Нужны явные сведения о дисциплине класса или соревнования.';
+
+  @override
+  String comparisonUnknownCoverage(int unknownSeason, int unknownProgram) {
+    return 'Исключённые данные: $unknownSeason гонок без известного вида биатлона/даты; $unknownProgram с неизвестной или неоднозначной дисциплиной.';
+  }
+
+  @override
+  String comparisonRaceCoverage(int finished, int excluded) {
+    return '$finished завершённых гонок · $excluded незавершённых гонок исключено';
+  }
+
+  @override
+  String get comparisonShowCounts => 'Показать количество';
+
+  @override
+  String comparisonFilters(
+    String sport,
+    String program,
+    String metric,
+    String selection,
+  ) {
+    return 'Фильтры: $sport · $program · $metric · $selection';
+  }
+
+  @override
+  String get comparisonPositionCaution =>
+      'Выбор по положению недоступен, если исторические положения стрельбы нельзя подтвердить. Все сохраняет известные измеренные серии.';
+
+  @override
+  String comparisonDeltaPoints(String value) {
+    return 'Разница точности (B − A): $value процентных пунктов';
+  }
+
+  @override
+  String comparisonDeltaMisses(String value) {
+    return 'Разница средних промахов (B − A): $value на серию';
+  }
+
+  @override
+  String comparisonDeltaSeconds(String value) {
+    return 'Разница среднего времени на стрельбище (B − A): $value с';
+  }
+
+  @override
+  String get comparisonCaution =>
+      'Различия описывают записанные серии, а не доказанное улучшение. Малые выборки, группы и условия могут различаться.';
+
+  @override
+  String get comparisonSprint => 'Спринт';
+
+  @override
+  String get comparisonIndividual => 'Индивидуальная гонка';
+
+  @override
+  String get comparisonShortIndividual => 'Короткая индивидуальная гонка';
+
+  @override
+  String get comparisonPursuit => 'Гонка преследования';
+
+  @override
+  String get comparisonMassStart => 'Масс-старт';
+
+  @override
+  String get comparisonSuperSprint => 'Суперспринт';
+
+  @override
+  String get comparisonRelay => 'Эстафета';
 }

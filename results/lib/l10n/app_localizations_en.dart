@@ -623,4 +623,94 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get seasonDistributionNoContributions => 'No series in this interval.';
+
+  @override
+  String get comparisonTitle => 'Compare seasons';
+
+  @override
+  String get comparisonSport => 'Biathlon';
+
+  @override
+  String get comparisonProgram => 'Program';
+
+  @override
+  String get comparisonSeasonA => 'Season A';
+
+  @override
+  String get comparisonSeasonB => 'Season B';
+
+  @override
+  String get comparisonNeedTwoSeasons =>
+      'Two dated biathlon seasons are needed for comparison.';
+
+  @override
+  String get comparisonNoProgram =>
+      'No unambiguous comparable program is known. Explicit class or event discipline metadata is required.';
+
+  @override
+  String comparisonUnknownCoverage(int unknownSeason, int unknownProgram) {
+    return 'Excluded coverage: $unknownSeason races without a known biathlon sport/date; $unknownProgram with an unknown or ambiguous program.';
+  }
+
+  @override
+  String comparisonRaceCoverage(int finished, int excluded) {
+    return '$finished finished races · $excluded unfinished races excluded';
+  }
+
+  @override
+  String get comparisonShowCounts => 'Show counts';
+
+  @override
+  String comparisonFilters(
+    String sport,
+    String program,
+    String metric,
+    String selection,
+  ) {
+    return 'Filters: $sport · $program · $metric · $selection';
+  }
+
+  @override
+  String get comparisonPositionCaution =>
+      'Position selections are unavailable when historical shooting positions cannot be verified. All retains known measured series.';
+
+  @override
+  String comparisonDeltaPoints(String value) {
+    return 'Hit rate difference (B − A): $value percentage points';
+  }
+
+  @override
+  String comparisonDeltaMisses(String value) {
+    return 'Mean misses difference (B − A): $value per series';
+  }
+
+  @override
+  String comparisonDeltaSeconds(String value) {
+    return 'Mean range time difference (B − A): $value s';
+  }
+
+  @override
+  String get comparisonCaution =>
+      'Differences describe recorded series, not proven improvement. Small samples, cohorts and conditions can differ.';
+
+  @override
+  String get comparisonSprint => 'Sprint';
+
+  @override
+  String get comparisonIndividual => 'Individual';
+
+  @override
+  String get comparisonShortIndividual => 'Short individual';
+
+  @override
+  String get comparisonPursuit => 'Pursuit';
+
+  @override
+  String get comparisonMassStart => 'Mass start';
+
+  @override
+  String get comparisonSuperSprint => 'Super sprint';
+
+  @override
+  String get comparisonRelay => 'Relay';
 }

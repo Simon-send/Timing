@@ -28,9 +28,12 @@ void main() {
       await firestore.doc('events/new/stages/final').set({'stageId': 'final'});
       await firestore.doc('events/old/classes/class').set({
         'participantCount': 250,
+        'name': 'Senior Normal',
       });
       await firestore.doc('events/new/stages/final/classes/class').set({
         'participantCount': 20,
+        'name': 'Senior',
+        'etappeName': 'Sprint 10 km',
       });
       for (var index = 0; index < 205; index++) {
         await firestore.doc('events/old/classes/class/results/r$index').set({
@@ -70,6 +73,14 @@ void main() {
       });
       final races = await first.future;
       expect(races, hasLength(206));
+      expect(
+        races.singleWhere((race) => race.resultId == 'stage').programLabels,
+        contains('Sprint 10 km'),
+      );
+      expect(
+        races.singleWhere((race) => race.resultId == 'r0').programLabels,
+        contains('Senior Normal'),
+      );
       expect(races.any((race) => race.resultId == 'r204'), isTrue);
       expect(
         races.singleWhere((race) => race.resultId == 'stage').stageId,
