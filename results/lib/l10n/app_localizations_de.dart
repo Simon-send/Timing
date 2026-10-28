@@ -628,4 +628,94 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get seasonDistributionNoContributions =>
       'Keine Serien in diesem Intervall.';
+
+  @override
+  String get comparisonTitle => 'Saisons vergleichen';
+
+  @override
+  String get comparisonSport => 'Biathlon';
+
+  @override
+  String get comparisonProgram => 'Disziplin';
+
+  @override
+  String get comparisonSeasonA => 'Saison A';
+
+  @override
+  String get comparisonSeasonB => 'Saison B';
+
+  @override
+  String get comparisonNeedTwoSeasons =>
+      'Für den Vergleich werden zwei datierte Biathlonsaisons benötigt.';
+
+  @override
+  String get comparisonNoProgram =>
+      'Keine eindeutig vergleichbare Disziplin bekannt. Explizite Disziplinangaben der Klasse oder Veranstaltung sind erforderlich.';
+
+  @override
+  String comparisonUnknownCoverage(int unknownSeason, int unknownProgram) {
+    return 'Ausgeschlossen: $unknownSeason Rennen ohne bekannte Biathlonsportart/Datum; $unknownProgram mit unbekannter oder mehrdeutiger Disziplin.';
+  }
+
+  @override
+  String comparisonRaceCoverage(int finished, int excluded) {
+    return '$finished beendete Rennen · $excluded nicht beendete Rennen ausgeschlossen';
+  }
+
+  @override
+  String get comparisonShowCounts => 'Anzahlen anzeigen';
+
+  @override
+  String comparisonFilters(
+    String sport,
+    String program,
+    String metric,
+    String selection,
+  ) {
+    return 'Filter: $sport · $program · $metric · $selection';
+  }
+
+  @override
+  String get comparisonPositionCaution =>
+      'Positionsauswahlen sind nicht verfügbar, wenn historische Schießpositionen nicht bestätigt werden können. Alle behält bekannte gemessene Serien bei.';
+
+  @override
+  String comparisonDeltaPoints(String value) {
+    return 'Trefferquotendifferenz (B − A): $value Prozentpunkte';
+  }
+
+  @override
+  String comparisonDeltaMisses(String value) {
+    return 'Differenz der mittleren Fehler (B − A): $value pro Serie';
+  }
+
+  @override
+  String comparisonDeltaSeconds(String value) {
+    return 'Differenz der mittleren Schießstandzeit (B − A): $value s';
+  }
+
+  @override
+  String get comparisonCaution =>
+      'Die Unterschiede beschreiben erfasste Serien, keine bewiesene Verbesserung. Kleine Stichproben, Gruppen und Bedingungen können abweichen.';
+
+  @override
+  String get comparisonSprint => 'Sprint';
+
+  @override
+  String get comparisonIndividual => 'Einzel';
+
+  @override
+  String get comparisonShortIndividual => 'Verkürztes Einzel';
+
+  @override
+  String get comparisonPursuit => 'Verfolgung';
+
+  @override
+  String get comparisonMassStart => 'Massenstart';
+
+  @override
+  String get comparisonSuperSprint => 'Supersprint';
+
+  @override
+  String get comparisonRelay => 'Staffel';
 }

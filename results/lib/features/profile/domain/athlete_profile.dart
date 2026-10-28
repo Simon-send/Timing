@@ -101,6 +101,7 @@ class AthleteRace {
     this.biathlonBenchmark,
     this.biathlonAllProfile,
     this.biathlonTopHalfProfile,
+    this.programLabels = const [],
   });
 
   final String eventId;
@@ -127,6 +128,10 @@ class AthleteRace {
   final BiathlonTopHalfBenchmark? biathlonBenchmark;
   final BiathlonAggregateProfile? biathlonAllProfile;
   final BiathlonAggregateProfile? biathlonTopHalfProfile;
+
+  /// Explicit class/etappe program labels read with the existing class metadata.
+  /// Age, distance and the recorded series count do not identify a program.
+  final List<String> programLabels;
 
   /// Call on the selected season scope; nonfinishers never supply observations.
   ShootingSelectionResult? shootingSelection(

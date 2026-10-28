@@ -625,4 +625,94 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get seasonDistributionNoContributions =>
       'Nessuna serie in questo intervallo.';
+
+  @override
+  String get comparisonTitle => 'Confronta stagioni';
+
+  @override
+  String get comparisonSport => 'Biathlon';
+
+  @override
+  String get comparisonProgram => 'Formato';
+
+  @override
+  String get comparisonSeasonA => 'Stagione A';
+
+  @override
+  String get comparisonSeasonB => 'Stagione B';
+
+  @override
+  String get comparisonNeedTwoSeasons =>
+      'Per il confronto servono due stagioni di biathlon con date note.';
+
+  @override
+  String get comparisonNoProgram =>
+      'Non è noto alcun formato confrontabile senza ambiguità. Servono metadati espliciti della disciplina di categoria o evento.';
+
+  @override
+  String comparisonUnknownCoverage(int unknownSeason, int unknownProgram) {
+    return 'Dati esclusi: $unknownSeason gare senza sport biathlon/data noti; $unknownProgram con formato sconosciuto o ambiguo.';
+  }
+
+  @override
+  String comparisonRaceCoverage(int finished, int excluded) {
+    return '$finished gare concluse · $excluded gare non concluse escluse';
+  }
+
+  @override
+  String get comparisonShowCounts => 'Mostra conteggi';
+
+  @override
+  String comparisonFilters(
+    String sport,
+    String program,
+    String metric,
+    String selection,
+  ) {
+    return 'Filtri: $sport · $program · $metric · $selection';
+  }
+
+  @override
+  String get comparisonPositionCaution =>
+      'Le selezioni per posizione non sono disponibili se le posizioni storiche non sono verificabili. Tutte conserva le serie misurate note.';
+
+  @override
+  String comparisonDeltaPoints(String value) {
+    return 'Differenza di precisione (B − A): $value punti percentuali';
+  }
+
+  @override
+  String comparisonDeltaMisses(String value) {
+    return 'Differenza degli errori medi (B − A): $value per serie';
+  }
+
+  @override
+  String comparisonDeltaSeconds(String value) {
+    return 'Differenza del tempo medio al poligono (B − A): $value s';
+  }
+
+  @override
+  String get comparisonCaution =>
+      'Le differenze descrivono le serie registrate, non un miglioramento dimostrato. Piccoli campioni, gruppi e condizioni possono differire.';
+
+  @override
+  String get comparisonSprint => 'Sprint';
+
+  @override
+  String get comparisonIndividual => 'Individuale';
+
+  @override
+  String get comparisonShortIndividual => 'Individuale corto';
+
+  @override
+  String get comparisonPursuit => 'Inseguimento';
+
+  @override
+  String get comparisonMassStart => 'Partenza in linea';
+
+  @override
+  String get comparisonSuperSprint => 'Super sprint';
+
+  @override
+  String get comparisonRelay => 'Staffetta';
 }

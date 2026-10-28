@@ -372,5 +372,85 @@
     }
   },
   "seasonDistributionContributions": "Contributing races and series",
-  "seasonDistributionNoContributions": "No series in this interval."
+  "seasonDistributionNoContributions": "No series in this interval.",
+  "comparisonTitle": "Compare seasons",
+  "comparisonSport": "Biathlon",
+  "comparisonProgram": "Program",
+  "comparisonSeasonA": "Season A",
+  "comparisonSeasonB": "Season B",
+  "comparisonNeedTwoSeasons": "Two dated biathlon seasons are needed for comparison.",
+  "comparisonNoProgram": "No unambiguous comparable program is known. Explicit class or event discipline metadata is required.",
+  "comparisonUnknownCoverage": "Excluded coverage: {unknownSeason} races without a known biathlon sport/date; {unknownProgram} with an unknown or ambiguous program.",
+  "@comparisonUnknownCoverage": {
+    "placeholders": {
+      "unknownSeason": {
+        "type": "int"
+      },
+      "unknownProgram": {
+        "type": "int"
+      }
+    }
+  },
+  "comparisonRaceCoverage": "{finished} finished races · {excluded} unfinished races excluded",
+  "@comparisonRaceCoverage": {
+    "placeholders": {
+      "finished": {
+        "type": "int"
+      },
+      "excluded": {
+        "type": "int"
+      }
+    }
+  },
+  "comparisonShowCounts": "Show counts",
+  "comparisonFilters": "Filters: {sport} · {program} · {metric} · {selection}",
+  "@comparisonFilters": {
+    "placeholders": {
+      "sport": {
+        "type": "String"
+      },
+      "program": {
+        "type": "String"
+      },
+      "metric": {
+        "type": "String"
+      },
+      "selection": {
+        "type": "String"
+      }
+    }
+  },
+  "comparisonPositionCaution": "Position selections are unavailable when historical shooting positions cannot be verified. All retains known measured series.",
+  "comparisonDeltaPoints": "Hit rate difference (B − A): {value} percentage points",
+  "@comparisonDeltaPoints": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "comparisonDeltaMisses": "Mean misses difference (B − A): {value} per series",
+  "@comparisonDeltaMisses": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "comparisonDeltaSeconds": "Mean range time difference (B − A): {value} s",
+  "@comparisonDeltaSeconds": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "comparisonCaution": "Differences describe recorded series, not proven improvement. Small samples, cohorts and conditions can differ.",
+  "comparisonSprint": "Sprint",
+  "comparisonIndividual": "Individual",
+  "comparisonShortIndividual": "Short individual",
+  "comparisonPursuit": "Pursuit",
+  "comparisonMassStart": "Mass start",
+  "comparisonSuperSprint": "Super sprint",
+  "comparisonRelay": "Relay"
 }

@@ -11,6 +11,7 @@ AthleteRace race({
   String classId = 'class',
   String resultId = 'same-result-id',
   String status = '',
+  List<String> programLabels = const [],
   int? relayLegNumber,
   bool relay = false,
   bool relayLeg = false,
@@ -33,6 +34,7 @@ AthleteRace race({
   totalMs: 60000,
   shooting: '',
   status: status,
+  programLabels: programLabels,
   isRelay: relay,
   biathlonMetrics: BiathlonRaceMetrics(
     shootingSeries: passes,

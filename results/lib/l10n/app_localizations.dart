@@ -1187,6 +1187,149 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No series in this interval.'**
   String get seasonDistributionNoContributions;
+
+  /// No description provided for @comparisonTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Compare seasons'**
+  String get comparisonTitle;
+
+  /// No description provided for @comparisonSport.
+  ///
+  /// In en, this message translates to:
+  /// **'Biathlon'**
+  String get comparisonSport;
+
+  /// No description provided for @comparisonProgram.
+  ///
+  /// In en, this message translates to:
+  /// **'Program'**
+  String get comparisonProgram;
+
+  /// No description provided for @comparisonSeasonA.
+  ///
+  /// In en, this message translates to:
+  /// **'Season A'**
+  String get comparisonSeasonA;
+
+  /// No description provided for @comparisonSeasonB.
+  ///
+  /// In en, this message translates to:
+  /// **'Season B'**
+  String get comparisonSeasonB;
+
+  /// No description provided for @comparisonNeedTwoSeasons.
+  ///
+  /// In en, this message translates to:
+  /// **'Two dated biathlon seasons are needed for comparison.'**
+  String get comparisonNeedTwoSeasons;
+
+  /// No description provided for @comparisonNoProgram.
+  ///
+  /// In en, this message translates to:
+  /// **'No unambiguous comparable program is known. Explicit class or event discipline metadata is required.'**
+  String get comparisonNoProgram;
+
+  /// No description provided for @comparisonUnknownCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Excluded coverage: {unknownSeason} races without a known biathlon sport/date; {unknownProgram} with an unknown or ambiguous program.'**
+  String comparisonUnknownCoverage(int unknownSeason, int unknownProgram);
+
+  /// No description provided for @comparisonRaceCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'{finished} finished races · {excluded} unfinished races excluded'**
+  String comparisonRaceCoverage(int finished, int excluded);
+
+  /// No description provided for @comparisonShowCounts.
+  ///
+  /// In en, this message translates to:
+  /// **'Show counts'**
+  String get comparisonShowCounts;
+
+  /// No description provided for @comparisonFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Filters: {sport} · {program} · {metric} · {selection}'**
+  String comparisonFilters(
+    String sport,
+    String program,
+    String metric,
+    String selection,
+  );
+
+  /// No description provided for @comparisonPositionCaution.
+  ///
+  /// In en, this message translates to:
+  /// **'Position selections are unavailable when historical shooting positions cannot be verified. All retains known measured series.'**
+  String get comparisonPositionCaution;
+
+  /// No description provided for @comparisonDeltaPoints.
+  ///
+  /// In en, this message translates to:
+  /// **'Hit rate difference (B − A): {value} percentage points'**
+  String comparisonDeltaPoints(String value);
+
+  /// No description provided for @comparisonDeltaMisses.
+  ///
+  /// In en, this message translates to:
+  /// **'Mean misses difference (B − A): {value} per series'**
+  String comparisonDeltaMisses(String value);
+
+  /// No description provided for @comparisonDeltaSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'Mean range time difference (B − A): {value} s'**
+  String comparisonDeltaSeconds(String value);
+
+  /// No description provided for @comparisonCaution.
+  ///
+  /// In en, this message translates to:
+  /// **'Differences describe recorded series, not proven improvement. Small samples, cohorts and conditions can differ.'**
+  String get comparisonCaution;
+
+  /// No description provided for @comparisonSprint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sprint'**
+  String get comparisonSprint;
+
+  /// No description provided for @comparisonIndividual.
+  ///
+  /// In en, this message translates to:
+  /// **'Individual'**
+  String get comparisonIndividual;
+
+  /// No description provided for @comparisonShortIndividual.
+  ///
+  /// In en, this message translates to:
+  /// **'Short individual'**
+  String get comparisonShortIndividual;
+
+  /// No description provided for @comparisonPursuit.
+  ///
+  /// In en, this message translates to:
+  /// **'Pursuit'**
+  String get comparisonPursuit;
+
+  /// No description provided for @comparisonMassStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Mass start'**
+  String get comparisonMassStart;
+
+  /// No description provided for @comparisonSuperSprint.
+  ///
+  /// In en, this message translates to:
+  /// **'Super sprint'**
+  String get comparisonSuperSprint;
+
+  /// No description provided for @comparisonRelay.
+  ///
+  /// In en, this message translates to:
+  /// **'Relay'**
+  String get comparisonRelay;
 }
 
 class _AppLocalizationsDelegate

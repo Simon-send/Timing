@@ -625,4 +625,94 @@ class AppLocalizationsEt extends AppLocalizations {
   @override
   String get seasonDistributionNoContributions =>
       'Selles vahemikus pole seeriaid.';
+
+  @override
+  String get comparisonTitle => 'Võrdle hooaegu';
+
+  @override
+  String get comparisonSport => 'Laskesuusatamine';
+
+  @override
+  String get comparisonProgram => 'Võistlusvorm';
+
+  @override
+  String get comparisonSeasonA => 'Hooaeg A';
+
+  @override
+  String get comparisonSeasonB => 'Hooaeg B';
+
+  @override
+  String get comparisonNeedTwoSeasons =>
+      'Võrdlemiseks on vaja kahte teadaolevate kuupäevadega laskesuusahooaega.';
+
+  @override
+  String get comparisonNoProgram =>
+      'Üheselt võrreldav võistlusvorm pole teada. Vaja on klassi või ürituse selgeid distsipliiniandmeid.';
+
+  @override
+  String comparisonUnknownCoverage(int unknownSeason, int unknownProgram) {
+    return 'Välja jäetud andmed: $unknownSeason võistlust ilma teadaoleva laskesuusaala/kuupäevata; $unknownProgram teadmata või mitmetähendusliku võistlusvormiga.';
+  }
+
+  @override
+  String comparisonRaceCoverage(int finished, int excluded) {
+    return '$finished lõpetatud võistlust · $excluded lõpetamata võistlust välja jäetud';
+  }
+
+  @override
+  String get comparisonShowCounts => 'Näita arve';
+
+  @override
+  String comparisonFilters(
+    String sport,
+    String program,
+    String metric,
+    String selection,
+  ) {
+    return 'Filtrid: $sport · $program · $metric · $selection';
+  }
+
+  @override
+  String get comparisonPositionCaution =>
+      'Asendivalikud pole saadaval, kui ajaloolisi laskeasendeid ei saa kontrollida. Kõik säilitab teadaolevad mõõdetud seeriad.';
+
+  @override
+  String comparisonDeltaPoints(String value) {
+    return 'Tabamusprotsendi erinevus (B − A): $value protsendipunkti';
+  }
+
+  @override
+  String comparisonDeltaMisses(String value) {
+    return 'Keskmiste möödalaskude erinevus (B − A): $value seeria kohta';
+  }
+
+  @override
+  String comparisonDeltaSeconds(String value) {
+    return 'Keskmise lasketiiruaja erinevus (B − A): $value s';
+  }
+
+  @override
+  String get comparisonCaution =>
+      'Erinevused kirjeldavad salvestatud seeriaid, mitte tõestatud paranemist. Väikesed valimid, rühmad ja tingimused võivad erineda.';
+
+  @override
+  String get comparisonSprint => 'Sprint';
+
+  @override
+  String get comparisonIndividual => 'Tavadistants';
+
+  @override
+  String get comparisonShortIndividual => 'Lühike tavadistants';
+
+  @override
+  String get comparisonPursuit => 'Jälitussõit';
+
+  @override
+  String get comparisonMassStart => 'Ühisstart';
+
+  @override
+  String get comparisonSuperSprint => 'Supersprint';
+
+  @override
+  String get comparisonRelay => 'Teatesõit';
 }

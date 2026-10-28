@@ -9,11 +9,14 @@ class HistogramBar {
     required this.start,
     required this.end,
     required this.count,
+    this.value,
   });
 
   final int start;
   final int end;
   final int count;
+  final double? value;
+  double get heightValue => value ?? count.toDouble();
 }
 
 /// Shared geometry for drawing, hit targets and the result percentile markers.
@@ -45,6 +48,8 @@ class HistogramBarsPainter extends CustomPainter {
     required this.formatValue,
     this.barLabel,
     this.maximumCount,
+    this.maximumValue,
+    this.axisLabel,
     this.showCountAxisLabels = false,
     this.mean,
     this.meanLabel,
@@ -57,6 +62,8 @@ class HistogramBarsPainter extends CustomPainter {
   final String Function(int) formatValue;
   final String Function(int index)? barLabel;
   final int? maximumCount;
+  final double? maximumValue;
+  final String Function(num)? axisLabel;
   final bool showCountAxisLabels;
   final double? mean;
   final String? meanLabel;
@@ -79,8 +86,8 @@ class HistogramBarsPainter extends CustomPainter {
     canvas.drawLine(chart.bottomLeft, chart.bottomRight, axisPaint);
     canvas.drawLine(chart.bottomLeft, chart.topLeft, axisPaint);
     final maxCount = math.max(
-      maximumCount ?? 0,
-      buckets.map((bucket) => bucket.count).reduce(math.max),
+      maximumValue ?? maximumCount?.toDouble() ?? 0,
+      buckets.map((bucket) => bucket.heightValue).reduce(math.max),
     );
     final peakBucket = buckets.reduce(
       (best, current) => current.count > best.count ? current : best,
@@ -92,7 +99,7 @@ class HistogramBarsPainter extends CustomPainter {
       final bucket = buckets[i];
       final height = maxCount == 0
           ? 0.0
-          : chart.height * bucket.count / maxCount;
+          : chart.height * bucket.heightValue / maxCount;
       final x = chart.left + i * chart.width / buckets.length + barGap / 2;
       final barRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(x, chart.bottom - height, barWidth, height),
@@ -147,7 +154,7 @@ class HistogramBarsPainter extends CustomPainter {
       _paintText(
         textPainter,
         canvas,
-        '$maxCount',
+        axisLabel?.call(maxCount) ?? maxCount.toInt().toString(),
         Offset(chart.left - 8, chart.top - 2),
         alignRight: true,
         fontSize: 10,
@@ -243,6 +250,8 @@ class HistogramBarsPainter extends CustomPainter {
       oldDelegate.formatValue != formatValue ||
       oldDelegate.barLabel != barLabel ||
       oldDelegate.maximumCount != maximumCount ||
+      oldDelegate.maximumValue != maximumValue ||
+      oldDelegate.axisLabel != axisLabel ||
       oldDelegate.showCountAxisLabels != showCountAxisLabels ||
       oldDelegate.mean != mean ||
       oldDelegate.meanLabel != meanLabel ||

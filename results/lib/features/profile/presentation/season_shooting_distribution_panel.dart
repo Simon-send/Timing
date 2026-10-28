@@ -19,8 +19,14 @@ class SeasonShootingDistributionPanel extends StatefulWidget {
     required this.metricLabel,
     required this.raceLabel,
     this.onRaceSelected,
+    this.commonScale,
+    this.maximumY,
+    this.showPercentages = false,
   });
 
+  final ShootingDistributionScale? commonScale;
+  final double? maximumY;
+  final bool showPercentages;
   final SeasonShootingMetricStatistics statistics;
   final ShootingMetric metric;
   final String metricLabel;
@@ -59,13 +65,15 @@ class _SeasonShootingDistributionPanelState
     final distribution = SeasonShootingDistribution.fromStatistics(
       widget.statistics,
       widget.metric,
-      scale: ShootingDistributionScale.forValues(
-        widget.statistics.validObservations.map(
-          (observation) => observation.value!,
-        ),
-        widget.metric,
-        timeBinCount: _timeBinCount,
-      ),
+      scale:
+          widget.commonScale ??
+          ShootingDistributionScale.forValues(
+            widget.statistics.validObservations.map(
+              (observation) => observation.value!,
+            ),
+            widget.metric,
+            timeBinCount: _timeBinCount,
+          ),
     );
     String binLabel(SeasonShootingBin bin) => isTime
         ? '${value(bin.start)} ≤ t ${bin.includesEnd ? '≤' : '<'} ${value(bin.end)}'
@@ -192,6 +200,11 @@ class _SeasonShootingDistributionPanelState
             )
           else ...[
             Text(widget.metricLabel),
+            Text(
+              widget.showPercentages
+                  ? l10n.seasonDistributionShare
+                  : l10n.seasonDistributionCount,
+            ),
             SizedBox(
               height: 360,
               child: LayoutBuilder(
@@ -209,6 +222,9 @@ class _SeasonShootingDistributionPanelState
                                   start: bin.start,
                                   end: bin.end,
                                   count: bin.count,
+                                  value: widget.showPercentages
+                                      ? bin.percentage
+                                      : null,
                                 ),
                             ],
                             palette: context.palette,
@@ -217,6 +233,10 @@ class _SeasonShootingDistributionPanelState
                             barLabel: (i) =>
                                 '${distribution.bins[i].count}\n${share(distribution.bins[i])}',
                             showCountAxisLabels: true,
+                            maximumValue: widget.maximumY,
+                            axisLabel: widget.showPercentages
+                                ? (input) => '${percentage.format(input)} %'
+                                : null,
                             mean: distribution.mean,
                             meanLabel: l10n.seasonDistributionMean(
                               value(distribution.mean!),
@@ -267,7 +287,7 @@ class _SeasonShootingDistributionPanelState
               ],
             ),
           ],
-          if (isTime) ...[
+          if (isTime && widget.commonScale == null) ...[
             const SizedBox(height: 8),
             Text(l10n.seasonDistributionIntervals(_timeBinCount)),
             Slider(

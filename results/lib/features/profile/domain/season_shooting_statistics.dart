@@ -93,14 +93,22 @@ class SeasonShootingStatistics {
 /// excludes whole non-finishers before looking at any of their measurements.
 SeasonShootingStatistics calculateSeasonShootingStatistics(
   Iterable<AthleteRace> races,
-  ShootingSelection selection,
-) {
+  ShootingSelection selection, {
+  ShootingSelectionResult? Function(
+    AthleteRace,
+    ShootingMetric,
+    ShootingSelection,
+  )?
+  selectObservations,
+}) {
   final eligible = races.where((race) => race.isFinished).toList();
   SeasonShootingMetricStatistics collect(ShootingMetric metric) {
     final observations = <SeasonShootingObservation>[];
     final unavailableRaces = <AthleteRace>[];
     for (final race in eligible) {
-      final result = race.shootingSelection(metric, selection);
+      final result = selectObservations == null
+          ? race.shootingSelection(metric, selection)
+          : selectObservations(race, metric, selection);
       if (result == null || result.observations.isEmpty) {
         unavailableRaces.add(race);
         continue;

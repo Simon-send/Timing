@@ -625,4 +625,94 @@ class AppLocalizationsSv extends AppLocalizations {
   @override
   String get seasonDistributionNoContributions =>
       'Inga serier i detta intervall.';
+
+  @override
+  String get comparisonTitle => 'Jämför säsonger';
+
+  @override
+  String get comparisonSport => 'Skidskytte';
+
+  @override
+  String get comparisonProgram => 'Program';
+
+  @override
+  String get comparisonSeasonA => 'Säsong A';
+
+  @override
+  String get comparisonSeasonB => 'Säsong B';
+
+  @override
+  String get comparisonNeedTwoSeasons =>
+      'Jämförelsen kräver två skidskyttesäsonger med kända datum.';
+
+  @override
+  String get comparisonNoProgram =>
+      'Inget entydigt jämförbart program är känt. Explicit disciplininformation för klass eller evenemang krävs.';
+
+  @override
+  String comparisonUnknownCoverage(int unknownSeason, int unknownProgram) {
+    return 'Uteslutet underlag: $unknownSeason lopp utan känd skidskyttesport/datum; $unknownProgram med okänt eller tvetydigt program.';
+  }
+
+  @override
+  String comparisonRaceCoverage(int finished, int excluded) {
+    return '$finished slutförda lopp · $excluded ej slutförda lopp uteslutna';
+  }
+
+  @override
+  String get comparisonShowCounts => 'Visa antal';
+
+  @override
+  String comparisonFilters(
+    String sport,
+    String program,
+    String metric,
+    String selection,
+  ) {
+    return 'Filter: $sport · $program · $metric · $selection';
+  }
+
+  @override
+  String get comparisonPositionCaution =>
+      'Positionsval är otillgängliga när historiska skjutpositioner inte kan verifieras. Alla behåller kända uppmätta serier.';
+
+  @override
+  String comparisonDeltaPoints(String value) {
+    return 'Skillnad i träffprocent (B − A): $value procentenheter';
+  }
+
+  @override
+  String comparisonDeltaMisses(String value) {
+    return 'Skillnad i genomsnittliga bom (B − A): $value per serie';
+  }
+
+  @override
+  String comparisonDeltaSeconds(String value) {
+    return 'Skillnad i genomsnittlig skjutvallstid (B − A): $value s';
+  }
+
+  @override
+  String get comparisonCaution =>
+      'Skillnaderna beskriver registrerade serier, inte bevisad förbättring. Små urval, deltagargrupper och förhållanden kan skilja sig.';
+
+  @override
+  String get comparisonSprint => 'Sprint';
+
+  @override
+  String get comparisonIndividual => 'Distans';
+
+  @override
+  String get comparisonShortIndividual => 'Kort distans';
+
+  @override
+  String get comparisonPursuit => 'Jaktstart';
+
+  @override
+  String get comparisonMassStart => 'Masstart';
+
+  @override
+  String get comparisonSuperSprint => 'Supersprint';
+
+  @override
+  String get comparisonRelay => 'Stafett';
 }
