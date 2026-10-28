@@ -532,4 +532,38 @@ class AppLocalizationsNb extends AppLocalizations {
   @override
   String get shootingRelayPositionsUnavailable =>
       'Skytestillinger er utilgjengelig for hele stafettlag. Velg Alle skytinger for registrerte standplasstider.';
+
+  @override
+  String get seasonShootingTitle => 'Skytestatistikk for sesongen';
+
+  @override
+  String get seasonShootingExplanation =>
+      'For valgte skytinger. Treffprosent bruker kjente femskuddsserier; stafetteskudd er utelatt. Antall gjelder registrerte serier. Manglende serier og usikker rekkefølge gjettes ikke.';
+
+  @override
+  String get seasonShootingHitPercent => 'Treffprosent';
+
+  @override
+  String get seasonShootingAverageMisses => 'Gjennomsnittlige bom per serie';
+
+  @override
+  String get seasonShootingMeanRangeTime => 'Gjennomsnittlig standplasstid';
+
+  @override
+  String get seasonShootingMedianRangeTime => 'Median standplasstid';
+
+  @override
+  String seasonShootingCoverage(int valid, int missing) {
+    return '$valid gyldige serier · $missing manglende målinger';
+  }
+
+  @override
+  String seasonShootingUnavailableRaces(int count) {
+    return 'Løp uten registrerte serier som kan velges: $count';
+  }
+
+  @override
+  String seasonShootingKnownShots(int hits, int shots) {
+    return '$hits treff / $shots kjente skudd';
+  }
 }

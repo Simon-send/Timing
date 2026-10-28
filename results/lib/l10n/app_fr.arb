@@ -258,5 +258,41 @@
   "shootingIncomplete": "Certains tirs, positions ou mesures manquent.",
   "shootingRelayUnavailable": "Les touches et les ratés sont indisponibles : les données de relais ne distinguent pas les balles de pioche des tours de pénalité. Le temps au pas de tir est affiché si enregistré.",
   "shootingExcluded": "Ce résultat est exclu des statistiques.",
-  "shootingRelayPositionsUnavailable": "Les positions de tir sont indisponibles pour une équipe de relais entière. Choisissez Tous les tirs pour les temps au pas de tir enregistrés."
+  "shootingRelayPositionsUnavailable": "Les positions de tir sont indisponibles pour une équipe de relais entière. Choisissez Tous les tirs pour les temps au pas de tir enregistrés.",
+  "seasonShootingTitle": "Statistiques de tir de la saison",
+  "seasonShootingExplanation": "Pour les tirs sélectionnés. Le taux de réussite utilise les séries connues de cinq tirs ; les tirs de relais sont exclus. Seules les séries enregistrées sont comptées. Les séries absentes et les ordres incertains ne sont pas déduits.",
+  "seasonShootingHitPercent": "Taux de réussite",
+  "seasonShootingAverageMisses": "Moyenne des tirs manqués par série",
+  "seasonShootingMeanRangeTime": "Temps moyen au pas de tir",
+  "seasonShootingMedianRangeTime": "Temps médian au pas de tir",
+  "seasonShootingCoverage": "{valid} séries valides · {missing} mesures manquantes",
+  "@seasonShootingCoverage": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingUnavailableRaces": "Courses sans série enregistrée sélectionnable : {count}",
+  "@seasonShootingUnavailableRaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingKnownShots": "{hits} réussites / {shots} tirs connus",
+  "@seasonShootingKnownShots": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "shots": {
+        "type": "int"
+      }
+    }
+  }
 }

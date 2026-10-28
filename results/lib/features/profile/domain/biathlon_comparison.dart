@@ -25,24 +25,6 @@ enum BiathlonMetric {
   };
 }
 
-/// Arithmetic mean of valid race percentages; missing data is not a zero.
-BiathlonBenchmarkValue? averageBiathlonHitPercent(
-  Iterable<BiathlonRaceMetrics> races,
-  BiathlonMetric metric,
-) {
-  if (!metric.isPercentage) return null;
-  final values = races
-      .map((race) => race.valueFor(metric))
-      .whereType<double>()
-      .where((value) => value.isFinite && value >= 0 && value <= 100)
-      .toList();
-  if (values.isEmpty) return null;
-  return BiathlonBenchmarkValue(
-    mean: values.reduce((a, b) => a + b) / values.length,
-    count: values.length,
-  );
-}
-
 class BiathlonRaceMetrics {
   const BiathlonRaceMetrics({
     this.finishTimeMs,

@@ -286,5 +286,41 @@
   "shootingIncomplete": "Some shootings, positions or measurements are missing.",
   "shootingRelayUnavailable": "Hits and misses are unavailable: relay data does not distinguish reserve shots from penalty loops. Range time is available when recorded.",
   "shootingExcluded": "This result is excluded from statistics.",
-  "shootingRelayPositionsUnavailable": "Shooting positions are unavailable for whole-team relays. Choose All shootings for recorded range times."
+  "shootingRelayPositionsUnavailable": "Shooting positions are unavailable for whole-team relays. Choose All shootings for recorded range times.",
+  "seasonShootingTitle": "Season shooting statistics",
+  "seasonShootingExplanation": "For the selected shootings. Hit percentage uses known five-shot series; relay shots are excluded. Counts cover recorded series only. Missing series and uncertain order are not inferred.",
+  "seasonShootingHitPercent": "Hit percentage",
+  "seasonShootingAverageMisses": "Average misses per series",
+  "seasonShootingMeanRangeTime": "Mean range time",
+  "seasonShootingMedianRangeTime": "Median range time",
+  "seasonShootingCoverage": "{valid} valid series · {missing} missing measurements",
+  "@seasonShootingCoverage": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingUnavailableRaces": "Races without selectable recorded series: {count}",
+  "@seasonShootingUnavailableRaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingKnownShots": "{hits} hits / {shots} known shots",
+  "@seasonShootingKnownShots": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "shots": {
+        "type": "int"
+      }
+    }
+  }
 }

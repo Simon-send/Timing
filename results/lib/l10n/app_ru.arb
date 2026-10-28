@@ -258,5 +258,41 @@
   "shootingIncomplete": "Некоторые стрельбы, положения или измерения отсутствуют.",
   "shootingRelayUnavailable": "Попадания и промахи недоступны: данные эстафеты не отличают дополнительные патроны от штрафных кругов. Время на рубеже показано, если записано.",
   "shootingExcluded": "Этот результат исключён из статистики.",
-  "shootingRelayPositionsUnavailable": "Положения стрельбы недоступны для всей эстафетной команды. Выберите «Все стрельбы», чтобы увидеть записанное время на рубеже."
+  "shootingRelayPositionsUnavailable": "Положения стрельбы недоступны для всей эстафетной команды. Выберите «Все стрельбы», чтобы увидеть записанное время на рубеже.",
+  "seasonShootingTitle": "Статистика стрельбы за сезон",
+  "seasonShootingExplanation": "Для выбранных стрельб. Процент попаданий рассчитан по известным сериям из пяти выстрелов; выстрелы в эстафетах исключены. Учитываются только записанные серии. Пропущенные серии и неясный порядок не восстанавливаются.",
+  "seasonShootingHitPercent": "Процент попаданий",
+  "seasonShootingAverageMisses": "Среднее число промахов за серию",
+  "seasonShootingMeanRangeTime": "Среднее время на рубеже",
+  "seasonShootingMedianRangeTime": "Медианное время на рубеже",
+  "seasonShootingCoverage": "{valid} серий с данными · {missing} отсутствующих измерений",
+  "@seasonShootingCoverage": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingUnavailableRaces": "Гонки без записанных серий, доступных для выбора: {count}",
+  "@seasonShootingUnavailableRaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingKnownShots": "{hits} попаданий / {shots} известных выстрелов",
+  "@seasonShootingKnownShots": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "shots": {
+        "type": "int"
+      }
+    }
+  }
 }

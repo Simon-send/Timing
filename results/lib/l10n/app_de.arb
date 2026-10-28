@@ -258,5 +258,41 @@
   "shootingIncomplete": "Einige Schießeinlagen, Anschläge oder Messwerte fehlen.",
   "shootingRelayUnavailable": "Treffer und Fehlschüsse sind nicht verfügbar: Staffeldaten unterscheiden Nachlader nicht von Strafrunden. Schießstandzeit wird angezeigt, wenn erfasst.",
   "shootingExcluded": "Dieses Ergebnis ist von der Statistik ausgeschlossen.",
-  "shootingRelayPositionsUnavailable": "Anschläge sind für ganze Staffelteams nicht verfügbar. Wähle Alle Schießeinlagen für erfasste Schießstandzeiten."
+  "shootingRelayPositionsUnavailable": "Anschläge sind für ganze Staffelteams nicht verfügbar. Wähle Alle Schießeinlagen für erfasste Schießstandzeiten.",
+  "seasonShootingTitle": "Schießstatistik der Saison",
+  "seasonShootingExplanation": "Für die gewählten Schießeinlagen. Die Trefferquote nutzt bekannte Fünf-Schuss-Serien; Staffelschüsse sind ausgeschlossen. Gezählt werden nur erfasste Serien. Fehlende Serien und eine unsichere Reihenfolge werden nicht geschätzt.",
+  "seasonShootingHitPercent": "Trefferquote",
+  "seasonShootingAverageMisses": "Durchschnittliche Fehler pro Serie",
+  "seasonShootingMeanRangeTime": "Mittlere Schießstandzeit",
+  "seasonShootingMedianRangeTime": "Mediane Schießstandzeit",
+  "seasonShootingCoverage": "{valid} gültige Serien · {missing} fehlende Messungen",
+  "@seasonShootingCoverage": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingUnavailableRaces": "Rennen ohne auswählbare erfasste Serien: {count}",
+  "@seasonShootingUnavailableRaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingKnownShots": "{hits} Treffer / {shots} bekannte Schüsse",
+  "@seasonShootingKnownShots": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "shots": {
+        "type": "int"
+      }
+    }
+  }
 }

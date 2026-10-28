@@ -258,5 +258,41 @@
   "shootingIncomplete": "Noen skytinger, stillinger eller målinger mangler.",
   "shootingRelayUnavailable": "Treff og bom er utilgjengelig: stafettdata skiller ikke reserveskudd fra strafferunder. Standplasstid vises når den er registrert.",
   "shootingExcluded": "Dette resultatet er utelukket fra statistikken.",
-  "shootingRelayPositionsUnavailable": "Skytestillinger er utilgjengelig for hele stafettlag. Velg Alle skytinger for registrerte standplasstider."
+  "shootingRelayPositionsUnavailable": "Skytestillinger er utilgjengelig for hele stafettlag. Velg Alle skytinger for registrerte standplasstider.",
+  "seasonShootingTitle": "Skytestatistikk for sesongen",
+  "seasonShootingExplanation": "For valgte skytinger. Treffprosent bruker kjente femskuddsserier; stafetteskudd er utelatt. Antall gjelder registrerte serier. Manglende serier og usikker rekkefølge gjettes ikke.",
+  "seasonShootingHitPercent": "Treffprosent",
+  "seasonShootingAverageMisses": "Gjennomsnittlige bom per serie",
+  "seasonShootingMeanRangeTime": "Gjennomsnittlig standplasstid",
+  "seasonShootingMedianRangeTime": "Median standplasstid",
+  "seasonShootingCoverage": "{valid} gyldige serier · {missing} manglende målinger",
+  "@seasonShootingCoverage": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingUnavailableRaces": "Løp uten registrerte serier som kan velges: {count}",
+  "@seasonShootingUnavailableRaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingKnownShots": "{hits} treff / {shots} kjente skudd",
+  "@seasonShootingKnownShots": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "shots": {
+        "type": "int"
+      }
+    }
+  }
 }

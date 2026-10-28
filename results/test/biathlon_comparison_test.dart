@@ -126,64 +126,25 @@ void main() {
     );
   }
 
-  test(
-    'averages valid race percentages equally, retaining zero and excluding missing data',
-    () {
-      final races = [
-        const BiathlonRaceMetrics(totalHitPercent: 100, proneHitPercent: 80),
-        const BiathlonRaceMetrics(totalHitPercent: 0, proneHitPercent: 60),
-        const BiathlonRaceMetrics(),
-        const BiathlonRaceMetrics(totalHitPercent: double.nan),
-        const BiathlonRaceMetrics(totalHitPercent: 101),
-      ];
-      final total = averageBiathlonHitPercent(
-        races,
-        BiathlonMetric.totalHitPercent,
-      );
-      expect(total?.mean, 50);
-      expect(total?.count, 2);
-      expect(
-        averageBiathlonHitPercent(races, BiathlonMetric.proneHitPercent)?.mean,
-        70,
-      );
-      expect(
-        averageBiathlonHitPercent(races, BiathlonMetric.standingHitPercent),
-        isNull,
-      );
-    },
-  );
   testWidgets(
-    'shows hit averages without reference profiles and excludes nonfinishers and relay',
+    'reference comparisons omit the obsolete unweighted season summary',
     (tester) async {
-      await tester.pumpWidget(
-        _app([
-          _race('first', withBenchmark: false),
-          _race(
-            'second',
-            withBenchmark: false,
-            ownMetrics: const BiathlonRaceMetrics(totalHitPercent: 40),
-          ),
-          for (final status in ['DNF', 'DNS', 'DFQ', 'DSQ', 'DQ'])
-            _race(status.toLowerCase(), status: status),
-          _race('relay', isRelay: true),
-        ]),
-      );
-      final summary = find.byKey(const Key('biathlon-average-hit-percent'));
-      expect(summary, findsOneWidget);
+      await tester.pumpWidget(_app([_race('first')]));
       expect(
-        find.descendant(of: summary, matching: find.text('60.0 %')),
+        find.byKey(const Key('biathlon-average-hit-percent')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const Key('biathlon-comparison-chart')),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: summary, matching: find.text('2 løp')),
+        find.byKey(const Key('biathlon-reference-topHalf')),
         findsOneWidget,
-      );
-      expect(
-        find.descendant(of: summary, matching: find.text('1 løp')),
-        findsNWidgets(2),
       );
     },
   );
+
   test('derives own hit percentages from complete public pass misses', () {
     final metrics = BiathlonRaceMetrics.fromResult(
       RaceResult.fromMap('r1', {

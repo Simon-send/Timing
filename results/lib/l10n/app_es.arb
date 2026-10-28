@@ -258,5 +258,41 @@
   "shootingIncomplete": "Faltan algunas tandas, posiciones o mediciones.",
   "shootingRelayUnavailable": "Aciertos y fallos no disponibles: los datos de relevos no distinguen las balas de reserva de las vueltas de penalización. Se muestra el tiempo en el campo de tiro si está registrado.",
   "shootingExcluded": "Este resultado se excluye de las estadísticas.",
-  "shootingRelayPositionsUnavailable": "Las posiciones de tiro no están disponibles para equipos de relevos completos. Elige Todas las tandas para ver los tiempos registrados en el campo de tiro."
+  "shootingRelayPositionsUnavailable": "Las posiciones de tiro no están disponibles para equipos de relevos completos. Elige Todas las tandas para ver los tiempos registrados en el campo de tiro.",
+  "seasonShootingTitle": "Estadísticas de tiro de la temporada",
+  "seasonShootingExplanation": "Para los tiros seleccionados. El porcentaje de acierto usa series conocidas de cinco disparos; se excluyen los disparos de relevos. Solo se cuentan las series registradas. No se deducen las series ausentes ni el orden incierto.",
+  "seasonShootingHitPercent": "Porcentaje de acierto",
+  "seasonShootingAverageMisses": "Media de fallos por serie",
+  "seasonShootingMeanRangeTime": "Tiempo medio en el campo de tiro",
+  "seasonShootingMedianRangeTime": "Mediana del tiempo en el campo de tiro",
+  "seasonShootingCoverage": "{valid} series válidas · {missing} mediciones ausentes",
+  "@seasonShootingCoverage": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingUnavailableRaces": "Carreras sin series registradas seleccionables: {count}",
+  "@seasonShootingUnavailableRaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingKnownShots": "{hits} aciertos / {shots} disparos conocidos",
+  "@seasonShootingKnownShots": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "shots": {
+        "type": "int"
+      }
+    }
+  }
 }

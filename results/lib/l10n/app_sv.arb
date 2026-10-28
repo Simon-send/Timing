@@ -258,5 +258,41 @@
   "shootingIncomplete": "Vissa skjutningar, ställningar eller mätvärden saknas.",
   "shootingRelayUnavailable": "Träffar och bom är inte tillgängliga: stafettdata skiljer inte extraskott från straffrundor. Skjutvallstid visas när den finns.",
   "shootingExcluded": "Detta resultat ingår inte i statistiken.",
-  "shootingRelayPositionsUnavailable": "Skjutställningar är inte tillgängliga för hela stafettlag. Välj Alla skjutningar för registrerade skjutvallstider."
+  "shootingRelayPositionsUnavailable": "Skjutställningar är inte tillgängliga för hela stafettlag. Välj Alla skjutningar för registrerade skjutvallstider.",
+  "seasonShootingTitle": "Säsongens skyttestatistik",
+  "seasonShootingExplanation": "För valda skjutningar. Träffprocenten använder kända femskottsserier; stafettskott utesluts. Antalen gäller registrerade serier. Saknade serier och osäker ordning uppskattas inte.",
+  "seasonShootingHitPercent": "Träffprocent",
+  "seasonShootingAverageMisses": "Genomsnittliga bom per serie",
+  "seasonShootingMeanRangeTime": "Genomsnittlig tid på skjutvallen",
+  "seasonShootingMedianRangeTime": "Mediantid på skjutvallen",
+  "seasonShootingCoverage": "{valid} giltiga serier · {missing} saknade mätningar",
+  "@seasonShootingCoverage": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingUnavailableRaces": "Lopp utan registrerade serier som kan väljas: {count}",
+  "@seasonShootingUnavailableRaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingKnownShots": "{hits} träffar / {shots} kända skott",
+  "@seasonShootingKnownShots": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "shots": {
+        "type": "int"
+      }
+    }
+  }
 }
