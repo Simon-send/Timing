@@ -59,6 +59,35 @@ List<ResultEvent> comparisonEvents() => [
 ];
 
 void main() {
+  test('supersprint penalties do not establish hits or fired-shot counts', () {
+    final data = dataset(
+      [
+        race(
+          event: 'super',
+          passes: [
+            pass(1, time: 30000),
+            pass(2, position: 'standing', misses: 1, time: 32000),
+          ],
+        ),
+      ],
+      [
+        event('super', DateTime(2025, 5, 1), disciplines: ['Supersprint']),
+      ],
+    );
+    final sample = data.sample(
+      year: 2025,
+      program: BiathlonProgram.superSprint,
+      selection: ShootingSelection.all,
+    );
+    expect(sample.statistics.hitPercent, isNull);
+    expect(sample.statistics.knownShotCount, 0);
+    expect(sample.statistics.hits.unavailableRaces, hasLength(1));
+    expect(sample.statistics.misses.validCount, 0);
+    expect(sample.statistics.misses.unavailableRaces, hasLength(1));
+    expect(sample.statistics.rangeTime.validCount, 2);
+    expect(sample.statistics.meanRangeTimeMs, 31000);
+  });
+
   test(
     'unequal samples use series, whole-status exclusion and absolute delta units',
     () {

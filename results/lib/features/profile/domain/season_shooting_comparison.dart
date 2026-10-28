@@ -92,6 +92,13 @@ ShootingSelectionResult? _comparisonObservations(
 ) {
   final metrics = race.biathlonMetrics;
   if (metrics == null) return null;
+  // Supersprint additions can represent penalties after reserve shots. The
+  // source has no fired-shot/target semantics to establish five-shot hits or
+  // misses. Measured stand time remains usable independently of ammunition.
+  if (program == BiathlonProgram.superSprint &&
+      metric != ShootingMetric.rangeTime) {
+    return null;
+  }
   final passes = metrics.shootingSeries.isNotEmpty
       ? metrics.shootingSeries
       : metrics.shootingPasses.values;
