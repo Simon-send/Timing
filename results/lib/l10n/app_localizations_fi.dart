@@ -569,4 +569,64 @@ class AppLocalizationsFi extends AppLocalizations {
   String seasonShootingKnownShots(int hits, int shots) {
     return '$hits osumaa / $shots tunnettua laukausta';
   }
+
+  @override
+  String get seasonDistributionTitle => 'Kauden jakauma';
+
+  @override
+  String seasonDistributionSeriesCount(int count) {
+    return 'n = $count mitattua sarjaa · kukin havainto on yksi sarja';
+  }
+
+  @override
+  String seasonDistributionSeconds(String value) {
+    return '$value s';
+  }
+
+  @override
+  String get seasonDistributionEmpty =>
+      'Tälle valinnalle ei ole kelvollisia mittauksia.';
+
+  @override
+  String get seasonDistributionLowData =>
+      'Hyvin vähän tietoja: alle 5 sarjaa. Tulkitse jakaumaa varoen.';
+
+  @override
+  String seasonDistributionMean(String value) {
+    return 'Keskiarvo: $value';
+  }
+
+  @override
+  String seasonDistributionMedian(String value) {
+    return 'Mediaani: $value';
+  }
+
+  @override
+  String get seasonDistributionShowChart => 'Näytä kaavio';
+
+  @override
+  String get seasonDistributionShowTable => 'Näytä saavutettava taulukko';
+
+  @override
+  String get seasonDistributionCount => 'Määrä';
+
+  @override
+  String get seasonDistributionShare => 'Osuus';
+
+  @override
+  String get seasonDistributionSelectBin =>
+      'Valitse pylväs tai väli nähdäksesi siihen kuuluvat kilpailut ja sarjat.';
+
+  @override
+  String seasonDistributionIntervals(int count) {
+    return 'Tavoiteltu välien määrä: $count';
+  }
+
+  @override
+  String get seasonDistributionContributions =>
+      'Jakaumaan kuuluvat kilpailut ja sarjat';
+
+  @override
+  String get seasonDistributionNoContributions =>
+      'Tällä välillä ei ole sarjoja.';
 }

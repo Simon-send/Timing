@@ -497,6 +497,22 @@ class _AthleteSeasonResultsState extends State<AthleteSeasonResults> {
           )) ...[
             ShellPanel(
               child: ShootingSelectionPanel(
+                onRaceSelected: (race) {
+                  if (race.eventId.isEmpty ||
+                      race.classId.isEmpty ||
+                      race.resultId.isEmpty) {
+                    return;
+                  }
+                  context.go(
+                    athleteLocation(
+                      eventId: race.eventId,
+                      classId: race.classId,
+                      resultId: race.resultId,
+                      stageId: race.stageId,
+                      relayLegNumber: race.relayLegNumber,
+                    ),
+                  );
+                },
                 statisticsRaces: [
                   for (final race in scope.statisticalRaces)
                     if (race.biathlonMetrics != null) race,

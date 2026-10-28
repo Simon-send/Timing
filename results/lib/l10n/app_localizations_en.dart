@@ -565,4 +565,62 @@ class AppLocalizationsEn extends AppLocalizations {
   String seasonShootingKnownShots(int hits, int shots) {
     return '$hits hits / $shots known shots';
   }
+
+  @override
+  String get seasonDistributionTitle => 'Season distribution';
+
+  @override
+  String seasonDistributionSeriesCount(int count) {
+    return 'n = $count measured series · each observation is one series';
+  }
+
+  @override
+  String seasonDistributionSeconds(String value) {
+    return '$value s';
+  }
+
+  @override
+  String get seasonDistributionEmpty =>
+      'No valid measurements for this selection.';
+
+  @override
+  String get seasonDistributionLowData =>
+      'Very little data: fewer than 5 series. Interpret the distribution with caution.';
+
+  @override
+  String seasonDistributionMean(String value) {
+    return 'Mean: $value';
+  }
+
+  @override
+  String seasonDistributionMedian(String value) {
+    return 'Median: $value';
+  }
+
+  @override
+  String get seasonDistributionShowChart => 'Show chart';
+
+  @override
+  String get seasonDistributionShowTable => 'Show accessible table';
+
+  @override
+  String get seasonDistributionCount => 'Count';
+
+  @override
+  String get seasonDistributionShare => 'Share';
+
+  @override
+  String get seasonDistributionSelectBin =>
+      'Select a bar or interval to see its contributing races and series.';
+
+  @override
+  String seasonDistributionIntervals(int count) {
+    return 'Target intervals: $count';
+  }
+
+  @override
+  String get seasonDistributionContributions => 'Contributing races and series';
+
+  @override
+  String get seasonDistributionNoContributions => 'No series in this interval.';
 }

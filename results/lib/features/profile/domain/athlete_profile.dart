@@ -81,6 +81,7 @@ class AthleteRace {
     required this.classId,
     required this.resultId,
     this.stageId,
+    this.relayLegNumber,
     required this.athleteId,
     required this.name,
     required this.className,
@@ -106,6 +107,7 @@ class AthleteRace {
   final String classId;
   final String resultId;
   final String? stageId;
+  final int? relayLegNumber;
   final String athleteId;
   final String name;
   final String className;

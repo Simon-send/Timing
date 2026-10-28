@@ -565,4 +565,64 @@ class AppLocalizationsEt extends AppLocalizations {
   String seasonShootingKnownShots(int hits, int shots) {
     return '$hits tabamust / $shots teadaolevat lasku';
   }
+
+  @override
+  String get seasonDistributionTitle => 'Hooaja jaotus';
+
+  @override
+  String seasonDistributionSeriesCount(int count) {
+    return 'n = $count mõõdetud seeriat · iga vaatlus on üks seeria';
+  }
+
+  @override
+  String seasonDistributionSeconds(String value) {
+    return '$value s';
+  }
+
+  @override
+  String get seasonDistributionEmpty =>
+      'Selle valiku jaoks pole kehtivaid mõõtmisi.';
+
+  @override
+  String get seasonDistributionLowData =>
+      'Väga vähe andmeid: alla 5 seeria. Tõlgenda jaotust ettevaatlikult.';
+
+  @override
+  String seasonDistributionMean(String value) {
+    return 'Keskmine: $value';
+  }
+
+  @override
+  String seasonDistributionMedian(String value) {
+    return 'Mediaan: $value';
+  }
+
+  @override
+  String get seasonDistributionShowChart => 'Näita diagrammi';
+
+  @override
+  String get seasonDistributionShowTable => 'Näita ligipääsetavat tabelit';
+
+  @override
+  String get seasonDistributionCount => 'Arv';
+
+  @override
+  String get seasonDistributionShare => 'Osakaal';
+
+  @override
+  String get seasonDistributionSelectBin =>
+      'Vali tulp või vahemik, et näha sellesse kuuluvaid võistlusi ja seeriaid.';
+
+  @override
+  String seasonDistributionIntervals(int count) {
+    return 'Soovitud vahemike arv: $count';
+  }
+
+  @override
+  String get seasonDistributionContributions =>
+      'Jaotusse kuuluvad võistlused ja seeriad';
+
+  @override
+  String get seasonDistributionNoContributions =>
+      'Selles vahemikus pole seeriaid.';
 }

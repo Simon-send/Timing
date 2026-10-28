@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:results/l10n/app_localizations.dart';
 
 import '../../../app/app_theme.dart';
+import '../../../core/widgets/histogram_chart.dart';
 
 class ResultDistributionData {
   const ResultDistributionData({
@@ -522,7 +523,7 @@ class _DistributionDialogState extends State<_DistributionDialog> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final size = Size(constraints.maxWidth, 400);
-              final chartRect = _HistogramLayout.chartRect(size);
+              final chartRect = HistogramChartLayout.chartRect(size);
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onPanStart: (details) {
@@ -1520,18 +1521,6 @@ double _yForValue(num value, _AxisRange range, Rect chart) {
   return chart.bottom - chart.height * ratio;
 }
 
-class _HistogramBucket {
-  const _HistogramBucket({
-    required this.start,
-    required this.end,
-    required this.count,
-  });
-
-  final int start;
-  final int end;
-  final int count;
-}
-
 class _PercentileSelection {
   const _PercentileSelection({required this.percentile, required this.value});
 
@@ -1564,30 +1553,12 @@ class _PercentileSelection {
   }
 }
 
-class _HistogramLayout {
-  static const left = 52.0;
-  static const top = 104.0;
-  static const right = 16.0;
-  static const bottom = 72.0;
-
-  static Rect chartRect(Size size) {
-    return Rect.fromLTWH(
-      left,
-      top,
-      math.max(0, size.width - left - right),
-      math.max(0, size.height - top - bottom),
-    );
-  }
-}
-
-List<_HistogramBucket> _buildBuckets(List<int> values, int bucketCount) {
+List<HistogramBar> _buildBuckets(List<int> values, int bucketCount) {
   if (values.isEmpty) return const [];
   final minValue = values.first;
   final maxValue = values.last;
   if (minValue == maxValue) {
-    return [
-      _HistogramBucket(start: minValue, end: maxValue, count: values.length),
-    ];
+    return [HistogramBar(start: minValue, end: maxValue, count: values.length)];
   }
 
   final width = (maxValue - minValue) / bucketCount;
@@ -1600,7 +1571,7 @@ List<_HistogramBucket> _buildBuckets(List<int> values, int bucketCount) {
 
   return [
     for (var index = 0; index < bucketCount; index++)
-      _HistogramBucket(
+      HistogramBar(
         start: minValue + (width * index).round(),
         end: index == bucketCount - 1
             ? maxValue
@@ -1666,7 +1637,7 @@ class _HistogramPainter extends CustomPainter {
     required this.totalCount,
   });
 
-  final List<_HistogramBucket> buckets;
+  final List<HistogramBar> buckets;
   final double averageValue;
   final int? currentAthleteValue;
   final String currentAthleteLabel;
@@ -1680,15 +1651,10 @@ class _HistogramPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final chart = _HistogramLayout.chartRect(size);
+    final chart = HistogramChartLayout.chartRect(size);
     if (chart.width <= 0 || chart.height <= 0 || buckets.isEmpty) return;
 
-    final axisPaint = Paint()
-      ..color = palette.border
-      ..strokeWidth = 1.4;
-    final barPaint = Paint()..color = palette.primary;
-    final peakPaint = Paint()..color = palette.primary;
-    final averageColor = _averageLineColor(palette);
+    final averageColor = histogramAverageLineColor(palette);
     final averagePaint = Paint()
       ..color = averageColor
       ..strokeWidth = 2.4;
@@ -1707,9 +1673,11 @@ class _HistogramPainter extends CustomPainter {
       ellipsis: '...',
     );
 
-    canvas.drawLine(chart.bottomLeft, chart.bottomRight, axisPaint);
-    canvas.drawLine(chart.bottomLeft, chart.topLeft, axisPaint);
-
+    HistogramBarsPainter(
+      buckets: buckets,
+      palette: palette,
+      formatValue: formatValue,
+    ).paint(canvas, size);
     final maxCount = buckets.map((bucket) => bucket.count).reduce(math.max);
     final peakBucket = buckets.reduce(
       (best, current) => current.count > best.count ? current : best,
@@ -1717,54 +1685,6 @@ class _HistogramPainter extends CustomPainter {
     final peakIndex = buckets.indexOf(peakBucket);
     final barGap = buckets.length > 18 ? 3.0 : 6.0;
     final barWidth = math.max(2.0, (chart.width / buckets.length) - barGap);
-
-    for (var i = 0; i < buckets.length; i++) {
-      final bucket = buckets[i];
-      final height = maxCount == 0
-          ? 0.0
-          : chart.height * bucket.count / maxCount;
-      final x = chart.left + i * (chart.width / buckets.length) + barGap / 2;
-      final barRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, chart.bottom - height, barWidth, height),
-        const Radius.circular(4),
-      );
-      canvas.drawRRect(barRect, i == peakIndex ? peakPaint : barPaint);
-      if (i == peakIndex) {
-        canvas.drawRRect(
-          barRect,
-          Paint()
-            ..color = palette.panel
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.4,
-        );
-      }
-
-      _paintText(
-        textPainter,
-        canvas,
-        '${bucket.count}',
-        Offset(x + barWidth / 2, chart.bottom - height - 18),
-        palette,
-        center: true,
-        fontSize: 11,
-        bold: true,
-      );
-
-      if (buckets.length <= 14 || i == 0 || i == buckets.length - 1) {
-        final label = i == buckets.length - 1
-            ? formatValue(bucket.end)
-            : formatValue(bucket.start);
-        _paintText(
-          textPainter,
-          canvas,
-          label,
-          Offset(x + barWidth / 2, chart.bottom + 8),
-          palette,
-          center: true,
-          fontSize: 10,
-        );
-      }
-    }
 
     final peakCenterX =
         chart.left +
@@ -2137,12 +2057,6 @@ class _HistogramPainter extends CustomPainter {
         oldDelegate.showPlacements != showPlacements ||
         oldDelegate.totalCount != totalCount;
   }
-}
-
-Color _averageLineColor(AppPalette palette) {
-  return palette.brightness == Brightness.dark
-      ? const Color(0xFF8ED8FF)
-      : const Color(0xFF006DAD);
 }
 
 double _badgeCenterWithin(double width, double centerX, double badgeWidth) {

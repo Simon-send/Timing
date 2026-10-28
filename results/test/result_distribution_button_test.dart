@@ -6,6 +6,56 @@ import 'package:results/features/results/presentation/result_distribution_button
 import 'package:results/l10n/app_localizations.dart';
 
 void main() {
+  testWidgets(
+    'histogram keeps interval control and comparison-marker interaction',
+    (tester) async {
+      tester.view.physicalSize = const Size(1000, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(AppThemeVariant.nordicDark),
+          home: Scaffold(
+            body: ResultDistributionButton(
+              data: ResultDistributionData(
+                title: 'Distribution',
+                values: [for (var i = 100; i <= 190; i += 10) i],
+                formatValue: (value) => '$value',
+                currentAthleteValue: 140,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byTooltip('Fordeling, regresjon og splittanalyse'));
+      await tester.pumpAndSettle();
+      expect(find.text('9'), findsOneWidget);
+      final slider = find.byType(Slider);
+      await tester.tapAt(tester.getTopLeft(slider) + const Offset(24, 24));
+      await tester.pumpAndSettle();
+      expect(find.text('45'), findsOneWidget);
+      expect(tester.widget<Slider>(slider).value, 2);
+      await tester.tap(find.byTooltip('Vis sammenligning'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Skjul sammenligning'), findsOneWidget);
+      await tester.tap(find.byTooltip('Vis plassering'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Vis prosent'), findsOneWidget);
+      final paint = find.byWidgetPredicate(
+        (widget) =>
+            widget is CustomPaint &&
+            widget.painter.runtimeType.toString() == '_HistogramPainter',
+      );
+      await tester.dragFrom(
+        tester.getTopLeft(paint) + const Offset(120, 140),
+        const Offset(100, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('45'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('choosing ski time returns to the same split regression', (
     tester,
   ) async {

@@ -294,5 +294,55 @@
         "type": "int"
       }
     }
-  }
+  },
+  "seasonDistributionTitle": "Säsongsfördelning",
+  "seasonDistributionSeriesCount": "n = {count} uppmätta serier · varje observation är en serie",
+  "@seasonDistributionSeriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionSeconds": "{value} s",
+  "@seasonDistributionSeconds": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionEmpty": "Inga giltiga mätningar för detta urval.",
+  "seasonDistributionLowData": "Mycket litet underlag: färre än 5 serier. Tolka fördelningen med försiktighet.",
+  "seasonDistributionMean": "Medelvärde: {value}",
+  "@seasonDistributionMean": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionMedian": "Median: {value}",
+  "@seasonDistributionMedian": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionShowChart": "Visa diagram",
+  "seasonDistributionShowTable": "Visa tillgänglig tabell",
+  "seasonDistributionCount": "Antal",
+  "seasonDistributionShare": "Andel",
+  "seasonDistributionSelectBin": "Välj en stapel eller ett intervall för att se bidragande lopp och serier.",
+  "seasonDistributionIntervals": "Önskat antal intervall: {count}",
+  "@seasonDistributionIntervals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionContributions": "Bidragande lopp och serier",
+  "seasonDistributionNoContributions": "Inga serier i detta intervall."
 }

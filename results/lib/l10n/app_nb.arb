@@ -294,5 +294,55 @@
         "type": "int"
       }
     }
-  }
+  },
+  "seasonDistributionTitle": "Sesongfordeling",
+  "seasonDistributionSeriesCount": "n = {count} målte serier · hver observasjon er én serie",
+  "@seasonDistributionSeriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionSeconds": "{value} s",
+  "@seasonDistributionSeconds": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionEmpty": "Ingen gyldige målinger for dette utvalget.",
+  "seasonDistributionLowData": "Svært lite datagrunnlag: færre enn 5 serier. Tolk fordelingen med varsomhet.",
+  "seasonDistributionMean": "Snitt: {value}",
+  "@seasonDistributionMean": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionMedian": "Median: {value}",
+  "@seasonDistributionMedian": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionShowChart": "Vis graf",
+  "seasonDistributionShowTable": "Vis tilgjengelig tabell",
+  "seasonDistributionCount": "Antall",
+  "seasonDistributionShare": "Andel",
+  "seasonDistributionSelectBin": "Velg en søyle eller et intervall for å se løpene og seriene som bidrar.",
+  "seasonDistributionIntervals": "Ønsket antall intervaller: {count}",
+  "@seasonDistributionIntervals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionContributions": "Løp og serier som bidrar",
+  "seasonDistributionNoContributions": "Ingen serier i dette intervallet."
 }

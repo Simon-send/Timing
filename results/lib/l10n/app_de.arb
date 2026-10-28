@@ -294,5 +294,55 @@
         "type": "int"
       }
     }
-  }
+  },
+  "seasonDistributionTitle": "Saisonverteilung",
+  "seasonDistributionSeriesCount": "n = {count} gemessene Serien · jede Beobachtung ist eine Serie",
+  "@seasonDistributionSeriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionSeconds": "{value} s",
+  "@seasonDistributionSeconds": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionEmpty": "Keine gültigen Messwerte für diese Auswahl.",
+  "seasonDistributionLowData": "Sehr wenige Daten: weniger als 5 Serien. Die Verteilung vorsichtig interpretieren.",
+  "seasonDistributionMean": "Mittelwert: {value}",
+  "@seasonDistributionMean": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionMedian": "Median: {value}",
+  "@seasonDistributionMedian": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionShowChart": "Diagramm anzeigen",
+  "seasonDistributionShowTable": "Barrierefreie Tabelle anzeigen",
+  "seasonDistributionCount": "Anzahl",
+  "seasonDistributionShare": "Anteil",
+  "seasonDistributionSelectBin": "Wähle einen Balken oder ein Intervall, um die zugehörigen Rennen und Serien zu sehen.",
+  "seasonDistributionIntervals": "Gewünschte Intervallanzahl: {count}",
+  "@seasonDistributionIntervals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionContributions": "Zugehörige Rennen und Serien",
+  "seasonDistributionNoContributions": "Keine Serien in diesem Intervall."
 }

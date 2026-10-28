@@ -322,5 +322,55 @@
         "type": "int"
       }
     }
-  }
+  },
+  "seasonDistributionTitle": "Season distribution",
+  "seasonDistributionSeriesCount": "n = {count} measured series · each observation is one series",
+  "@seasonDistributionSeriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionSeconds": "{value} s",
+  "@seasonDistributionSeconds": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionEmpty": "No valid measurements for this selection.",
+  "seasonDistributionLowData": "Very little data: fewer than 5 series. Interpret the distribution with caution.",
+  "seasonDistributionMean": "Mean: {value}",
+  "@seasonDistributionMean": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionMedian": "Median: {value}",
+  "@seasonDistributionMedian": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionShowChart": "Show chart",
+  "seasonDistributionShowTable": "Show accessible table",
+  "seasonDistributionCount": "Count",
+  "seasonDistributionShare": "Share",
+  "seasonDistributionSelectBin": "Select a bar or interval to see its contributing races and series.",
+  "seasonDistributionIntervals": "Target intervals: {count}",
+  "@seasonDistributionIntervals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionContributions": "Contributing races and series",
+  "seasonDistributionNoContributions": "No series in this interval."
 }
