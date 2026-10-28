@@ -534,4 +534,39 @@ class AppLocalizationsFi extends AppLocalizations {
   @override
   String get shootingRelayPositionsUnavailable =>
       'Ampuma-asentoja ei ole saatavilla koko viestijoukkueelle. Valitse Kaikki ammunnat nähdäksesi kirjatut ampumapaikka-ajat.';
+
+  @override
+  String get seasonShootingTitle => 'Kauden ampumatilastot';
+
+  @override
+  String get seasonShootingExplanation =>
+      'Valituille ammunnoille. Osumaprosentti käyttää tunnettuja viiden laukauksen sarjoja; viestin laukaukset jätetään pois. Määrät koskevat vain tallennettuja sarjoja. Puuttuvia sarjoja ja epävarmaa järjestystä ei päätellä.';
+
+  @override
+  String get seasonShootingHitPercent => 'Osumaprosentti';
+
+  @override
+  String get seasonShootingAverageMisses =>
+      'Keskimääräiset ohilaukaukset sarjaa kohti';
+
+  @override
+  String get seasonShootingMeanRangeTime => 'Keskimääräinen ampumapaikka-aika';
+
+  @override
+  String get seasonShootingMedianRangeTime => 'Ampumapaikka-ajan mediaani';
+
+  @override
+  String seasonShootingCoverage(int valid, int missing) {
+    return '$valid kelvollista sarjaa · $missing puuttuvaa mittausta';
+  }
+
+  @override
+  String seasonShootingUnavailableRaces(int count) {
+    return 'Kilpailut ilman valittavia tallennettuja sarjoja: $count';
+  }
+
+  @override
+  String seasonShootingKnownShots(int hits, int shots) {
+    return '$hits osumaa / $shots tunnettua laukausta';
+  }
 }

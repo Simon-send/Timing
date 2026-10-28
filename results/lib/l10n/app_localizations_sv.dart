@@ -532,4 +532,38 @@ class AppLocalizationsSv extends AppLocalizations {
   @override
   String get shootingRelayPositionsUnavailable =>
       'Skjutställningar är inte tillgängliga för hela stafettlag. Välj Alla skjutningar för registrerade skjutvallstider.';
+
+  @override
+  String get seasonShootingTitle => 'Säsongens skyttestatistik';
+
+  @override
+  String get seasonShootingExplanation =>
+      'För valda skjutningar. Träffprocenten använder kända femskottsserier; stafettskott utesluts. Antalen gäller registrerade serier. Saknade serier och osäker ordning uppskattas inte.';
+
+  @override
+  String get seasonShootingHitPercent => 'Träffprocent';
+
+  @override
+  String get seasonShootingAverageMisses => 'Genomsnittliga bom per serie';
+
+  @override
+  String get seasonShootingMeanRangeTime => 'Genomsnittlig tid på skjutvallen';
+
+  @override
+  String get seasonShootingMedianRangeTime => 'Mediantid på skjutvallen';
+
+  @override
+  String seasonShootingCoverage(int valid, int missing) {
+    return '$valid giltiga serier · $missing saknade mätningar';
+  }
+
+  @override
+  String seasonShootingUnavailableRaces(int count) {
+    return 'Lopp utan registrerade serier som kan väljas: $count';
+  }
+
+  @override
+  String seasonShootingKnownShots(int hits, int shots) {
+    return '$hits träffar / $shots kända skott';
+  }
 }

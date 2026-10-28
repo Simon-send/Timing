@@ -534,4 +534,39 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get shootingRelayPositionsUnavailable =>
       'Anschläge sind für ganze Staffelteams nicht verfügbar. Wähle Alle Schießeinlagen für erfasste Schießstandzeiten.';
+
+  @override
+  String get seasonShootingTitle => 'Schießstatistik der Saison';
+
+  @override
+  String get seasonShootingExplanation =>
+      'Für die gewählten Schießeinlagen. Die Trefferquote nutzt bekannte Fünf-Schuss-Serien; Staffelschüsse sind ausgeschlossen. Gezählt werden nur erfasste Serien. Fehlende Serien und eine unsichere Reihenfolge werden nicht geschätzt.';
+
+  @override
+  String get seasonShootingHitPercent => 'Trefferquote';
+
+  @override
+  String get seasonShootingAverageMisses =>
+      'Durchschnittliche Fehler pro Serie';
+
+  @override
+  String get seasonShootingMeanRangeTime => 'Mittlere Schießstandzeit';
+
+  @override
+  String get seasonShootingMedianRangeTime => 'Mediane Schießstandzeit';
+
+  @override
+  String seasonShootingCoverage(int valid, int missing) {
+    return '$valid gültige Serien · $missing fehlende Messungen';
+  }
+
+  @override
+  String seasonShootingUnavailableRaces(int count) {
+    return 'Rennen ohne auswählbare erfasste Serien: $count';
+  }
+
+  @override
+  String seasonShootingKnownShots(int hits, int shots) {
+    return '$hits Treffer / $shots bekannte Schüsse';
+  }
 }

@@ -531,4 +531,38 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get shootingRelayPositionsUnavailable =>
       'Положения стрельбы недоступны для всей эстафетной команды. Выберите «Все стрельбы», чтобы увидеть записанное время на рубеже.';
+
+  @override
+  String get seasonShootingTitle => 'Статистика стрельбы за сезон';
+
+  @override
+  String get seasonShootingExplanation =>
+      'Для выбранных стрельб. Процент попаданий рассчитан по известным сериям из пяти выстрелов; выстрелы в эстафетах исключены. Учитываются только записанные серии. Пропущенные серии и неясный порядок не восстанавливаются.';
+
+  @override
+  String get seasonShootingHitPercent => 'Процент попаданий';
+
+  @override
+  String get seasonShootingAverageMisses => 'Среднее число промахов за серию';
+
+  @override
+  String get seasonShootingMeanRangeTime => 'Среднее время на рубеже';
+
+  @override
+  String get seasonShootingMedianRangeTime => 'Медианное время на рубеже';
+
+  @override
+  String seasonShootingCoverage(int valid, int missing) {
+    return '$valid серий с данными · $missing отсутствующих измерений';
+  }
+
+  @override
+  String seasonShootingUnavailableRaces(int count) {
+    return 'Гонки без записанных серий, доступных для выбора: $count';
+  }
+
+  @override
+  String seasonShootingKnownShots(int hits, int shots) {
+    return '$hits попаданий / $shots известных выстрелов';
+  }
 }

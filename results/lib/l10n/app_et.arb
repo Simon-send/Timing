@@ -258,5 +258,41 @@
   "shootingIncomplete": "Mõned laskmised, asendid või mõõtmised puuduvad.",
   "shootingRelayUnavailable": "Tabamused ja möödalasud pole saadaval: teatevõistluse andmed ei erista varupadruneid trahviringidest. Lasketiiru aeg kuvatakse, kui see on salvestatud.",
   "shootingExcluded": "See tulemus on statistikast välja jäetud.",
-  "shootingRelayPositionsUnavailable": "Laskmisasendid pole terve teatevõistkonna kohta saadaval. Salvestatud lasketiiruaegade nägemiseks vali Kõik laskmised."
+  "shootingRelayPositionsUnavailable": "Laskmisasendid pole terve teatevõistkonna kohta saadaval. Salvestatud lasketiiruaegade nägemiseks vali Kõik laskmised.",
+  "seasonShootingTitle": "Hooaja laskestatistika",
+  "seasonShootingExplanation": "Valitud laskmiste kohta. Tabamusprotsent kasutab teadaolevaid viielasulisi seeriaid; teatesõidu lasud on välja jäetud. Arvud hõlmavad ainult salvestatud seeriaid. Puuduvaid seeriaid ja ebaselget järjekorda ei oletata.",
+  "seasonShootingHitPercent": "Tabamusprotsent",
+  "seasonShootingAverageMisses": "Keskmine möödalaskude arv seerias",
+  "seasonShootingMeanRangeTime": "Keskmine lasketiiruaeg",
+  "seasonShootingMedianRangeTime": "Lasketiiruaja mediaan",
+  "seasonShootingCoverage": "{valid} kehtivat seeriat · {missing} puuduvat mõõtmist",
+  "@seasonShootingCoverage": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingUnavailableRaces": "Võistlused ilma valitavate salvestatud seeriateta: {count}",
+  "@seasonShootingUnavailableRaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingKnownShots": "{hits} tabamust / {shots} teadaolevat lasku",
+  "@seasonShootingKnownShots": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "shots": {
+        "type": "int"
+      }
+    }
+  }
 }

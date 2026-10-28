@@ -531,4 +531,38 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get shootingRelayPositionsUnavailable =>
       'Shooting positions are unavailable for whole-team relays. Choose All shootings for recorded range times.';
+
+  @override
+  String get seasonShootingTitle => 'Season shooting statistics';
+
+  @override
+  String get seasonShootingExplanation =>
+      'For the selected shootings. Hit percentage uses known five-shot series; relay shots are excluded. Counts cover recorded series only. Missing series and uncertain order are not inferred.';
+
+  @override
+  String get seasonShootingHitPercent => 'Hit percentage';
+
+  @override
+  String get seasonShootingAverageMisses => 'Average misses per series';
+
+  @override
+  String get seasonShootingMeanRangeTime => 'Mean range time';
+
+  @override
+  String get seasonShootingMedianRangeTime => 'Median range time';
+
+  @override
+  String seasonShootingCoverage(int valid, int missing) {
+    return '$valid valid series · $missing missing measurements';
+  }
+
+  @override
+  String seasonShootingUnavailableRaces(int count) {
+    return 'Races without selectable recorded series: $count';
+  }
+
+  @override
+  String seasonShootingKnownShots(int hits, int shots) {
+    return '$hits hits / $shots known shots';
+  }
 }

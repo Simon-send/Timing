@@ -532,4 +532,39 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get shootingRelayPositionsUnavailable =>
       'Les positions de tir sont indisponibles pour une équipe de relais entière. Choisissez Tous les tirs pour les temps au pas de tir enregistrés.';
+
+  @override
+  String get seasonShootingTitle => 'Statistiques de tir de la saison';
+
+  @override
+  String get seasonShootingExplanation =>
+      'Pour les tirs sélectionnés. Le taux de réussite utilise les séries connues de cinq tirs ; les tirs de relais sont exclus. Seules les séries enregistrées sont comptées. Les séries absentes et les ordres incertains ne sont pas déduits.';
+
+  @override
+  String get seasonShootingHitPercent => 'Taux de réussite';
+
+  @override
+  String get seasonShootingAverageMisses =>
+      'Moyenne des tirs manqués par série';
+
+  @override
+  String get seasonShootingMeanRangeTime => 'Temps moyen au pas de tir';
+
+  @override
+  String get seasonShootingMedianRangeTime => 'Temps médian au pas de tir';
+
+  @override
+  String seasonShootingCoverage(int valid, int missing) {
+    return '$valid séries valides · $missing mesures manquantes';
+  }
+
+  @override
+  String seasonShootingUnavailableRaces(int count) {
+    return 'Courses sans série enregistrée sélectionnable : $count';
+  }
+
+  @override
+  String seasonShootingKnownShots(int hits, int shots) {
+    return '$hits réussites / $shots tirs connus';
+  }
 }

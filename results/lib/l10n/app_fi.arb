@@ -258,5 +258,41 @@
   "shootingIncomplete": "Joitakin ammuntoja, asentoja tai mittauksia puuttuu.",
   "shootingRelayUnavailable": "Osumia ja ohilaukauksia ei ole saatavilla: viestitiedot eivät erota varapatruunoita sakkokierroksista. Ampumapaikka-aika näytetään, jos se on kirjattu.",
   "shootingExcluded": "Tämä tulos on jätetty tilastojen ulkopuolelle.",
-  "shootingRelayPositionsUnavailable": "Ampuma-asentoja ei ole saatavilla koko viestijoukkueelle. Valitse Kaikki ammunnat nähdäksesi kirjatut ampumapaikka-ajat."
+  "shootingRelayPositionsUnavailable": "Ampuma-asentoja ei ole saatavilla koko viestijoukkueelle. Valitse Kaikki ammunnat nähdäksesi kirjatut ampumapaikka-ajat.",
+  "seasonShootingTitle": "Kauden ampumatilastot",
+  "seasonShootingExplanation": "Valituille ammunnoille. Osumaprosentti käyttää tunnettuja viiden laukauksen sarjoja; viestin laukaukset jätetään pois. Määrät koskevat vain tallennettuja sarjoja. Puuttuvia sarjoja ja epävarmaa järjestystä ei päätellä.",
+  "seasonShootingHitPercent": "Osumaprosentti",
+  "seasonShootingAverageMisses": "Keskimääräiset ohilaukaukset sarjaa kohti",
+  "seasonShootingMeanRangeTime": "Keskimääräinen ampumapaikka-aika",
+  "seasonShootingMedianRangeTime": "Ampumapaikka-ajan mediaani",
+  "seasonShootingCoverage": "{valid} kelvollista sarjaa · {missing} puuttuvaa mittausta",
+  "@seasonShootingCoverage": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingUnavailableRaces": "Kilpailut ilman valittavia tallennettuja sarjoja: {count}",
+  "@seasonShootingUnavailableRaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingKnownShots": "{hits} osumaa / {shots} tunnettua laukausta",
+  "@seasonShootingKnownShots": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "shots": {
+        "type": "int"
+      }
+    }
+  }
 }

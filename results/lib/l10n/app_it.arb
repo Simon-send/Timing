@@ -258,5 +258,41 @@
   "shootingIncomplete": "Mancano alcune sessioni, posizioni o misurazioni.",
   "shootingRelayUnavailable": "Centri ed errori non disponibili: i dati della staffetta non distinguono i colpi di riserva dai giri di penalità. Il tempo al poligono è mostrato se registrato.",
   "shootingExcluded": "Questo risultato è escluso dalle statistiche.",
-  "shootingRelayPositionsUnavailable": "Le posizioni di tiro non sono disponibili per le squadre di staffetta complete. Scegli Tutte le sessioni per i tempi al poligono registrati."
+  "shootingRelayPositionsUnavailable": "Le posizioni di tiro non sono disponibili per le squadre di staffetta complete. Scegli Tutte le sessioni per i tempi al poligono registrati.",
+  "seasonShootingTitle": "Statistiche di tiro della stagione",
+  "seasonShootingExplanation": "Per i tiri selezionati. La percentuale di successo usa serie note di cinque tiri; i tiri di staffetta sono esclusi. I conteggi riguardano solo le serie registrate. Le serie mancanti e gli ordini incerti non vengono dedotti.",
+  "seasonShootingHitPercent": "Percentuale di successo",
+  "seasonShootingAverageMisses": "Errori medi per serie",
+  "seasonShootingMeanRangeTime": "Tempo medio al poligono",
+  "seasonShootingMedianRangeTime": "Tempo mediano al poligono",
+  "seasonShootingCoverage": "{valid} serie valide · {missing} misurazioni mancanti",
+  "@seasonShootingCoverage": {
+    "placeholders": {
+      "valid": {
+        "type": "int"
+      },
+      "missing": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingUnavailableRaces": "Gare senza serie registrate selezionabili: {count}",
+  "@seasonShootingUnavailableRaces": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonShootingKnownShots": "{hits} centri / {shots} tiri noti",
+  "@seasonShootingKnownShots": {
+    "placeholders": {
+      "hits": {
+        "type": "int"
+      },
+      "shots": {
+        "type": "int"
+      }
+    }
+  }
 }

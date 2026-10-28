@@ -497,6 +497,10 @@ class _AthleteSeasonResultsState extends State<AthleteSeasonResults> {
           )) ...[
             ShellPanel(
               child: ShootingSelectionPanel(
+                statisticsRaces: [
+                  for (final race in scope.statisticalRaces)
+                    if (race.biathlonMetrics != null) race,
+                ],
                 entries: [
                   for (final race in scope.statisticalRaces)
                     if (race.biathlonMetrics case final metrics?)

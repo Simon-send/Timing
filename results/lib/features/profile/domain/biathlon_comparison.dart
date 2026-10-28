@@ -25,24 +25,6 @@ enum BiathlonMetric {
   };
 }
 
-/// Arithmetic mean of valid race percentages; missing data is not a zero.
-BiathlonBenchmarkValue? averageBiathlonHitPercent(
-  Iterable<BiathlonRaceMetrics> races,
-  BiathlonMetric metric,
-) {
-  if (!metric.isPercentage) return null;
-  final values = races
-      .map((race) => race.valueFor(metric))
-      .whereType<double>()
-      .where((value) => value.isFinite && value >= 0 && value <= 100)
-      .toList();
-  if (values.isEmpty) return null;
-  return BiathlonBenchmarkValue(
-    mean: values.reduce((a, b) => a + b) / values.length,
-    count: values.length,
-  );
-}
-
 class BiathlonRaceMetrics {
   const BiathlonRaceMetrics({
     this.finishTimeMs,
@@ -100,6 +82,29 @@ class BiathlonRaceMetrics {
             0,
             (maxIndex, pass) => pass.index > maxIndex ? pass.index : maxIndex,
           );
+    // Individual source positions are inferred from its recorded series count.
+    // A conflicting class count makes that inference uncertain; retain all
+    // measurements, but leave positions unassigned for the selection contract.
+    final uncertainPositions =
+        !isRelay &&
+        expectedShootingCount != null &&
+        expectedShootingCount > 0 &&
+        declaredShootingCount != null &&
+        declaredShootingCount > 0 &&
+        expectedShootingCount != declaredShootingCount;
+    final selectionPasses = uncertainPositions
+        ? [
+            for (final pass in passes)
+              ShootingPass(
+                index: pass.index,
+                rangeMs: pass.rangeMs,
+                misses: pass.misses,
+                position: '',
+                penaltyMs: pass.penaltyMs,
+                rangeRank: pass.rangeRank,
+              ),
+          ]
+        : passes;
     final completeShooting =
         passes.isNotEmpty &&
         passes.length == shootingCount &&
@@ -166,7 +171,7 @@ class BiathlonRaceMetrics {
       },
       timingPoints: result.splitValues,
       shootingPasses: {for (final pass in passes) pass.index: pass},
-      shootingSeries: passes,
+      shootingSeries: selectionPasses,
       extraPassValues: _parsePublicPassValues(publicPasses),
       laps: {for (final lap in analysis.laps) lap.index: lap},
       isRelay: isRelay,

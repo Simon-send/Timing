@@ -1043,6 +1043,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Shooting positions are unavailable for whole-team relays. Choose All shootings for recorded range times.'**
   String get shootingRelayPositionsUnavailable;
+
+  /// No description provided for @seasonShootingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Season shooting statistics'**
+  String get seasonShootingTitle;
+
+  /// No description provided for @seasonShootingExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'For the selected shootings. Hit percentage uses known five-shot series; relay shots are excluded. Counts cover recorded series only. Missing series and uncertain order are not inferred.'**
+  String get seasonShootingExplanation;
+
+  /// No description provided for @seasonShootingHitPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'Hit percentage'**
+  String get seasonShootingHitPercent;
+
+  /// No description provided for @seasonShootingAverageMisses.
+  ///
+  /// In en, this message translates to:
+  /// **'Average misses per series'**
+  String get seasonShootingAverageMisses;
+
+  /// No description provided for @seasonShootingMeanRangeTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Mean range time'**
+  String get seasonShootingMeanRangeTime;
+
+  /// No description provided for @seasonShootingMedianRangeTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Median range time'**
+  String get seasonShootingMedianRangeTime;
+
+  /// No description provided for @seasonShootingCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'{valid} valid series · {missing} missing measurements'**
+  String seasonShootingCoverage(int valid, int missing);
+
+  /// No description provided for @seasonShootingUnavailableRaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Races without selectable recorded series: {count}'**
+  String seasonShootingUnavailableRaces(int count);
+
+  /// No description provided for @seasonShootingKnownShots.
+  ///
+  /// In en, this message translates to:
+  /// **'{hits} hits / {shots} known shots'**
+  String seasonShootingKnownShots(int hits, int shots);
 }
 
 class _AppLocalizationsDelegate

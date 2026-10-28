@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../app/app_theme.dart';
 import '../../../core/formatting/time_formatters.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../profile/domain/athlete_profile.dart';
 import '../../profile/domain/biathlon_comparison.dart';
+import '../../profile/domain/season_shooting_statistics.dart';
 import '../domain/shooting_selection.dart';
 
 class ShootingSelectionEntry {
@@ -23,11 +25,16 @@ class ShootingSelectionEntry {
 }
 
 /// The same controls and pass observations in race and selected-season views.
-/// This deliberately does not pool observations into seasonal statistics.
+/// Season statistics opt in with the full selected scope; race details do not.
 class ShootingSelectionPanel extends StatefulWidget {
-  const ShootingSelectionPanel({super.key, required this.entries});
+  const ShootingSelectionPanel({
+    super.key,
+    required this.entries,
+    this.statisticsRaces,
+  });
 
   final List<ShootingSelectionEntry> entries;
+  final List<AthleteRace>? statisticsRaces;
 
   @override
   State<ShootingSelectionPanel> createState() => _ShootingSelectionPanelState();
@@ -88,11 +95,144 @@ class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
             if (value != null) setState(() => _selection = value);
           },
         ),
+        if (widget.statisticsRaces case final races?) ...[
+          const SizedBox(height: 14),
+          _SeasonStatistics(
+            statistics: calculateSeasonShootingStatistics(races, _selection),
+          ),
+        ],
         for (final entry in widget.entries) ...[
           const SizedBox(height: 14),
           _Observations(entry: entry, metric: _metric, selection: _selection),
         ],
       ],
+    );
+  }
+}
+
+class _SeasonStatistics extends StatelessWidget {
+  const _SeasonStatistics({required this.statistics});
+
+  final SeasonShootingStatistics statistics;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    String number(double? value) => value?.toStringAsFixed(1) ?? '—';
+    String time(double? value) =>
+        value == null ? '—' : formatDurationMs(value.round());
+
+    return Container(
+      key: const Key('season-shooting-statistics'),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.palette.panelAlt,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: context.palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.seasonShootingTitle,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.seasonShootingExplanation,
+            style: TextStyle(color: context.palette.mutedText, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 24,
+            runSpacing: 16,
+            children: [
+              _Statistic(
+                id: 'hit-percent',
+                label: l10n.seasonShootingHitPercent,
+                value: statistics.hitPercent == null
+                    ? '—'
+                    : '${number(statistics.hitPercent)} %',
+                coverage: statistics.hits,
+                detail: statistics.totalHits == null
+                    ? null
+                    : l10n.seasonShootingKnownShots(
+                        statistics.totalHits!,
+                        statistics.knownShotCount,
+                      ),
+              ),
+              _Statistic(
+                id: 'average-misses',
+                label: l10n.seasonShootingAverageMisses,
+                value: number(statistics.averageMisses),
+                coverage: statistics.misses,
+              ),
+              _Statistic(
+                id: 'mean-range-time',
+                label: l10n.seasonShootingMeanRangeTime,
+                value: time(statistics.meanRangeTimeMs),
+                coverage: statistics.rangeTime,
+              ),
+              _Statistic(
+                id: 'median-range-time',
+                label: l10n.seasonShootingMedianRangeTime,
+                value: time(statistics.medianRangeTimeMs),
+                coverage: statistics.rangeTime,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Statistic extends StatelessWidget {
+  const _Statistic({
+    required this.id,
+    required this.label,
+    required this.value,
+    required this.coverage,
+    this.detail,
+  });
+
+  final String id;
+  final String label;
+  final String value;
+  final SeasonShootingMetricStatistics coverage;
+  final String? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 260),
+      child: Column(
+        key: Key('season-shooting-$id'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          if (detail != null) Text(detail!),
+          Text(
+            l10n.seasonShootingCoverage(
+              coverage.validCount,
+              coverage.missingCount,
+            ),
+            style: TextStyle(color: context.palette.mutedText, fontSize: 12),
+          ),
+          if (coverage.unavailableRaces.isNotEmpty)
+            Text(
+              l10n.seasonShootingUnavailableRaces(
+                coverage.unavailableRaces.length,
+              ),
+              style: TextStyle(color: context.palette.mutedText, fontSize: 12),
+            ),
+        ],
+      ),
     );
   }
 }

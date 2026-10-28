@@ -532,4 +532,38 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get shootingRelayPositionsUnavailable =>
       'Le posizioni di tiro non sono disponibili per le squadre di staffetta complete. Scegli Tutte le sessioni per i tempi al poligono registrati.';
+
+  @override
+  String get seasonShootingTitle => 'Statistiche di tiro della stagione';
+
+  @override
+  String get seasonShootingExplanation =>
+      'Per i tiri selezionati. La percentuale di successo usa serie note di cinque tiri; i tiri di staffetta sono esclusi. I conteggi riguardano solo le serie registrate. Le serie mancanti e gli ordini incerti non vengono dedotti.';
+
+  @override
+  String get seasonShootingHitPercent => 'Percentuale di successo';
+
+  @override
+  String get seasonShootingAverageMisses => 'Errori medi per serie';
+
+  @override
+  String get seasonShootingMeanRangeTime => 'Tempo medio al poligono';
+
+  @override
+  String get seasonShootingMedianRangeTime => 'Tempo mediano al poligono';
+
+  @override
+  String seasonShootingCoverage(int valid, int missing) {
+    return '$valid serie valide · $missing misurazioni mancanti';
+  }
+
+  @override
+  String seasonShootingUnavailableRaces(int count) {
+    return 'Gare senza serie registrate selezionabili: $count';
+  }
+
+  @override
+  String seasonShootingKnownShots(int hits, int shots) {
+    return '$hits centri / $shots tiri noti';
+  }
 }

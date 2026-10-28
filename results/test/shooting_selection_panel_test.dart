@@ -104,6 +104,7 @@ void main() {
       await tester.pumpWidget(
         app(BiathlonResultPanel(analysis: current.biathlon!, result: current)),
       );
+      expect(find.byKey(const Key('season-shooting-statistics')), findsNothing);
       await choose(tester, 'shooting-pass-selector', '1st standing');
       expect(
         find.byKey(const Key('shooting-observation-single-3')),
@@ -126,6 +127,80 @@ void main() {
         find.byKey(const Key('shooting-observation-single-4')),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'season summary pools series and follows the existing pass selector',
+    (tester) async {
+      await tester.pumpWidget(
+        app(
+          AthleteSeasonResults(
+            profile: const AthleteProfile(
+              athleteId: 'athlete',
+              displayName: 'Athlete',
+              normalizedName: 'athlete',
+              primaryClubId: null,
+              primaryTeamId: null,
+              events: [],
+            ),
+            races: [
+              race('old', 'short', count: 2),
+              race('new', 'long'),
+              race('new', 'relay', relay: true, count: 2),
+              for (final status in ['DNF', 'DNS', 'DFQ', 'DSQ', 'DQ'])
+                race('new', status, status: status),
+            ],
+            events: [
+              ResultEvent(
+                id: 'old',
+                name: 'Old',
+                sportName: 'Biathlon',
+                date: DateTime(2025, 4, 30),
+                place: '',
+              ),
+              ResultEvent(
+                id: 'new',
+                name: 'New',
+                sportName: 'Biathlon',
+                date: DateTime(2025, 5, 1),
+                place: '',
+              ),
+            ],
+          ),
+        ),
+      );
+      Finder card(String id) => find.byKey(Key('season-shooting-$id'));
+      void value(String id, String text) => expect(
+        find.descendant(of: card(id), matching: find.text(text)),
+        findsOneWidget,
+      );
+      value('hit-percent', '76.7 %');
+      value('hit-percent', '23 hits / 30 known shots');
+      value('hit-percent', '6 valid series · 2 missing measurements');
+      value('average-misses', '1.2');
+      value('mean-range-time', '0:20.0');
+      value('mean-range-time', '8 valid series · 0 missing measurements');
+      value('median-range-time', '0:20.0');
+      expect(
+        find.byKey(const Key('biathlon-average-hit-percent')),
+        findsNothing,
+      );
+      await choose(tester, 'shooting-pass-selector', '1st standing');
+      value('hit-percent', '70.0 %');
+      value('hit-percent', '7 hits / 10 known shots');
+      value('mean-range-time', '0:23.3');
+      await choose(tester, 'shooting-pass-selector', '2nd standing');
+      value('hit-percent', '40.0 %');
+      value('hit-percent', 'Races without selectable recorded series: 2');
+      await tester.ensureVisible(find.byKey(const Key('season-2025')));
+      await tester.tap(find.byKey(const Key('season-2025')));
+      await tester.pumpAndSettle();
+      value('hit-percent', 'Races without selectable recorded series: 1');
+      await choose(tester, 'shooting-pass-selector', 'All shootings');
+      value('hit-percent', '70.0 %');
+      value('hit-percent', '14 hits / 20 known shots');
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -239,6 +314,7 @@ void main() {
         await tester.pumpWidget(
           app(
             ShootingSelectionPanel(
+              statisticsRaces: [race('event', 'relay', relay: true, count: 2)],
               entries: [
                 ShootingSelectionEntry(
                   id: 'relay',
@@ -254,6 +330,8 @@ void main() {
           tester.element(find.byType(ShootingSelectionPanel)),
         );
         expect(find.text(l10n.shootingRelayUnavailable), findsOneWidget);
+        expect(find.text(l10n.seasonShootingTitle), findsOneWidget);
+        expect(find.text(l10n.seasonShootingCoverage(0, 2)), findsNWidgets(2));
         await choose(
           tester,
           'shooting-metric-selector',

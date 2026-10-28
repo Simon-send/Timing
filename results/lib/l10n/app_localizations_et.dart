@@ -531,4 +531,38 @@ class AppLocalizationsEt extends AppLocalizations {
   @override
   String get shootingRelayPositionsUnavailable =>
       'Laskmisasendid pole terve teatevõistkonna kohta saadaval. Salvestatud lasketiiruaegade nägemiseks vali Kõik laskmised.';
+
+  @override
+  String get seasonShootingTitle => 'Hooaja laskestatistika';
+
+  @override
+  String get seasonShootingExplanation =>
+      'Valitud laskmiste kohta. Tabamusprotsent kasutab teadaolevaid viielasulisi seeriaid; teatesõidu lasud on välja jäetud. Arvud hõlmavad ainult salvestatud seeriaid. Puuduvaid seeriaid ja ebaselget järjekorda ei oletata.';
+
+  @override
+  String get seasonShootingHitPercent => 'Tabamusprotsent';
+
+  @override
+  String get seasonShootingAverageMisses => 'Keskmine möödalaskude arv seerias';
+
+  @override
+  String get seasonShootingMeanRangeTime => 'Keskmine lasketiiruaeg';
+
+  @override
+  String get seasonShootingMedianRangeTime => 'Lasketiiruaja mediaan';
+
+  @override
+  String seasonShootingCoverage(int valid, int missing) {
+    return '$valid kehtivat seeriat · $missing puuduvat mõõtmist';
+  }
+
+  @override
+  String seasonShootingUnavailableRaces(int count) {
+    return 'Võistlused ilma valitavate salvestatud seeriateta: $count';
+  }
+
+  @override
+  String seasonShootingKnownShots(int hits, int shots) {
+    return '$hits tabamust / $shots teadaolevat lasku';
+  }
 }
