@@ -566,4 +566,63 @@ class AppLocalizationsSv extends AppLocalizations {
   String seasonShootingKnownShots(int hits, int shots) {
     return '$hits träffar / $shots kända skott';
   }
+
+  @override
+  String get seasonDistributionTitle => 'Säsongsfördelning';
+
+  @override
+  String seasonDistributionSeriesCount(int count) {
+    return 'n = $count uppmätta serier · varje observation är en serie';
+  }
+
+  @override
+  String seasonDistributionSeconds(String value) {
+    return '$value s';
+  }
+
+  @override
+  String get seasonDistributionEmpty =>
+      'Inga giltiga mätningar för detta urval.';
+
+  @override
+  String get seasonDistributionLowData =>
+      'Mycket litet underlag: färre än 5 serier. Tolka fördelningen med försiktighet.';
+
+  @override
+  String seasonDistributionMean(String value) {
+    return 'Medelvärde: $value';
+  }
+
+  @override
+  String seasonDistributionMedian(String value) {
+    return 'Median: $value';
+  }
+
+  @override
+  String get seasonDistributionShowChart => 'Visa diagram';
+
+  @override
+  String get seasonDistributionShowTable => 'Visa tillgänglig tabell';
+
+  @override
+  String get seasonDistributionCount => 'Antal';
+
+  @override
+  String get seasonDistributionShare => 'Andel';
+
+  @override
+  String get seasonDistributionSelectBin =>
+      'Välj en stapel eller ett intervall för att se bidragande lopp och serier.';
+
+  @override
+  String seasonDistributionIntervals(int count) {
+    return 'Önskat antal intervall: $count';
+  }
+
+  @override
+  String get seasonDistributionContributions => 'Bidragande lopp och serier';
+
+  @override
+  String get seasonDistributionNoContributions =>
+      'Inga serier i detta intervall.';
 }

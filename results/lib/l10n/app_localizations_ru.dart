@@ -565,4 +565,62 @@ class AppLocalizationsRu extends AppLocalizations {
   String seasonShootingKnownShots(int hits, int shots) {
     return '$hits попаданий / $shots известных выстрелов';
   }
+
+  @override
+  String get seasonDistributionTitle => 'Распределение за сезон';
+
+  @override
+  String seasonDistributionSeriesCount(int count) {
+    return 'n = $count измеренных серий · каждое наблюдение — одна серия';
+  }
+
+  @override
+  String seasonDistributionSeconds(String value) {
+    return '$value с';
+  }
+
+  @override
+  String get seasonDistributionEmpty =>
+      'Для выбранных условий нет корректных измерений.';
+
+  @override
+  String get seasonDistributionLowData =>
+      'Очень мало данных: менее 5 серий. Интерпретируйте распределение с осторожностью.';
+
+  @override
+  String seasonDistributionMean(String value) {
+    return 'Среднее: $value';
+  }
+
+  @override
+  String seasonDistributionMedian(String value) {
+    return 'Медиана: $value';
+  }
+
+  @override
+  String get seasonDistributionShowChart => 'Показать график';
+
+  @override
+  String get seasonDistributionShowTable => 'Показать доступную таблицу';
+
+  @override
+  String get seasonDistributionCount => 'Число';
+
+  @override
+  String get seasonDistributionShare => 'Доля';
+
+  @override
+  String get seasonDistributionSelectBin =>
+      'Выберите столбец или интервал, чтобы увидеть соответствующие гонки и серии.';
+
+  @override
+  String seasonDistributionIntervals(int count) {
+    return 'Желаемое число интервалов: $count';
+  }
+
+  @override
+  String get seasonDistributionContributions => 'Соответствующие гонки и серии';
+
+  @override
+  String get seasonDistributionNoContributions => 'В этом интервале нет серий.';
 }

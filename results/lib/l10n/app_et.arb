@@ -294,5 +294,55 @@
         "type": "int"
       }
     }
-  }
+  },
+  "seasonDistributionTitle": "Hooaja jaotus",
+  "seasonDistributionSeriesCount": "n = {count} mõõdetud seeriat · iga vaatlus on üks seeria",
+  "@seasonDistributionSeriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionSeconds": "{value} s",
+  "@seasonDistributionSeconds": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionEmpty": "Selle valiku jaoks pole kehtivaid mõõtmisi.",
+  "seasonDistributionLowData": "Väga vähe andmeid: alla 5 seeria. Tõlgenda jaotust ettevaatlikult.",
+  "seasonDistributionMean": "Keskmine: {value}",
+  "@seasonDistributionMean": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionMedian": "Mediaan: {value}",
+  "@seasonDistributionMedian": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionShowChart": "Näita diagrammi",
+  "seasonDistributionShowTable": "Näita ligipääsetavat tabelit",
+  "seasonDistributionCount": "Arv",
+  "seasonDistributionShare": "Osakaal",
+  "seasonDistributionSelectBin": "Vali tulp või vahemik, et näha sellesse kuuluvaid võistlusi ja seeriaid.",
+  "seasonDistributionIntervals": "Soovitud vahemike arv: {count}",
+  "@seasonDistributionIntervals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionContributions": "Jaotusse kuuluvad võistlused ja seeriad",
+  "seasonDistributionNoContributions": "Selles vahemikus pole seeriaid."
 }

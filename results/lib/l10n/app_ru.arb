@@ -294,5 +294,55 @@
         "type": "int"
       }
     }
-  }
+  },
+  "seasonDistributionTitle": "Распределение за сезон",
+  "seasonDistributionSeriesCount": "n = {count} измеренных серий · каждое наблюдение — одна серия",
+  "@seasonDistributionSeriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionSeconds": "{value} с",
+  "@seasonDistributionSeconds": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionEmpty": "Для выбранных условий нет корректных измерений.",
+  "seasonDistributionLowData": "Очень мало данных: менее 5 серий. Интерпретируйте распределение с осторожностью.",
+  "seasonDistributionMean": "Среднее: {value}",
+  "@seasonDistributionMean": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionMedian": "Медиана: {value}",
+  "@seasonDistributionMedian": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionShowChart": "Показать график",
+  "seasonDistributionShowTable": "Показать доступную таблицу",
+  "seasonDistributionCount": "Число",
+  "seasonDistributionShare": "Доля",
+  "seasonDistributionSelectBin": "Выберите столбец или интервал, чтобы увидеть соответствующие гонки и серии.",
+  "seasonDistributionIntervals": "Желаемое число интервалов: {count}",
+  "@seasonDistributionIntervals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionContributions": "Соответствующие гонки и серии",
+  "seasonDistributionNoContributions": "В этом интервале нет серий."
 }

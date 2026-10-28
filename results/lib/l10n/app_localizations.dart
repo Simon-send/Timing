@@ -1097,6 +1097,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{hits} hits / {shots} known shots'**
   String seasonShootingKnownShots(int hits, int shots);
+
+  /// No description provided for @seasonDistributionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Season distribution'**
+  String get seasonDistributionTitle;
+
+  /// No description provided for @seasonDistributionSeriesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'n = {count} measured series · each observation is one series'**
+  String seasonDistributionSeriesCount(int count);
+
+  /// No description provided for @seasonDistributionSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} s'**
+  String seasonDistributionSeconds(String value);
+
+  /// No description provided for @seasonDistributionEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No valid measurements for this selection.'**
+  String get seasonDistributionEmpty;
+
+  /// No description provided for @seasonDistributionLowData.
+  ///
+  /// In en, this message translates to:
+  /// **'Very little data: fewer than 5 series. Interpret the distribution with caution.'**
+  String get seasonDistributionLowData;
+
+  /// No description provided for @seasonDistributionMean.
+  ///
+  /// In en, this message translates to:
+  /// **'Mean: {value}'**
+  String seasonDistributionMean(String value);
+
+  /// No description provided for @seasonDistributionMedian.
+  ///
+  /// In en, this message translates to:
+  /// **'Median: {value}'**
+  String seasonDistributionMedian(String value);
+
+  /// No description provided for @seasonDistributionShowChart.
+  ///
+  /// In en, this message translates to:
+  /// **'Show chart'**
+  String get seasonDistributionShowChart;
+
+  /// No description provided for @seasonDistributionShowTable.
+  ///
+  /// In en, this message translates to:
+  /// **'Show accessible table'**
+  String get seasonDistributionShowTable;
+
+  /// No description provided for @seasonDistributionCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Count'**
+  String get seasonDistributionCount;
+
+  /// No description provided for @seasonDistributionShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get seasonDistributionShare;
+
+  /// No description provided for @seasonDistributionSelectBin.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a bar or interval to see its contributing races and series.'**
+  String get seasonDistributionSelectBin;
+
+  /// No description provided for @seasonDistributionIntervals.
+  ///
+  /// In en, this message translates to:
+  /// **'Target intervals: {count}'**
+  String seasonDistributionIntervals(int count);
+
+  /// No description provided for @seasonDistributionContributions.
+  ///
+  /// In en, this message translates to:
+  /// **'Contributing races and series'**
+  String get seasonDistributionContributions;
+
+  /// No description provided for @seasonDistributionNoContributions.
+  ///
+  /// In en, this message translates to:
+  /// **'No series in this interval.'**
+  String get seasonDistributionNoContributions;
 }
 
 class _AppLocalizationsDelegate

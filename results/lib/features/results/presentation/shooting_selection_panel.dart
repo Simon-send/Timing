@@ -6,6 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../profile/domain/athlete_profile.dart';
 import '../../profile/domain/biathlon_comparison.dart';
 import '../../profile/domain/season_shooting_statistics.dart';
+import '../../profile/presentation/season_shooting_distribution_panel.dart';
 import '../domain/shooting_selection.dart';
 
 class ShootingSelectionEntry {
@@ -31,10 +32,14 @@ class ShootingSelectionPanel extends StatefulWidget {
     super.key,
     required this.entries,
     this.statisticsRaces,
+    this.raceLabel,
+    this.onRaceSelected,
   });
 
   final List<ShootingSelectionEntry> entries;
   final List<AthleteRace>? statisticsRaces;
+  final String Function(AthleteRace)? raceLabel;
+  final ValueChanged<AthleteRace>? onRaceSelected;
 
   @override
   State<ShootingSelectionPanel> createState() => _ShootingSelectionPanelState();
@@ -47,6 +52,21 @@ class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final races = widget.statisticsRaces;
+    final statistics = races == null
+        ? null
+        : calculateSeasonShootingStatistics(races, _selection);
+    String raceLabel(AthleteRace race) {
+      if (widget.raceLabel != null) return widget.raceLabel!(race);
+      for (final entry in widget.entries) {
+        if (entry.id == '${race.key}/${race.resultId}') return entry.label;
+      }
+      return [
+        race.eventId,
+        race.className,
+      ].where((value) => value.isNotEmpty).join(' · ');
+    }
+
     return Column(
       key: const Key('shooting-selection-panel'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -95,10 +115,16 @@ class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
             if (value != null) setState(() => _selection = value);
           },
         ),
-        if (widget.statisticsRaces case final races?) ...[
+        if (statistics != null) ...[
           const SizedBox(height: 14),
-          _SeasonStatistics(
-            statistics: calculateSeasonShootingStatistics(races, _selection),
+          _SeasonStatistics(statistics: statistics),
+          const SizedBox(height: 14),
+          SeasonShootingDistributionPanel(
+            statistics: statistics.forMetric(_metric),
+            metric: _metric,
+            metricLabel: _metricLabel(_metric, l10n),
+            raceLabel: raceLabel,
+            onRaceSelected: widget.onRaceSelected,
           ),
         ],
         for (final entry in widget.entries) ...[

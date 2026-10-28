@@ -294,5 +294,55 @@
         "type": "int"
       }
     }
-  }
+  },
+  "seasonDistributionTitle": "Kauden jakauma",
+  "seasonDistributionSeriesCount": "n = {count} mitattua sarjaa · kukin havainto on yksi sarja",
+  "@seasonDistributionSeriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionSeconds": "{value} s",
+  "@seasonDistributionSeconds": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionEmpty": "Tälle valinnalle ei ole kelvollisia mittauksia.",
+  "seasonDistributionLowData": "Hyvin vähän tietoja: alle 5 sarjaa. Tulkitse jakaumaa varoen.",
+  "seasonDistributionMean": "Keskiarvo: {value}",
+  "@seasonDistributionMean": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionMedian": "Mediaani: {value}",
+  "@seasonDistributionMedian": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionShowChart": "Näytä kaavio",
+  "seasonDistributionShowTable": "Näytä saavutettava taulukko",
+  "seasonDistributionCount": "Määrä",
+  "seasonDistributionShare": "Osuus",
+  "seasonDistributionSelectBin": "Valitse pylväs tai väli nähdäksesi siihen kuuluvat kilpailut ja sarjat.",
+  "seasonDistributionIntervals": "Tavoiteltu välien määrä: {count}",
+  "@seasonDistributionIntervals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionContributions": "Jakaumaan kuuluvat kilpailut ja sarjat",
+  "seasonDistributionNoContributions": "Tällä välillä ei ole sarjoja."
 }

@@ -569,4 +569,64 @@ class AppLocalizationsEs extends AppLocalizations {
   String seasonShootingKnownShots(int hits, int shots) {
     return '$hits aciertos / $shots disparos conocidos';
   }
+
+  @override
+  String get seasonDistributionTitle => 'Distribución de la temporada';
+
+  @override
+  String seasonDistributionSeriesCount(int count) {
+    return 'n = $count series medidas · cada observación es una serie';
+  }
+
+  @override
+  String seasonDistributionSeconds(String value) {
+    return '$value s';
+  }
+
+  @override
+  String get seasonDistributionEmpty =>
+      'No hay mediciones válidas para esta selección.';
+
+  @override
+  String get seasonDistributionLowData =>
+      'Muy pocos datos: menos de 5 series. Interpreta la distribución con cautela.';
+
+  @override
+  String seasonDistributionMean(String value) {
+    return 'Media: $value';
+  }
+
+  @override
+  String seasonDistributionMedian(String value) {
+    return 'Mediana: $value';
+  }
+
+  @override
+  String get seasonDistributionShowChart => 'Mostrar gráfico';
+
+  @override
+  String get seasonDistributionShowTable => 'Mostrar tabla accesible';
+
+  @override
+  String get seasonDistributionCount => 'Cantidad';
+
+  @override
+  String get seasonDistributionShare => 'Proporción';
+
+  @override
+  String get seasonDistributionSelectBin =>
+      'Selecciona una barra o un intervalo para ver las carreras y series correspondientes.';
+
+  @override
+  String seasonDistributionIntervals(int count) {
+    return 'Número deseado de intervalos: $count';
+  }
+
+  @override
+  String get seasonDistributionContributions =>
+      'Carreras y series correspondientes';
+
+  @override
+  String get seasonDistributionNoContributions =>
+      'No hay series en este intervalo.';
 }

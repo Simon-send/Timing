@@ -294,5 +294,55 @@
         "type": "int"
       }
     }
-  }
+  },
+  "seasonDistributionTitle": "Distribución de la temporada",
+  "seasonDistributionSeriesCount": "n = {count} series medidas · cada observación es una serie",
+  "@seasonDistributionSeriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionSeconds": "{value} s",
+  "@seasonDistributionSeconds": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionEmpty": "No hay mediciones válidas para esta selección.",
+  "seasonDistributionLowData": "Muy pocos datos: menos de 5 series. Interpreta la distribución con cautela.",
+  "seasonDistributionMean": "Media: {value}",
+  "@seasonDistributionMean": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionMedian": "Mediana: {value}",
+  "@seasonDistributionMedian": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "seasonDistributionShowChart": "Mostrar gráfico",
+  "seasonDistributionShowTable": "Mostrar tabla accesible",
+  "seasonDistributionCount": "Cantidad",
+  "seasonDistributionShare": "Proporción",
+  "seasonDistributionSelectBin": "Selecciona una barra o un intervalo para ver las carreras y series correspondientes.",
+  "seasonDistributionIntervals": "Número deseado de intervalos: {count}",
+  "@seasonDistributionIntervals": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "seasonDistributionContributions": "Carreras y series correspondientes",
+  "seasonDistributionNoContributions": "No hay series en este intervalo."
 }
