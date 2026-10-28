@@ -62,6 +62,51 @@ SeasonShootingStatistics summarize(
 ]) => calculateSeasonShootingStatistics(races, selection);
 
 void main() {
+  test('conflicting source and class counts cannot classify partial series', () {
+    // The importer infers positions from its two recorded series, although the
+    // class reference establishes four. Source index two is not known standing.
+    final parsed = RaceResult.fromMap('partial', {
+      'totalMs': 60000,
+      'analysisSummary': {
+        'biathlon': {
+          'metrics': {'shootingCount': 2},
+          'passes': {
+            'shoot1': {
+              'index': 1,
+              'position': 'prone',
+              'misses': 0,
+              'rangeMs': 10000,
+            },
+            'shoot2': {
+              'index': 2,
+              'position': 'standing',
+              'misses': 5,
+              'rangeMs': 20000,
+            },
+          },
+        },
+      },
+    });
+    final metrics = BiathlonRaceMetrics.fromResult(
+      parsed,
+      expectedShootingCount: 4,
+    )!;
+    final input = [race('partial', metrics: metrics)];
+    final all = summarize(input);
+    expect(all.knownShotCount, 10);
+    expect(all.hitPercent, 50);
+    expect(all.rangeTime.validCount, 2);
+    for (final selection in ShootingSelection.values.where(
+      (value) => value.position != null,
+    )) {
+      final selected = summarize(input, selection);
+      expect(selected.hits.validCount, 0);
+      expect(selected.hitPercent, isNull);
+      expect(selected.hits.unavailableRaces, hasLength(1));
+      expect(selected.rangeTime.validCount, 0);
+    }
+  });
+
   test(
     'pools known shots across two- and four-series races with provenance',
     () {
