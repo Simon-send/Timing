@@ -239,6 +239,7 @@ class _SeasonShootingDistributionPanelState
                             label: binSummary(distribution.bins[i]),
                             child: Tooltip(
                               message: binSummary(distribution.bins[i]),
+                              excludeFromSemantics: true,
                               child: TextButton(
                                 key: Key('season-distribution-bar-$i'),
                                 onPressed: () => select(i),

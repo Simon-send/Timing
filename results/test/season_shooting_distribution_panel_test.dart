@@ -42,6 +42,41 @@ const profile = AthleteProfile(
 );
 
 void main() {
+  testWidgets('chart bars announce their value and count only once', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      await tester.pumpWidget(
+        app(
+          ShootingSelectionPanel(
+            statisticsRaces: [
+              race(passes: [pass(1)]),
+            ],
+            entries: const [],
+          ),
+        ),
+      );
+      final bar = find.byKey(const Key('season-distribution-bar-5'));
+      await tester.ensureVisible(bar);
+      await tester.pumpAndSettle();
+      final label = find.ancestor(
+        of: bar,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              widget.properties.label == 'Hits: 5 · 1 · 100 %',
+        ),
+      );
+      expect(label, findsOneWidget);
+      final data = tester.getSemantics(label).getSemanticsData();
+      expect(data.label, 'Hits: 5 · 1 · 100 %');
+      expect(data.tooltip, isEmpty);
+    } finally {
+      semantics.dispose();
+    }
+  });
+
   testWidgets(
     'one series renders, bar reveals its exact source, keyboard opens table',
     (tester) async {
