@@ -2,6 +2,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:results/features/results/domain/race_result.dart';
 
 void main() {
+  test(
+    'explicitly unconfirmed finish preserves splits but has no placement',
+    () {
+      final result = RaceResult.fromMap('partial', {
+        'finishConfirmed': false,
+        'totalMs': 1000,
+        'rank': 1,
+        'status': 'TIME',
+        'timingPoints': [
+          {'setupUid': 'first', 'cumMs': 1000},
+        ],
+      });
+      expect(result.isFinished, isFalse);
+      expect(result.placementLabel, '-');
+      expect(result.splitValues['first']?.cumMs, 1000);
+      expect(
+        RaceResult.fromMap('legacy', {'totalMs': 1000}).isFinished,
+        isTrue,
+      );
+    },
+  );
+
   test('reads whether a result advanced to a later stage', () {
     expect(
       RaceResult.fromMap('qualified', {'advanced': true}).advanced,

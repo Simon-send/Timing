@@ -507,7 +507,8 @@ AthleteRace _athleteRaceFromDoc(
     status: parsedResult.status,
     participantCount: participantCount,
     totalMs: parsedResult.totalMs,
-    biathlonMetrics: isBiathlon
+    finishConfirmed: parsedResult.finishConfirmed,
+    biathlonMetrics: isBiathlon && parsedResult.finishConfirmed != false
         ? BiathlonRaceMetrics.fromResult(
             parsedResult,
             publicMetrics: asStringMap(biathlonSummary['metrics']),

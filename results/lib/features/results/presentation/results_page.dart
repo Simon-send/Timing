@@ -2409,7 +2409,7 @@ class _ResultsAreaState extends ConsumerState<_ResultsArea> {
 
       for (final row in classRows) {
         labels.putIfAbsent(_rowKey(row), () {
-          return row.result.isFinished ? '-' : 'DNF';
+          return row.result.placementLabel;
         });
       }
     }
@@ -2418,7 +2418,7 @@ class _ResultsAreaState extends ConsumerState<_ResultsArea> {
       for (final row in rows)
         row.copyWith(
           originalPlacementLabel:
-              labels[_rowKey(row)] ?? (row.result.isFinished ? '-' : 'DNF'),
+              labels[_rowKey(row)] ?? (row.result.placementLabel),
         ),
     ];
   }

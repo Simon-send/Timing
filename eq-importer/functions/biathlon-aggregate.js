@@ -140,7 +140,8 @@ function buildOne(kind, finishers, cohort, splitDefs, expectedShootingCount) {
 }
 
 function buildBiathlonAggregates(results, splitDefs = {}) {
-  const finishers = results.filter((row) => row.isBiathlon === true &&
+  const finishers = results.filter((row) => row.finishConfirmed !== false &&
+      row.isBiathlon === true &&
       row.isRelay !== true && row.entrant?.kind !== "team" &&
       !isNonFinishStatus(row.status) && positive(row.totalMs))
       .slice().sort((left, right) => left.totalMs - right.totalMs ||

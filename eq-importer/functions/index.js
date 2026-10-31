@@ -1199,6 +1199,7 @@ function buildAthleteEventResultEntry(result, context) {
     className: firstDefined(result.className, null),
     rank: firstDefined(result.rank, null),
     finishRank: firstDefined(result.finishRank, result.rank, null),
+    finishConfirmed: result.finishConfirmed,
   };
 }
 
@@ -1242,13 +1243,29 @@ function prepareEntityWrite(write) {
   if (Array.isArray(data.athletes) && data.athletes.length > 0) {
     data.athletes = FieldValue.arrayUnion(...data.athletes);
   }
-  if (Array.isArray(data.events) && data.events.length > 0) {
-    data.events = FieldValue.arrayUnion(...data.events);
-  }
   return {
     ref: write.ref,
     data,
   };
+}
+
+// Event summaries are keyed by event, not by their changing rank/status values.
+// Read inside the write transaction to retain other events from concurrent imports.
+async function batchSetEntityDocs(writes) {
+  await batchSetDocs(writes.filter((write) => !Array.isArray(write.data.events)));
+  for (const write of writes.filter((write) => Array.isArray(write.data.events))) {
+    assertExecutionBudget();
+    await getDb().runTransaction(async (transaction) => {
+      if (execution.getStore()) await assertWriteLease(transaction);
+      const snapshot = await transaction.get(write.ref);
+      const existing = snapshot.exists ? snapshot.data().events : [];
+      const eventIds = new Set(write.data.events.map((entry) => String(entry.eventId)));
+      const events = (Array.isArray(existing) ? existing : [])
+        .filter((entry) => !eventIds.has(String(entry.eventId)))
+        .concat(write.data.events);
+      transaction.set(write.ref, sanitizeForFirestore({...write.data, events}) || {}, {merge: true});
+    });
+  }
 }
 
 async function filterChangedEntityWrites(writes, eventId) {
@@ -1593,7 +1610,7 @@ function buildResultClassDoc(args) {
   const biathlon = isBiathlon ?
     withoutHitFields(args.derived.analysis, args.derived.shooting, args.derived.laps) :
     null;
-  const relayLegs = isTeam && isBiathlon ?
+  const relayLegs = isTeam && isBiathlon && args.finishConfirmed !== false ?
     buildRelayLegBiathlon(args.rawSplits) :
     [];
   const document = Object.assign({}, identity, {
@@ -1605,6 +1622,7 @@ function buildResultClassDoc(args) {
     hasTimingData: true,
     isRelay: isTeam,
     isBiathlon,
+    finishConfirmed: args.finishConfirmed,
     totalMs: args.totalMs,
     totalText: args.totalText,
     status: args.status,
@@ -1622,7 +1640,7 @@ function buildResultClassDoc(args) {
     },
     team: isTeam ? {members, legs: relayLegs} : null,
     timingPoints: args.derived.rawPasses,
-    analysis: biathlon ? {biathlon: Object.assign({version: 1}, biathlon)} : null,
+    analysis: biathlon && args.finishConfirmed !== false ? {biathlon: Object.assign({version: 1}, biathlon)} : null,
     updatedAt: FieldValue.serverTimestamp(),
   });
   return sanitizeForFirestore(document) || {};
@@ -2483,7 +2501,7 @@ function addMetricRanks(results, field, rankField, options = {}) {
       const metrics = metricsOf(r);
       const value = metrics && metrics[field];
       return metrics &&
-        !isNonFinishStatus(r.status) &&
+        r.finishConfirmed !== false && !isNonFinishStatus(r.status) &&
         typeof value === "number" &&
         Number.isFinite(value) &&
         (options.positiveOnly !== true || value > 0);
@@ -2518,7 +2536,7 @@ function addShootingPassRanks(results) {
       for (const [fallbackKey, pass] of Object.entries(passes)) {
         if (!pass || typeof pass !== "object") continue;
         pass.rangeRank = null;
-        if (isNonFinishStatus(result.status)) continue;
+        if (result.finishConfirmed === false || isNonFinishStatus(result.status)) continue;
 
         const index = Number.isFinite(Number(pass.index)) ?
           Number(pass.index) :
@@ -2579,7 +2597,7 @@ function addClassRanks(results) {
     .filter((r) =>
       typeof r.totalMs === "number" &&
       r.totalMs > 0 &&
-      !isNonFinishStatus(r.status))
+      r.finishConfirmed !== false && !isNonFinishStatus(r.status))
     .sort((a, b) => a.totalMs - b.totalMs);
 
   let previousValue = null;
@@ -2607,7 +2625,7 @@ function addRawPassRanks(results) {
       pass.cumRankCount = null;
       pass.legRank = null;
       pass.legRankCount = null;
-      if (isNonFinishStatus(result.status) || pass.setupUid == null) continue;
+      if (result.finishConfirmed === false || isNonFinishStatus(result.status) || pass.setupUid == null) continue;
 
       const key = String(pass.setupUid);
       if (typeof pass.cumMs === "number" && Number.isFinite(pass.cumMs) && pass.cumMs > 0) {
@@ -3200,17 +3218,31 @@ async function importEqTimingFromUrls(params) {
   const participants = normalizeParticipants(participantPayload);
   const publishedByEd = new Map();
   let publishedRows = [];
-  if (params.verifyCoverage) {
-    publishedRows = await fetchAllForStation(timesUrlBase, null, true);
-    for (const row of publishedRows) {
+  // Each public list is complete independently; stations may add legitimate
+  // entrants absent from the default finish list. Identity must agree everywhere.
+  const publishedPidToEd = new Map();
+  const addPublishedRows = (rows) => {
+    const seen = new Set();
+    for (const row of rows) {
       const edUid = toNumberOrNull(row.EtappeDeltakerUID);
       const participant = row.Deltaker;
       const pid = participant && toNumberOrNull(participant.UID);
       if (edUid == null || pid == null) throw sourceError("UNRESOLVED_PUBLISHED_PARTICIPANT");
-      if (publishedByEd.has(edUid)) throw sourceError("DUPLICATE_PUBLISHED_PARTICIPANT");
-      publishedByEd.set(edUid, {participant, pid, row});
+      if (seen.has(edUid)) throw sourceError("DUPLICATE_PUBLISHED_PARTICIPANT");
+      seen.add(edUid);
+      const existing = publishedByEd.get(edUid);
+      if ((existing && existing.pid !== pid) ||
+        (publishedPidToEd.has(pid) && publishedPidToEd.get(pid) !== edUid)) {
+        throw sourceError("RESULT_IDENTITY_CONFLICT");
+      }
+      if (!existing) publishedByEd.set(edUid, {participant, pid, row});
+      publishedPidToEd.set(pid, edUid);
       participants[String(pid)] = Object.assign({}, participants[String(pid)] || {}, participant);
     }
+  };
+  if (params.verifyCoverage) {
+    publishedRows = await fetchAllForStation(timesUrlBase, null, true);
+    addPublishedRows(publishedRows);
   }
   const entityContext = {
     eventId,
@@ -3318,7 +3350,8 @@ async function importEqTimingFromUrls(params) {
   let allTimeItems = publishedRows.slice();
   const stationFetches = [];
   for (const stationUid of stationUids) {
-    const itemsForStation = await fetchAllForStation(timesUrlBase, stationUid);
+    const itemsForStation = await fetchAllForStation(timesUrlBase, stationUid, params.verifyCoverage);
+    if (params.verifyCoverage) addPublishedRows(itemsForStation);
     stationFetches.push({
       stationUid: String(stationUid),
       count: itemsForStation.length,
@@ -3518,6 +3551,12 @@ async function importEqTimingFromUrls(params) {
       totalText = finishTotalText;
     }
 
+    const finishConfirmed = params.verifyCoverage ?
+      finishTotalMs != null && finishTotalMs > 0 && !isNonFinishStatus(resultStatus) : undefined;
+    if (finishConfirmed === false) {
+      totalMs = null;
+      totalText = null;
+    }
     const derived = buildDerivedResultMetrics(rawSplits, totalMs);
 
     const docId = String(base.participantUid != null ? base.participantUid : edUid);
@@ -3535,6 +3574,7 @@ async function importEqTimingFromUrls(params) {
         docId,
         totalMs,
         totalText,
+        finishConfirmed,
         status: resultStatus,
         advanced: hasAdvancedToLaterStage(event, p, etappeUid),
         splits,
@@ -3610,6 +3650,15 @@ async function importEqTimingFromUrls(params) {
       });
     }
     preparedResult.data.analysisSummary = buildPublicAnalysisSummary(detailedAnalysis);
+    if (preparedResult.data.finishConfirmed === false) {
+      // Merge writes must remove previously inferred finish/analysis values.
+      for (const field of ["rank", "Rank", "place", "Place", "placement", "Plassering",
+        "finishRank", "calculatedFinishRank", "originalFinishRank", "totalMs", "totalTimeMs",
+        "totalText", "totalTimeFormatted", "analysisSummary"]) {
+        preparedResult.data[field] = FieldValue.delete();
+      }
+      if (preparedResult.data.team) preparedResult.data.team.legs = FieldValue.delete();
+    }
     preparedResult.data.analysis = FieldValue.delete();
     preparedResult.data.contentHash = resultContentHash(preparedResult.data);
   }
@@ -3621,9 +3670,11 @@ async function importEqTimingFromUrls(params) {
     Array.from(athleteWritesById.values()),
     eventId,
   );
-  await batchSetDocs(clubWrites);
-  await batchSetDocs(athleteWrites);
+  await batchSetEntityDocs(clubWrites);
+  await batchSetEntityDocs(athleteWrites);
   await batchSetDocs(privateAnalysisWrites);
+  await batchDeleteDocs(preparedResults.filter((result) => result.data.finishConfirmed === false)
+    .map((result) => result.ref.collection("privateAnalysis").doc("current")));
   const existingContentHashes = staleResultCleanup.existingContentHashes || {};
   delete staleResultCleanup.existingContentHashes;
   const resultWrites = preparedResults
@@ -3663,6 +3714,11 @@ async function importEqTimingFromUrls(params) {
     },
   };
 
+  const hasTimingData = preparedResults.some(({data}) =>
+    (typeof data.totalMs === "number" && data.totalMs > 0) ||
+    (Array.isArray(data.timingPoints) && data.timingPoints.some((point) =>
+      [point.cumMs, point.legMs].some((value) =>
+        typeof value === "number" && Number.isFinite(value) && value > 0))));
   const stageClassSummary = sanitizeForFirestore(Object.assign(
     {},
     buildClassDoc(event, classId, etappeUid),
@@ -3687,9 +3743,7 @@ async function importEqTimingFromUrls(params) {
       stageId: String(etappeUid),
       resultProfile: classification.profile,
       resultOrderVersion: 1,
-      hasTimingData: preparedResults.some((result) =>
-        typeof result.data.totalMs === "number" ||
-        Object.keys(result.data.splits || {}).length > 0),
+      hasTimingData,
       changedResultCount: resultWrites.length,
       changedClubCount: clubWrites.length,
       changedAthleteCount: athleteWrites.length,
@@ -3718,8 +3772,7 @@ async function importEqTimingFromUrls(params) {
     importedSplitDefs,
     importedParticipants: 0,
     importedResults: preparedResults.length,
-    hasTimingData: preparedResults.some((result) =>
-      typeof result.data.totalMs === "number" || Object.keys(result.data.splits || {}).length > 0),
+    hasTimingData,
     changedResults: resultWrites.length,
     changedClubs: clubWrites.length,
     changedAthletes: athleteWrites.length,
@@ -3927,6 +3980,7 @@ const result = await importEqTimingFromUrls({
 }
 
 function resultStatusOrder(result) {
+  if (result && result.finishConfirmed === false) return Math.max(1, resultStatusSortOrder(result.status));
   const statusOrder = resultStatusSortOrder(result && result.status);
   if (statusOrder > 0) return statusOrder;
   const finished = typeof result.totalMs === "number" && result.totalMs > 0 ||
