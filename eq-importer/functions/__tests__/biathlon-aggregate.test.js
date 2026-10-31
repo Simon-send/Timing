@@ -164,3 +164,11 @@ test("laps with different timing boundaries are not averaged together", () => {
   expect(Object.values(laps).map((lap) => lap.values.skiMs.count))
       .toEqual([1, 1]);
 });
+
+test("explicitly unconfirmed finishes never contribute any aggregate observation", () => {
+  const profiles = buildBiathlonAggregates([
+    result("legacy", 1000), result("partial", 1, {finishConfirmed: false}),
+  ], defs);
+  expect(profiles.all.finishersCount).toBe(1);
+  expect(profiles.all.metrics.finishTimeMs).toEqual({mean: 1000, count: 1});
+});

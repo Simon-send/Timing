@@ -1718,6 +1718,23 @@ await ref.collection("runs").doc("run").collection("targets").doc("target")
     ]);
   });
 
+  test("unconfirmed finishes cannot enter metric, shooting or timing rank cohorts", () => {
+    const mod = loadModule();
+    const rows = [false, true, undefined].map((finishConfirmed, index) => ({
+      finishConfirmed, status: "TIME",
+      analysis: {biathlon: {metrics: {skiTimeMs: index + 1},
+        passes: {shoot1: {rangeMs: index + 1}}}},
+      timingPoints: [{setupUid: 1, cumMs: index + 1, legMs: index + 1}],
+    }));
+    mod._test.addMetricRanks(rows, "skiTimeMs", "skiRank");
+    mod._test.addShootingPassRanks(rows);
+    mod._test.addRawPassRanks(rows);
+    expect(rows.map((row) => row.analysis.biathlon.metrics.skiRank)).toEqual([null, 1, 2]);
+    expect(rows.map((row) => row.analysis.biathlon.passes.shoot1.rangeRank)).toEqual([null, 1, 2]);
+    expect(rows.map((row) => row.timingPoints[0].cumRank)).toEqual([null, 1, 2]);
+    expect(rows.map((row) => row.timingPoints[0].cumRankCount)).toEqual([null, 2, 2]);
+  });
+
   test("ranks each shooting pass across finished results", () => {
     const mod = loadModule();
     const results = [
@@ -2901,6 +2918,116 @@ describe("eq importer http handlers", () => {
     expect(mockState.docs.get("events/80088/stages/330315/classes/1224375").hasTimingData).toBe(false);
   });
 
+  test.each([[60000, true], [0, false]])(
+    "all-intermediate class reports actual timing (%i ms) through worker state",
+    async (timeMs, hasTimingData) => {
+      const mod = loadModule();
+      const fixtures = buildImportFixtures();
+      const intermediate = {...fixtures.stationOneTimes.Items[0],
+        AkkumulertTid: timeMs, Splitt: {Tid: timeMs},
+        Deltaker: fixtures.participants["101"]};
+      mockAxiosGet.mockImplementation(async (url) => {
+        if (url.includes("/Event/")) return {data: fixtures.event};
+        if (url.includes("/Contestants/")) return {data: fixtures.participants};
+        return {data: {Items: new URL(url).searchParams.get("station") === "1434583" ?
+          [intermediate] : []}};
+      });
+      const report = await mod._import({eventId: 80088, classId: 1224375,
+        event: fixtures.event, participants: fixtures.participants, verifyCoverage: true,
+        timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375"});
+      expect(report).toMatchObject({importedResults: 1, hasTimingData});
+      const stageClass = "events/80088/stages/330315/classes/1224375";
+      expect(mockState.docs.get(stageClass).hasTimingData).toBe(hasTimingData);
+      expect(mockState.docs.get(stageClass + "/results/101").finishConfirmed).toBe(false);
+      const started = makeResponse();
+      await mod.startImportEvent({method: "POST", body: {eventId: 80088}}, started);
+      const completed = makeResponse();
+      await mod.runImportEventChunk({method: "POST", body: {eventId: 80088,
+        jobId: started.body.jobId, runId: started.body.runId, classIndex: 0, classCount: 1}}, completed);
+      expect(completed.statusCode).toBe(200);
+      expect(mockState.docs.get("importJobs/" + started.body.jobId).status).toBe("done");
+      expect(mockState.docs.get("events/80088").importState).toBe("updated");
+      expect(mockState.docs.get(stageClass).importState).toBe(hasTimingData ? "updated" : "waiting");
+      expect(mockState.docs.get("events/80088/stages/330315").classImportStates["1224375"])
+        .toBe(hasTimingData ? "updated" : "waiting");
+    },
+  );
+
+  test("verified station union preserves intermediate-only entrants without finish or statistics", async () => {
+    const mod = loadModule();
+    const fixtures = buildImportFixtures();
+    const participant = {...fixtures.participants["101"], UID: 102,
+      Utover: {UID: 1002, Fornavn: "Intermediate", Etternavn: "Only"},
+      EtappeDeltaker: {"9002": {}}};
+    const finished = {...fixtures.stationTwoTimes.Items[0], Deltaker: fixtures.participants["101"]};
+    const intermediate = {...fixtures.stationOneTimes.Items[0],
+      EtappeDeltakerUID: 9002, Deltaker: participant};
+    mockAxiosGet.mockImplementation(async (url) => {
+      const station = new URL(url).searchParams.get("station");
+      return {data: {Items: station === "1434583" ? [
+        {...fixtures.stationOneTimes.Items[0], Deltaker: fixtures.participants["101"]}, intermediate,
+      ] : [finished]}};
+    });
+    mod._test.getDb();
+    const partialPath = "events/80088/stages/330315/classes/1224375/results/102";
+    mockState.docs.set(partialPath, {
+      totalMs: 60000, totalText: "1:00", rank: 1, finishRank: 1,
+      totalTimeMs: 60000, totalTimeFormatted: "1:00", calculatedFinishRank: 1,
+      originalFinishRank: 1, Rank: 1, place: 1, Place: 1, placement: 1, Plassering: 1,
+      analysisSummary: {biathlon: {metrics: {skiTimeMs: 50000}}},
+    });
+    mockState.docs.set(partialPath + "/privateAnalysis/current", {analysis: {skiTimeMs: 50000}});
+    mockState.docs.set("athletes/athlete:1002", {events: [
+      {eventId: 80088, rank: 1}, {eventId: 80088, rank: 2}, {eventId: 99, rank: 3},
+    ]});
+    const result = await mod._import({eventId: 80088, classId: 1224375,
+      event: fixtures.event, participants: fixtures.participants, verifyCoverage: true,
+      timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375"});
+    expect(result.importedResults).toBe(2);
+    const path = "events/80088/stages/330315/classes/1224375/results/";
+    const partial = mockState.docs.get(path + "102");
+    expect(mockState.docs.get("athletes/athlete:1002").events).toEqual([
+      {eventId: 99, rank: 3}, expect.objectContaining({eventId: 80088, finishConfirmed: false}),
+    ]);
+    expect(mockState.docs.get("athletes/athlete:1002").events[1].rank).toBeUndefined();
+    expect(partial.finishConfirmed).toBe(false);
+    for (const field of ["totalMs", "totalText", "totalTimeMs", "totalTimeFormatted",
+      "rank", "Rank", "place", "Place", "placement", "Plassering", "finishRank",
+      "calculatedFinishRank", "originalFinishRank"]) {
+      expect(partial[field]).toBeUndefined();
+    }
+    expect(partial.status || "").not.toMatch(/DNS|DNF/);
+    expect(partial.finishRank).toBeUndefined();
+    expect(partial.rank).toBeUndefined();
+    expect(partial.timingPoints).toEqual([expect.objectContaining({cumMs: 60000})]);
+    expect(partial.timingPoints[0].cumRank).toBeUndefined();
+    expect(partial.analysisSummary).toBeUndefined();
+    expect(mockState.docs.has(path + "102/privateAnalysis/current")).toBe(false);
+    expect(mockState.docs.get(path + "101")).toMatchObject({finishConfirmed: true, finishRank: 1});
+  });
+
+  test.each([
+    ["duplicate station identity", "DUPLICATE_PUBLISHED_PARTICIPANT"],
+    ["conflicting station identity", "RESULT_IDENTITY_CONFLICT"],
+    ["incomplete station page", "INCOMPLETE_TIMING_RESPONSE"],
+  ])("verified union rejects %s", async (problem, code) => {
+    const mod = loadModule();
+    const fixtures = buildImportFixtures();
+    const row = {...fixtures.stationTwoTimes.Items[0], Deltaker: fixtures.participants["101"]};
+    mockAxiosGet.mockImplementation(async (url) => {
+      if (!new URL(url).searchParams.has("station")) return {data: {Items: [row]}};
+      if (problem === "duplicate station identity") return {data: {Items: [row, row]}};
+      if (problem === "conflicting station identity") {
+        return {data: {Items: [{...row, Deltaker: {...row.Deltaker, UID: 102}}]}};
+      }
+      return {data: {Items: [row], TotalItems: 2}};
+    });
+    await expect(mod._import({eventId: 80088, classId: 1224375,
+      event: fixtures.event, participants: fixtures.participants, verifyCoverage: true,
+      timesUrlBase: "https://live.eqtiming.com/api/Result/Class/80088/330315/1224375"}))
+      .rejects.toThrow(code);
+  });
+
   test("unresolved published identities fail their target but allow the next stage", async () => {
     const mod = loadModule();
     const fixtures = buildDuplicateClassAcrossDistancesFixtures();
@@ -3052,8 +3179,12 @@ describe("eq importer http handlers", () => {
       .mockResolvedValueOnce({data: {Items: fixtures.stationTwoTimes.Items.map((row) => ({
         ...row, Deltaker: fixtures.participants["101"],
       })), TotalItems: 1}})
-      .mockResolvedValueOnce({data: fixtures.stationOneTimes})
-      .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+      .mockResolvedValueOnce({data: {Items: fixtures.stationOneTimes.Items.map((row) => ({
+        ...row, Deltaker: fixtures.participants["101"],
+      }))}})
+      .mockResolvedValueOnce({data: {Items: fixtures.stationTwoTimes.Items.map((row) => ({
+        ...row, Deltaker: fixtures.participants["101"],
+      }))}});
 
     const chunkReq = {
       method: "POST",

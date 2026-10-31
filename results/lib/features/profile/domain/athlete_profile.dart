@@ -95,6 +95,7 @@ class AthleteRace {
     required this.status,
     this.participantCount = 0,
     this.totalMs,
+    this.finishConfirmed,
     this.isRelay = false,
     this.splits = const [],
     this.biathlonMetrics,
@@ -122,6 +123,7 @@ class AthleteRace {
   final String status;
   final int participantCount;
   final int? totalMs;
+  final bool? finishConfirmed;
   final bool isRelay;
   final List<AthleteRaceSplit> splits;
   final BiathlonRaceMetrics? biathlonMetrics;
@@ -165,11 +167,13 @@ class AthleteRace {
   }
 
   bool get isFinished =>
+      finishConfirmed != false &&
       !isExcludedResultStatus(status) &&
       ((totalMs ?? 0) > 0 ||
           ((finishRank ?? rank ?? 0) > 0 && totalText.trim().isNotEmpty));
 
   String get placementLabel {
+    if (finishConfirmed == false && !isExcludedResultStatus(status)) return '-';
     if (isExcludedResultStatus(status)) return status.trim();
     if (finishRank != null && finishRank! > 0) return finishRank.toString();
     if (rank != null && rank! > 0) return rank.toString();

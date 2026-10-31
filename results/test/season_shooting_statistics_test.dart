@@ -29,7 +29,9 @@ AthleteRace race(
   bool relayLeg = false,
   int? expectedCount,
   int? totalMs = 60000,
+  bool? finishConfirmed,
 }) => AthleteRace(
+  finishConfirmed: finishConfirmed,
   eventId: eventId,
   classId: 'class',
   resultId: id,
@@ -62,6 +64,16 @@ SeasonShootingStatistics summarize(
 ]) => calculateSeasonShootingStatistics(races, selection);
 
 void main() {
+  test('unconfirmed finish supplies no season shooting observations', () {
+    final partial = race('partial', finishConfirmed: false, passes: [pass(1)]);
+    expect(partial.isFinished, isFalse);
+    expect(partial.isCompletedIndividualBiathlonRace, isFalse);
+    final stats = summarize([partial]);
+    expect(stats.hits.validCount, 0);
+    expect(stats.misses.validCount, 0);
+    expect(stats.rangeTime.validCount, 0);
+  });
+
   test('conflicting source and class counts cannot classify partial series', () {
     // The importer infers positions from its two recorded series, although the
     // class reference establishes four. Source index two is not known standing.

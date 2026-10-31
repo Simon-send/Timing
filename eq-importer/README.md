@@ -13,6 +13,28 @@ events/{eventId}/stages/{stageId}/classes/{classId}/results/{resultId}
 stafett leser alle konkurranseledd. `null`, tom tekst og tomme samlinger fjernes
 før skriving, mens `0` og `false` beholdes.
 
+## Bekreftet målgang ved verifisert import
+
+Manifestbaserte importer (`verifyCoverage`) bruker unionen av komplette offentlige
+resultatlister fra standardvisningen og alle stasjoner. Samme deltaker på flere
+stasjoner gir ett resultat; ufullstendig paginering og motstridende identitet
+avviser klassen. `finishConfirmed` er bare sann ved positiv tid på en definert
+målstasjon og uten en ekskludert resultatstatus. `TIME` og siste mellomtid alene
+bekrefter ikke målgang.
+
+Ved `finishConfirmed: false` beholdes `timingPoints` og faktisk kildestatus uten
+å finne på DNS/DNF. Måltid, plassering og avledet offentlig/privat analyse fjernes
+også ved reimport av tidligere fullførte resultater. Raden bidrar ikke til
+rangeringer, referanseprofiler eller sesongstatistikk. Utøverens eventoppsummering
+oppdateres per event i en transaksjon som bevarer øvrig historikk.
+
+Eksisterende dokumenter uten feltet og eldre importer uten dekningskontroll
+beholder tidligere leseregler. Reimport av berørte arrangementer med en ny
+manifestbasert jobb er nødvendig for å rette allerede lagrede mellomtider og
+statistikk; ingen automatisk masseendring utføres. Feltet er offentlig og
+backendskrevet; eksisterende regler tillater lesing og avviser klientskriving,
+og `privateAnalysis` er fortsatt sperret for klienter.
+
 ## Profil-overstyring
 
 Backend kan overstyre EQ-klassifiseringen med miljøvariabelen

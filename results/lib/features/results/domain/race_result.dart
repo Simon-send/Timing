@@ -188,6 +188,7 @@ class RaceResult {
     this.athleteId,
     required this.rank,
     this.finishRank,
+    this.finishConfirmed,
     required this.bib,
     required this.name,
     required this.club,
@@ -286,6 +287,7 @@ class RaceResult {
 
     return RaceResult(
       id: id,
+      finishConfirmed: asBool(data['finishConfirmed']),
       stageId:
           asNonEmptyString(data['stageId']) ??
           asNonEmptyString(data['etappeUid']),
@@ -338,11 +340,13 @@ class RaceResult {
         teamName: teamName,
       ),
       relayMembers: relayMembers,
-      relayLegBiathlon: relayLegBiathlon,
+      relayLegBiathlon: data['finishConfirmed'] == false
+          ? const {}
+          : relayLegBiathlon,
       isRelay:
           asBool(data['isRelay']) == true ||
           entrantKind == ResultEntrantKind.team,
-      biathlon: hasBiathlon
+      biathlon: hasBiathlon && data['finishConfirmed'] != false
           ? BiathlonAnalysis.fromMaps(analysis, shootingData, biathlonLaps)
           : null,
     );
@@ -358,6 +362,7 @@ class RaceResult {
   final String? athleteId;
   final int? rank;
   final int? finishRank;
+  final bool? finishConfirmed;
   final String bib;
   final String name;
   final String club;
@@ -390,6 +395,7 @@ class RaceResult {
   }
 
   bool get isFinished {
+    if (finishConfirmed == false) return false;
     if (resultStatusSortOrder(status) > 0) return false;
     if (totalMs != null && totalMs! > 0) return true;
     return rank != null && totalText.trim().isNotEmpty;
@@ -404,6 +410,7 @@ class RaceResult {
   }
 
   String get placementLabel {
+    if (finishConfirmed == false && !isExcludedResultStatus(status)) return '-';
     if (isExcludedResultStatus(status)) return status.trim();
     if (finishRank != null && finishRank! > 0) return finishRank.toString();
     if (rank != null && rank! > 0) return rank.toString();
@@ -636,6 +643,7 @@ RaceResult? relayLegRaceResult(RaceResult teamResult, int legNumber) {
   return RaceResult(
     id: viewId,
     sourceResultId: teamResult.detailResultId,
+    finishConfirmed: teamResult.finishConfirmed,
     relayLegNumber: legNumber,
     isRelay: true,
     relayOverallRank: teamResult.finishRank ?? teamResult.rank,
