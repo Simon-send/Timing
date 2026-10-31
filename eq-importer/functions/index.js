@@ -4578,6 +4578,10 @@ exports.repairImportDispatches = onSchedule({
         } else if (decision === "block") {
           transaction.set(snapshot.ref, {
             status: "blocked", lastError: "IMPORT_RECOVERY_EXHAUSTED",
+            activeClassIndex: FieldValue.delete(),
+            leaseOwner: FieldValue.delete(),
+            leaseExpiresAtMs: FieldValue.delete(),
+            pendingDispatch: FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp(),
           }, {merge: true});
           transaction.set(getDb().collection("events").doc(String(data.eventId)), {
