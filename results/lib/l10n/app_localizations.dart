@@ -786,6 +786,24 @@ abstract class AppLocalizations {
   /// **'Split breakdown'**
   String get splitBreakdown;
 
+  /// No description provided for @sprintPodiumTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Top 3 overall'**
+  String get sprintPodiumTitle;
+
+  /// No description provided for @sprintPodiumCumulative.
+  ///
+  /// In en, this message translates to:
+  /// **'Average from start {time} ({count} of 3)'**
+  String sprintPodiumCumulative(String time, int count);
+
+  /// No description provided for @sprintPodiumLeg.
+  ///
+  /// In en, this message translates to:
+  /// **'Split average {time} ({count} of 3)'**
+  String sprintPodiumLeg(String time, int count);
+
   /// No description provided for @backToResults.
   ///
   /// In en, this message translates to:

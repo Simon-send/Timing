@@ -56,6 +56,57 @@ void main() {
     ]);
   });
 
+  test('stable result IDs distinguish same-name athletes and absent heats', () {
+    final selected = RaceResult.fromMap('nsf-b', {
+      'name': 'Samme Navn',
+      'clubName': 'Klubb B',
+      'totalMs': 62000,
+    });
+    final other = RaceResult.fromMap('nsf-a', {
+      'name': 'Samme Navn',
+      'clubName': 'Klubb A',
+      'totalMs': 61000,
+    });
+    final results = buildAthleteStageResults(
+      stages: const [prologue, heat],
+      resultsByStageId: {
+        'prologue': [other, selected],
+        'heat-1': [other],
+      },
+      athleteId: null,
+      athleteName: selected.name,
+      stableResultId: selected.id,
+    );
+    expect(results.map((value) => value.stage.id), ['prologue']);
+    expect(results.single.athleteResult.club, 'Klubb B');
+  });
+
+  test('overall athlete lists sort official ranks before names', () {
+    final rows = [
+      RaceResult.fromMap('second', {
+        'name': 'Ada',
+        'rank': 2,
+        'resultKind': 'classification',
+      }),
+      RaceResult.fromMap('winner', {
+        'name': 'Zara',
+        'rank': 1,
+        'resultKind': 'classification',
+      }),
+    ];
+    final results = buildAthleteStageResults(
+      stages: const [prologue],
+      resultsByStageId: {'prologue': rows},
+      athleteId: null,
+      athleteName: 'Zara',
+      stableResultId: 'winner',
+    );
+    expect(results.single.results.map((value) => value.id), [
+      'winner',
+      'second',
+    ]);
+  });
+
   test('finds a relay athlete even when the leg changes between heats', () {
     final results = buildAthleteStageResults(
       stages: const [prologue, heat],

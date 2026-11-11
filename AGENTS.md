@@ -6,7 +6,7 @@ Dette er arbeidsinstruksen for hele `EQ_converter`-repoet. Den gjelder for alle
 filer under roten med mindre en dypere `AGENTS.md` senere gir mer spesifikke
 regler. Dokumentet er skrevet for både mennesker og kodeagenter.
 
-Målet med repoet er å hente konkurransedata fra EQ Timing, normalisere dem til
+Målet med repoet er å hente konkurransedata fra EQ Timing og NSF Timing, normalisere dem til
 et stabilt Firestore-skjema og vise resultat-, utøver- og analysevisninger i en
 Flutter-app. Bevar datakontrakten mellom importøren og klienten; endringer på
 bare én side er den vanligste kilden til feil.
@@ -162,6 +162,14 @@ enkelt testfil kjøres først, for eksempel
 ## Importøren (`eq-importer/`)
 
 ### Runtime og inngangspunkter
+
+NSF Timing importeres med det lokale operatørverktøyet
+`functions/scripts/import-nsf.js`, ikke en eksportert Cloud Function. Det leser
+offentlige nettlesertabeller og offisielle PDF-lister, forhåndsviser en
+versjonert JSON og krever kontrollsum og eksplisitt prosjekt før skriving.
+NSF bruker samme v3-kontrakt under `events/nsf-<id>`; interne importkvitteringer
+ligger i `nsfImportReceipts`. Se `NSF-IMPORT.md` for operatørflyten. Bevar
+adskillelsen fra EQ-profiler og den faste sluttpallen i sprintreferansen.
 
 - Aktiv runtime er CommonJS JavaScript i `functions/index.js` på Node 22.
 - `functions_ts_old/` er arkivert TypeScript og skal ikke holdes synkronisert.
@@ -412,15 +420,15 @@ Denne delen avledes deterministisk fra arbeidsomradet. Oppdater den med `tools/u
 
 | Arbeidsomrade | Oppdagede filer | Manifest/runtime |
 | --- | ---: | --- |
-| `results/` | 261 | results (Dart SDK ^3.11.0) |
-| `eq-importer/` | 116 | Node 22 |
-| `eq/` | 140 | eq (Dart SDK ^3.11.0) |
-| `webScraper/` | 9 | Python-prototyper uten manifest |
-| `AI/` | 3 | Referansemateriale |
+| `results/` | 287 | results (Dart SDK ^3.11.0) |
+| `eq-importer/` | 82 | Node 22 |
+| `eq/` | 0 | ikke versjonert |
+| `webScraper/` | 0 | Python-prototyper uten manifest |
+| `AI/` | 0 | Referansemateriale |
 
-- Flutter-kilde: 75 Dart-filer under `results/lib`.
-- Flutter-tester: 23 testfiler med 91 oppdagede `test`/`testWidgets`-tilfeller.
-- Importortester: 13 Jest-fil med 102 oppdagede testtilfeller.
+- Flutter-kilde: 93 Dart-filer under `results/lib`.
+- Flutter-tester: 37 testfiler med 243 oppdagede `test`/`testWidgets`-tilfeller.
+- Importortester: 25 Jest-fil med 191 oppdagede testtilfeller.
 - Lokaler: de, en, es, et, fi, fr, it, nb, ru, sv.
 - Deklarerte rutesegmenter: /, /login, /forgot-password, /register, /connect-athlete, /me, /events, :eventId/results, :classId/athletes/:resultId.
 - Eksporterte Cloud Functions: getImportStatus, repairImportDispatches, runImportEventChunk, startImportEvent.

@@ -2,6 +2,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:results/features/results/domain/race_result.dart';
 
 void main() {
+  test('an official classification does not require a finish time', () {
+    final result = RaceResult.fromMap('ranked', {
+      'resultKind': 'classification',
+      'rank': 3,
+    });
+    expect(result.isFinished, isTrue);
+    expect(result.placementLabel, '3');
+    expect(result.totalMs, isNull);
+    expect(result.totalText, isEmpty);
+    expect(result.splitValues, isEmpty);
+    expect(RaceResult.fromMap('legacy', {'rank': 3}).isFinished, isFalse);
+  });
+
+  test('non-finishing statuses override a classification rank', () {
+    for (final status in ['DSQ', 'DQ', 'DFQ', 'DNS', 'DNF']) {
+      final result = RaceResult.fromMap(status, {
+        'resultKind': 'classification',
+        'rank': 1,
+        'status': status,
+      });
+      expect(result.isFinished, isFalse);
+      expect(result.placementLabel, status);
+    }
+  });
+
   test(
     'explicitly unconfirmed finish preserves splits but has no placement',
     () {
@@ -43,6 +68,25 @@ void main() {
     expect(effectiveSplitLegMs(result, 'first'), 1000);
     expect(effectiveSplitLegMs(result, 'second'), 1400);
   });
+
+  test(
+    'authoritative split legs preserve a gap without inventing a segment',
+    () {
+      final result = RaceResult.fromMap('nsf-result', {
+        'splitLegsAuthoritative': true,
+        'timingPoints': [
+          {'setupUid': 'first', 'cumMs': 1000, 'legMs': 1000},
+          {'setupUid': 'third', 'cumMs': 3900},
+          {'setupUid': 'finish', 'cumMs': 4600, 'legMs': 700},
+        ],
+      });
+      expect(result.splitValues['third']?.cumMs, 3900);
+      expect(effectiveSplitLegMs(result, 'first'), 1000);
+      expect(effectiveSplitLegMs(result, 'third'), isNull);
+      expect(effectiveSplitLegMs(result, 'finish'), 700);
+      expect(combinedSplitLegMs(result, ['third', 'finish']), isNull);
+    },
+  );
 
   test('sums independent split legs without accepting partial data', () {
     final result = RaceResult.fromMap('result', {

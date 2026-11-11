@@ -6,11 +6,18 @@ import '../domain/race_result_order.dart';
 import '../domain/competition_stage.dart';
 import '../domain/result_class.dart';
 import '../domain/split_def.dart';
+import '../domain/sprint_podium.dart';
 
 abstract class ResultsRepository {
   Stream<List<ResultClass>> watchClasses(String eventId);
 
   Stream<List<CompetitionStage>> watchStages(String eventId);
+
+  Stream<SprintPodium?> watchStageSprintPodium(
+    String eventId,
+    String stageId,
+    String classId,
+  );
 
   Stream<List<SplitDef>> watchStageSplitDefs(
     String eventId,
@@ -101,6 +108,17 @@ class FirestoreResultsRepository implements ResultsRepository {
       if (stageId == null) return Stream.value(const <SplitDef>[]);
       return watchStageSplitDefs(eventId, stageId, classId);
     });
+  }
+
+  @override
+  Stream<SprintPodium?> watchStageSprintPodium(
+    String eventId,
+    String stageId,
+    String classId,
+  ) {
+    return _stageClassDoc(eventId, stageId, classId).snapshots().map(
+      (snapshot) => SprintPodium.fromMap(snapshot.data()?['sprintPodium']),
+    );
   }
 
   @override

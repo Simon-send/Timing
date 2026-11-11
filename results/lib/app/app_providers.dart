@@ -20,6 +20,7 @@ import '../features/results/domain/competition_stage.dart';
 import '../features/results/domain/result_class.dart';
 import '../features/results/domain/result_sort_mode.dart';
 import '../features/results/domain/split_def.dart';
+import '../features/results/domain/sprint_podium.dart';
 import '../features/settings/data/settings_repository.dart';
 import '../features/settings/domain/user_settings.dart';
 
@@ -267,6 +268,17 @@ final stageSplitDefsProvider =
           .watchStageSplitDefs(args.eventId, args.stageId, args.classId);
     });
 
+final stageSprintPodiumProvider = StreamProvider.autoDispose
+    .family<SprintPodium?, ({String eventId, String stageId, String classId})>((
+      ref,
+      args,
+    ) {
+      ref.watch(appDataRefreshProvider);
+      return ref
+          .watch(resultsRepositoryProvider)
+          .watchStageSprintPodium(args.eventId, args.stageId, args.classId);
+    });
+
 final stageResultsProvider =
     StreamProvider.family<
       List<RaceResult>,
@@ -319,6 +331,7 @@ typedef AthleteStageResultsRequest = ({
   String classId,
   String? athleteId,
   String athleteName,
+  String? stableResultId,
 });
 
 final athleteStageResultsProvider = FutureProvider.autoDispose
@@ -352,6 +365,7 @@ final athleteStageResultsProvider = FutureProvider.autoDispose
         resultsByStageId: Map.fromEntries(reads),
         athleteId: args.athleteId,
         athleteName: args.athleteName,
+        stableResultId: args.stableResultId,
       );
     });
 

@@ -385,6 +385,19 @@ class AppLocalizationsSv extends AppLocalizations {
   String get splitBreakdown => 'Split breakdown';
 
   @override
+  String get sprintPodiumTitle => 'Topp 3 totalt';
+
+  @override
+  String sprintPodiumCumulative(String time, int count) {
+    return 'Snitt från start $time ($count av 3)';
+  }
+
+  @override
+  String sprintPodiumLeg(String time, int count) {
+    return 'Snitt för delsträckan $time ($count av 3)';
+  }
+
+  @override
   String get backToResults => 'Back to results';
 
   @override

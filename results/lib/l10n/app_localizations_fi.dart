@@ -386,6 +386,19 @@ class AppLocalizationsFi extends AppLocalizations {
   String get splitBreakdown => 'Split breakdown';
 
   @override
+  String get sprintPodiumTitle => 'Lopputulosten 3 parasta';
+
+  @override
+  String sprintPodiumCumulative(String time, int count) {
+    return 'Keskiaika lähdöstä $time ($count/3)';
+  }
+
+  @override
+  String sprintPodiumLeg(String time, int count) {
+    return 'Osuuden keskiaika $time ($count/3)';
+  }
+
+  @override
   String get backToResults => 'Back to results';
 
   @override

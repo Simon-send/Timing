@@ -311,6 +311,13 @@ class ResultsTable extends StatelessWidget {
         if (bMs == null) return -1;
         return aMs.compareTo(bMs);
       }
+      final aRank = a.result.isFinished ? a.result.classificationRank : null;
+      final bRank = b.result.isFinished ? b.result.classificationRank : null;
+      if (aRank != bRank) {
+        if (aRank == null) return 1;
+        if (bRank == null) return -1;
+        return aRank.compareTo(bRank);
+      }
       final nameCompare = a.result.name.compareTo(b.result.name);
       if (nameCompare != 0) return nameCompare;
       final classCompare = a.classId.compareTo(b.classId);
@@ -329,6 +336,7 @@ class ResultsTable extends StatelessWidget {
   ) {
     int? best;
     for (final row in rows) {
+      if (!row.result.isFinished) continue;
       final timeMs = _sortMs(row.result, selectedSplitId, splitRange, sortMode);
       if (timeMs == null || timeMs <= 0) continue;
       if (best == null || timeMs < best) best = timeMs;
@@ -417,6 +425,7 @@ class ResultsTable extends StatelessWidget {
     ResultSortMode sortMode,
     int? winnerMs,
   ) {
+    if (!result.isFinished) return '-';
     final timeMs = _sortMs(result, selectedSplitId, splitRange, sortMode);
     if (winnerMs == null || timeMs == null) return '-';
     final gap = timeMs - winnerMs;
@@ -439,6 +448,7 @@ class ResultsTable extends StatelessWidget {
     required bool showOriginalPlacement,
   }) {
     final result = row.result;
+    if (result.isClassification) return result.placementLabel;
     if (result.isFinished) {
       final currentTime = _sortMs(
         result,

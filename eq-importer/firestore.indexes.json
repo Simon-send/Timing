@@ -6,6 +6,11 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "nsfImportReceipts",
+      "fieldPath": "coverage",
+      "indexes": []
+    },
+    {
       "collectionGroup": "sourceFragments",
       "fieldPath": "payload",
       "indexes": []

@@ -146,6 +146,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Import receipts contain operational state and are only used by Admin SDK.
+    match /nsfImportReceipts/{eventId} {
+      allow read, write: if false;
+    }
+
     match /athletes/{athleteId} {
       allow read: if true;
       allow write: if false;
