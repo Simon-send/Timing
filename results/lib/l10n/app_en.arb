@@ -1,4 +1,6 @@
 {
+  "eventSportBiathlon": "Biathlon",
+  "eventSportCrossCountry": "Cross-country skiing",
   "biathlonStatistics": "Biathlon statistics",
   "biathlonFinishTime": "Finish time",
   "biathlonSkiTime": "Ski time",

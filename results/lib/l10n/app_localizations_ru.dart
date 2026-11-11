@@ -9,6 +9,12 @@ class AppLocalizationsRu extends AppLocalizations {
   AppLocalizationsRu([String locale = 'ru']) : super(locale);
 
   @override
+  String get eventSportBiathlon => 'Биатлон';
+
+  @override
+  String get eventSportCrossCountry => 'Лыжные гонки';
+
+  @override
   String get biathlonStatistics => 'Статистика биатлона';
 
   @override

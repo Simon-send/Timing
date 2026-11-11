@@ -1,4 +1,6 @@
 {
+  "eventSportBiathlon": "Biathlon",
+  "eventSportCrossCountry": "Skilanglauf",
   "biathlonStatistics": "Biathlonstatistik",
   "biathlonFinishTime": "Zielzeit",
   "biathlonSkiTime": "Laufzeit",

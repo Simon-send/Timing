@@ -9,6 +9,12 @@ class AppLocalizationsFi extends AppLocalizations {
   AppLocalizationsFi([String locale = 'fi']) : super(locale);
 
   @override
+  String get eventSportBiathlon => 'Ampumahiihto';
+
+  @override
+  String get eventSportCrossCountry => 'Maastohiihto';
+
+  @override
   String get biathlonStatistics => 'Ampumahiihtotilastot';
 
   @override

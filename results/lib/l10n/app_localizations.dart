@@ -114,6 +114,18 @@ abstract class AppLocalizations {
     Locale('sv'),
   ];
 
+  /// No description provided for @eventSportBiathlon.
+  ///
+  /// In en, this message translates to:
+  /// **'Biathlon'**
+  String get eventSportBiathlon;
+
+  /// No description provided for @eventSportCrossCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Cross-country skiing'**
+  String get eventSportCrossCountry;
+
   /// No description provided for @biathlonStatistics.
   ///
   /// In en, this message translates to:

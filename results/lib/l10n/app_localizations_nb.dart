@@ -9,6 +9,12 @@ class AppLocalizationsNb extends AppLocalizations {
   AppLocalizationsNb([String locale = 'nb']) : super(locale);
 
   @override
+  String get eventSportBiathlon => 'Skiskyting';
+
+  @override
+  String get eventSportCrossCountry => 'Langrenn';
+
+  @override
   String get biathlonStatistics => 'Skiskytterstatistikk';
 
   @override

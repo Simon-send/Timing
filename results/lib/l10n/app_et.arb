@@ -1,4 +1,6 @@
 {
+  "eventSportBiathlon": "Laskesuusatamine",
+  "eventSportCrossCountry": "Murdmaasuusatamine",
   "biathlonStatistics": "Laskesuusatamise statistika",
   "biathlonFinishTime": "Lõppaeg",
   "biathlonSkiTime": "Suusaaeg",

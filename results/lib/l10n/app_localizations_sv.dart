@@ -9,6 +9,12 @@ class AppLocalizationsSv extends AppLocalizations {
   AppLocalizationsSv([String locale = 'sv']) : super(locale);
 
   @override
+  String get eventSportBiathlon => 'Skidskytte';
+
+  @override
+  String get eventSportCrossCountry => 'Längdskidåkning';
+
+  @override
   String get biathlonStatistics => 'Skidskyttestatistik';
 
   @override
