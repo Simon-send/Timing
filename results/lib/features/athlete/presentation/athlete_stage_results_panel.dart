@@ -316,6 +316,7 @@ bool _isSelectedResult(AthleteStageResult stageResult, RaceResult result) {
 }
 
 String _placementFor(AthleteStageResult stageResult, RaceResult result) {
+  if (result.isClassification) return result.placementLabel;
   if (!result.isFinished) {
     final status = result.status.trim();
     return status.isEmpty ? 'DNF' : status;
@@ -341,6 +342,7 @@ String _resultTime(RaceResult result) {
   if (text.isNotEmpty) return text;
   final formatted = formatDurationMs(result.totalMs);
   if (formatted.isNotEmpty) return formatted;
+  if (result.isClassification && result.isFinished) return '-';
   final status = result.status.trim();
   return status.isEmpty ? '-' : status;
 }

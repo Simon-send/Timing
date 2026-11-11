@@ -2,7 +2,7 @@ import '../../../core/firebase/firestore_mappers.dart';
 
 enum ResultProfile { standard, sprint, relay, biathlon }
 
-enum ResultProfileSource { eq, override }
+enum ResultProfileSource { eq, nsf, override }
 
 class CompetitionStage {
   const CompetitionStage({
@@ -28,9 +28,11 @@ class CompetitionStage {
       order: asInt(data['order']) ?? 10000,
       classIds: _stringList(data['classIds']),
       profile: _profile(data['resultProfile']),
-      profileSource: asNonEmptyString(data['resultProfileSource']) == 'override'
-          ? ResultProfileSource.override
-          : ResultProfileSource.eq,
+      profileSource: switch (asNonEmptyString(data['resultProfileSource'])) {
+        'override' => ResultProfileSource.override,
+        'nsf' => ResultProfileSource.nsf,
+        _ => ResultProfileSource.eq,
+      },
       hasRelayCapability: asBool(data['isRelay']) ?? false,
       hasBiathlonCapability: asBool(data['isBiathlon']) ?? false,
       classImportStates: {

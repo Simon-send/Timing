@@ -189,6 +189,8 @@ class RaceResult {
     required this.rank,
     this.finishRank,
     this.finishConfirmed,
+    this.isClassification = false,
+    this.splitLegsAuthoritative = false,
     required this.bib,
     required this.name,
     required this.club,
@@ -288,6 +290,8 @@ class RaceResult {
     return RaceResult(
       id: id,
       finishConfirmed: asBool(data['finishConfirmed']),
+      isClassification: data['resultKind'] == 'classification',
+      splitLegsAuthoritative: asBool(data['splitLegsAuthoritative']) ?? false,
       stageId:
           asNonEmptyString(data['stageId']) ??
           asNonEmptyString(data['etappeUid']),
@@ -363,6 +367,8 @@ class RaceResult {
   final int? rank;
   final int? finishRank;
   final bool? finishConfirmed;
+  final bool isClassification;
+  final bool splitLegsAuthoritative;
   final String bib;
   final String name;
   final String club;
@@ -396,9 +402,16 @@ class RaceResult {
 
   bool get isFinished {
     if (finishConfirmed == false) return false;
-    if (resultStatusSortOrder(status) > 0) return false;
+    if (isExcludedResultStatus(status)) return false;
+    if (isClassification) return classificationRank != null;
     if (totalMs != null && totalMs! > 0) return true;
     return rank != null && totalText.trim().isNotEmpty;
+  }
+
+  int? get classificationRank {
+    if (!isClassification) return null;
+    if (finishRank != null && finishRank! > 0) return finishRank;
+    return rank != null && rank! > 0 ? rank : null;
   }
 
   /// Fullførte løpere kommer først. DNF og DNS får de to høyeste
@@ -410,8 +423,11 @@ class RaceResult {
   }
 
   String get placementLabel {
-    if (finishConfirmed == false && !isExcludedResultStatus(status)) return '-';
     if (isExcludedResultStatus(status)) return status.trim();
+    if (finishConfirmed == false) return '-';
+    if (isClassification) {
+      return classificationRank?.toString() ?? asNonEmptyString(status) ?? '-';
+    }
     if (finishRank != null && finishRank! > 0) return finishRank.toString();
     if (rank != null && rank! > 0) return rank.toString();
     final normalizedStatus = status.trim();
@@ -434,6 +450,7 @@ int? effectiveSplitLegMs(RaceResult result, String splitId) {
   if (split == null) return null;
   final explicitLegMs = split.legMs;
   if (explicitLegMs != null && explicitLegMs > 0) return explicitLegMs;
+  if (result.splitLegsAuthoritative) return null;
 
   final cumulativeMs = split.cumMs;
   if (cumulativeMs == null || cumulativeMs <= 0) return null;

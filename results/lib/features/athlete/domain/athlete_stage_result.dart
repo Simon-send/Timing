@@ -1,5 +1,6 @@
 import '../../results/domain/competition_stage.dart';
 import '../../results/domain/race_result.dart';
+import '../../results/domain/race_result_order.dart';
 
 class AthleteStageResult {
   const AthleteStageResult({
@@ -20,6 +21,7 @@ List<AthleteStageResult> buildAthleteStageResults({
   required Map<String, List<RaceResult>> resultsByStageId,
   required String? athleteId,
   required String athleteName,
+  String? stableResultId,
 }) {
   final sortedStages = [...stages]
     ..sort((a, b) {
@@ -34,6 +36,7 @@ List<AthleteStageResult> buildAthleteStageResults({
       rawResults,
       athleteId: athleteId,
       athleteName: athleteName,
+      stableResultId: stableResultId,
     );
     if (match == null) continue;
 
@@ -59,7 +62,14 @@ List<AthleteStageResult> buildAthleteStageResults({
   Iterable<RaceResult> results, {
   required String? athleteId,
   required String athleteName,
+  required String? stableResultId,
 }) {
+  if (stableResultId != null) {
+    final match = results
+        .where((result) => result.id == stableResultId)
+        .firstOrNull;
+    return match == null ? null : (result: match, relayLegNumber: null);
+  }
   for (final result in results) {
     final isTeam =
         result.entrant?.kind == ResultEntrantKind.team ||
@@ -115,6 +125,7 @@ String _normalizeName(String value) {
 }
 
 int _compareResults(RaceResult a, RaceResult b) {
+  if (a.isClassification || b.isClassification) return compareRaceResults(a, b);
   final statusCompare = a.statusSortOrder.compareTo(b.statusSortOrder);
   if (statusCompare != 0) return statusCompare;
   final aTime = a.totalMs;

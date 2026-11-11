@@ -384,6 +384,19 @@ class AppLocalizationsIt extends AppLocalizations {
   String get splitBreakdown => 'Split breakdown';
 
   @override
+  String get sprintPodiumTitle => 'Primi 3 della classifica generale';
+
+  @override
+  String sprintPodiumCumulative(String time, int count) {
+    return 'Media dalla partenza $time ($count su 3)';
+  }
+
+  @override
+  String sprintPodiumLeg(String time, int count) {
+    return 'Media del tratto $time ($count su 3)';
+  }
+
+  @override
   String get backToResults => 'Back to results';
 
   @override

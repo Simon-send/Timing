@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:results/app/app_providers.dart';
 import 'package:results/app/app_theme.dart';
 import 'package:results/features/auth/data/auth_repository.dart';
@@ -14,6 +15,8 @@ import 'package:results/features/results/presentation/results_table.dart';
 import 'package:results/features/results/presentation/result_locations.dart';
 import 'package:results/features/results/presentation/results_page.dart';
 import 'package:results/features/results/presentation/relay_leg_selector.dart';
+import 'package:results/features/results/domain/sprint_podium.dart';
+import 'package:results/features/athlete/presentation/athlete_summary_panel.dart';
 import 'package:results/features/athlete/presentation/relay_team_panel.dart';
 import 'package:results/features/athlete/presentation/biathlon_result_panel.dart';
 import 'package:results/features/events/presentation/event_card.dart';
@@ -328,6 +331,138 @@ void main() {
     expect(find.text('1(2)'), findsOneWidget);
     expect(find.text('1(7)'), findsNothing);
     expect(find.text('SKYTING'), findsNothing);
+  });
+
+  testWidgets('DNF retains its split without a statistical gap', (
+    tester,
+  ) async {
+    final rows = [
+      for (final (id, name, time, status) in [
+        ('a', 'Første', 1000, ''),
+        ('b', 'Andre', 1200, ''),
+        ('dnf', 'Brutt', 500, 'DNF'),
+      ])
+        ResultTableRow(
+          result: RaceResult.fromMap(id, {
+            'name': name,
+            'status': status,
+            if (status.isEmpty) 'totalMs': time + 1000,
+            'timingPoints': [
+              {'setupUid': 'mid', 'cumMs': time, 'legMs': time},
+            ],
+          }),
+          classId: 'senior',
+          className: 'Senior',
+          color: null,
+          originalPlacementLabel: '',
+        ),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('nb'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: Scaffold(
+          body: ResultsTable(
+            rows: rows,
+            selectedSplitId: 'mid',
+            splitRange: null,
+            sortMode: ResultSortMode.cumulative,
+            onSortModeChanged: (_) {},
+            tableDensity: TableDensity.comfortable,
+            affiliationView: ResultAffiliationView.club,
+            onAffiliationViewToggle: () {},
+            onAthleteTap: (_) {},
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('DNF'), findsOneWidget);
+    expect(find.text('0:00.5'), findsNWidgets(2));
+    expect(find.text('+0.0'), findsOneWidget);
+    expect(find.text('+0:00.2'), findsOneWidget);
+  });
+
+  testWidgets('missing NSF legs stay blank in table and outside split graph', (
+    tester,
+  ) async {
+    final rows = [
+      for (final (id, name, missingLeg) in [
+        ('missing', 'Mangler segment', true),
+        ('known', 'Kjent segment', false),
+      ])
+        ResultTableRow(
+          result: RaceResult.fromMap(id, {
+            'name': name,
+            'totalMs': 4600,
+            'splitLegsAuthoritative': true,
+            'timingPoints': [
+              {'setupUid': 'first', 'cumMs': 1000, 'legMs': 1000},
+              {
+                'setupUid': 'third',
+                'cumMs': 3900,
+                if (!missingLeg) 'legMs': 1200,
+              },
+              {'setupUid': 'finish', 'cumMs': 4600, 'legMs': 700},
+            ],
+          }),
+          classId: 'senior',
+          className: 'Senior',
+          color: null,
+          originalPlacementLabel: '',
+        ),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('nb'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: Scaffold(
+          body: ResultsTable(
+            rows: rows,
+            selectedSplitId: 'third',
+            splitRange: null,
+            sortMode: ResultSortMode.cumulative,
+            onSortModeChanged: (_) {},
+            tableDensity: TableDensity.comfortable,
+            affiliationView: ResultAffiliationView.club,
+            onAffiliationViewToggle: () {},
+            onAthleteTap: (_) {},
+          ),
+        ),
+      ),
+    );
+    expect(find.text('0:03.9'), findsNWidgets(2));
+    expect(find.text('0:02.9'), findsNothing);
+    expect(find.text('0:01.2'), findsOneWidget);
+    await tester.pumpWidget(
+      MaterialApp(
+        key: const ValueKey('nsf-missing-leg-graph'),
+        theme: buildAppTheme(AppThemeVariant.nordicDark),
+        home: Scaffold(
+          body: SizedBox(
+            width: 900,
+            height: 420,
+            child: ResultsSplitGraph(
+              rows: rows,
+              splitOptions: const [
+                SplitOption(
+                  id: 'third',
+                  label: 'Tredje',
+                  sort: 2,
+                  kind: 'split',
+                ),
+              ],
+              selectedSplitId: 'third',
+              splitRange: null,
+              onAthleteTap: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Mangler segment'), findsNothing);
+    expect(find.text('Kjent segment'), findsOneWidget);
   });
 
   testWidgets('qualified result shows an advancement badge', (tester) async {
@@ -800,6 +935,119 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'NSF sprint keeps official placements and phase reference across navigation',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(900, 1100));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final repository = _NsfSprintResultsRepository();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            eventsRepositoryProvider.overrideWithValue(
+              _FakeEventsRepository(
+                eventId: 'nsf-123',
+                eventName: 'NSF sprint',
+              ),
+            ),
+            resultsRepositoryProvider.overrideWithValue(repository),
+            authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+            settingsRepositoryProvider.overrideWithValue(
+              _FakeSettingsRepository(),
+            ),
+          ],
+          child: const ResultsApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('NSF sprint'));
+      await tester.pumpAndSettle();
+
+      final heading = find.byKey(const Key('result-body-heading'));
+      expect(tester.widget<Text>(heading).data, 'Kvinner · Sammenlagt');
+      expect(find.text('Top 3 overall'), findsNothing);
+      expect(find.text('DNF'), findsNothing);
+      expect(find.text('0:00.0'), findsNothing);
+      expect(find.text('DSQ'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Zara')).dy,
+        lessThan(tester.getTopLeft(find.text('Alma')).dy),
+      );
+      expect(
+        find.descendant(of: find.byType(DataTable), matching: find.text('4')),
+        findsOneWidget,
+      );
+
+      final selector = find.ancestor(
+        of: find.text('Konkurranseledd'),
+        matching: find.byType(DropdownButtonFormField<String>),
+      );
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Finale 1').last);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(heading).data, 'Kvinner · Finale 1');
+      expect(find.text('Top 3 overall'), findsOneWidget);
+      expect(find.text('Average from start 0:46.0 (2 of 3)'), findsOneWidget);
+      expect(find.text('Split average 0:45.5 (1 of 3)'), findsOneWidget);
+      expect(find.text('Average from start 2:08.2 (3 of 3)'), findsOneWidget);
+      expect(find.text('Split average 1:22.2 (3 of 3)'), findsNothing);
+      expect(
+        repository.podiumRequests,
+        contains((eventId: 'nsf-123', stageId: 'final-1', classId: 'women')),
+      );
+      expect(
+        GoRouterState.of(
+          tester.element(heading),
+        ).uri.queryParameters[resultStageQueryParameter],
+        'final-1',
+      );
+
+      GoRouter.of(tester.element(heading)).go(
+        resultsLocation(
+          eventId: 'nsf-123',
+          classId: 'women',
+          stageId: 'final-1',
+          splitId: 'mid',
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Zara'));
+      await tester.pumpAndSettle();
+      final athleteContext = tester.element(find.byType(AthleteSummaryPanel));
+      final athleteUri = GoRouterState.of(athleteContext).uri;
+      expect(athleteUri.path, '/events/nsf-123/results/women/athletes/zara');
+      expect(athleteUri.queryParameters[resultStageQueryParameter], 'final-1');
+      expect(athleteUri.queryParameters[resultSplitQueryParameter], 'mid');
+      await tester.tap(find.byTooltip('Back to results'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(heading).data, 'Kvinner · Finale 1');
+      expect(find.text('Top 3 overall'), findsOneWidget);
+      expect(
+        GoRouterState.of(
+          tester.element(heading),
+        ).uri.queryParameters[resultSplitQueryParameter],
+        'mid',
+      );
+
+      await tester.tap(selector);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Prolog').last);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(heading).data, 'Kvinner · Prolog');
+      expect(find.text('Top 3 overall'), findsNothing);
+      expect(
+        GoRouterState.of(
+          tester.element(heading),
+        ).uri.queryParameters[resultStageQueryParameter],
+        'prolog',
+      );
+    },
+  );
 
   testWidgets('class clicks open each class primary stage and show its count', (
     tester,
@@ -1559,17 +1807,146 @@ void main() {
 }
 
 class _FakeEventsRepository implements EventsRepository {
+  _FakeEventsRepository({
+    this.eventId = '83078',
+    this.eventName = 'AKSA Cup 7',
+  });
+
+  final String eventId;
+  final String eventName;
+
   @override
   Stream<List<ResultEvent>> watchEvents() {
     return Stream.value([
       ResultEvent(
-        id: '83078',
-        name: 'AKSA Cup 7',
+        id: eventId,
+        name: eventName,
         sportName: 'Skiskyting',
         date: DateTime(2026, 5, 26),
         place: 'Alta',
       ),
     ]);
+  }
+}
+
+class _NsfSprintResultsRepository extends _FakeResultsRepository {
+  _NsfSprintResultsRepository()
+    : super(
+        stages: [
+          for (final (id, name, type, order) in [
+            ('prolog', 'Prolog', 'interval', 0),
+            ('final-1', 'Finale 1', 'heats', 1),
+            ('sprint-overall', 'Sammenlagt', 'overall', 2),
+          ])
+            CompetitionStage.fromMap(id, {
+              'name': name,
+              'type': type,
+              'order': order,
+              'classIds': ['women'],
+              'resultProfile': 'sprint',
+            }),
+        ],
+      );
+
+  final podiumRequests = <({String eventId, String stageId, String classId})>[];
+
+  @override
+  Stream<List<ResultClass>> watchClasses(String eventId) => Stream.value([
+    ResultClass.fromMap('women', {
+      'name': 'Kvinner',
+      'resultCount': 3,
+      'primaryStageId': 'sprint-overall',
+    }),
+  ]);
+
+  @override
+  Stream<SprintPodium?> watchStageSprintPodium(
+    String eventId,
+    String stageId,
+    String classId,
+  ) {
+    podiumRequests.add((eventId: eventId, stageId: stageId, classId: classId));
+    return Stream.value(
+      stageId != 'final-1'
+          ? null
+          : SprintPodium.fromMap({
+              'phase': 'final',
+              'points': {
+                'mid': {
+                  'cumMeanMs': 46000,
+                  'cumCount': 2,
+                  'legMeanMs': 45500,
+                  'legCount': 1,
+                },
+                'finish': {'cumMeanMs': 128200, 'cumCount': 3},
+              },
+            }),
+    );
+  }
+
+  @override
+  Stream<List<SplitDef>> watchStageSplitDefs(
+    String eventId,
+    String stageId,
+    String classId,
+  ) => stageId == 'sprint-overall'
+      ? Stream.value(const [])
+      : super.watchStageSplitDefs(eventId, stageId, classId);
+
+  @override
+  Stream<List<RaceResult>> watchStageResults(
+    String eventId,
+    String stageId,
+    String classId, {
+    int limit = initialResultsLimit,
+  }) => Stream.value(_stageRows(stageId));
+
+  @override
+  Future<List<RaceResult>> fetchStageResults(
+    String eventId,
+    String stageId,
+    String classId,
+  ) async => _stageRows(stageId);
+
+  @override
+  Stream<RaceResult?> watchStageResult(
+    String eventId,
+    String stageId,
+    String classId,
+    String resultId,
+  ) => Stream.value(
+    _stageRows(stageId).where((row) => row.id == resultId).firstOrNull,
+  );
+
+  List<RaceResult> _stageRows(String stageId) {
+    if (stageId == 'sprint-overall') {
+      return [
+        for (final (id, name, rank, status) in [
+          ('alma', 'Alma', 4, ''),
+          ('disqualified', 'Diskvalifisert', 1, 'DSQ'),
+          ('zara', 'Zara', 1, ''),
+        ])
+          RaceResult.fromMap(id, {
+            'name': name,
+            'stageId': stageId,
+            'resultKind': 'classification',
+            'rank': rank,
+            'status': status,
+          }),
+      ];
+    }
+    return [
+      RaceResult.fromMap('zara', {
+        'name': 'Zara',
+        'stageId': stageId,
+        'rank': 1,
+        'totalMs': 128000,
+        'timingPoints': [
+          {'setupUid': 'mid', 'cumMs': 45900},
+          {'setupUid': 'finish', 'cumMs': 128000},
+        ],
+      }),
+    ];
   }
 }
 
@@ -1680,6 +2057,13 @@ class _FakeResultsRepository implements ResultsRepository {
   Stream<List<CompetitionStage>> watchStages(String eventId) {
     return Stream.value(stages);
   }
+
+  @override
+  Stream<SprintPodium?> watchStageSprintPodium(
+    String eventId,
+    String stageId,
+    String classId,
+  ) => Stream.value(null);
 
   @override
   Stream<List<SplitDef>> watchStageSplitDefs(

@@ -28,6 +28,7 @@ import 'result_locations.dart';
 import 'relay_leg_selector.dart';
 import 'results_table.dart';
 import 'split_selector.dart';
+import 'sprint_podium_reference.dart';
 
 const _biathlonSplitId = '__biathlon_analysis__';
 
@@ -1156,6 +1157,14 @@ class _ResultsAreaState extends ConsumerState<_ResultsArea> {
                       },
                     ),
                     const SizedBox(height: 14),
+                    if (activeStage.profile == ResultProfile.sprint &&
+                        rangeSplitOptions.isNotEmpty)
+                      SprintPodiumReference(
+                        eventId: eventId,
+                        stageId: activeStage.id,
+                        classId: classId,
+                        splits: rangeSplitOptions,
+                      ),
                     isBiathlonSplit
                         ? BiathlonTable(
                             rows: tableRows,

@@ -4,10 +4,12 @@ import 'race_result.dart';
 int compareRaceResults(RaceResult a, RaceResult b) {
   final statusCompare = a.statusSortOrder.compareTo(b.statusSortOrder);
   if (statusCompare != 0) return statusCompare;
-  if (a.rank != b.rank) {
-    if (a.rank == null) return 1;
-    if (b.rank == null) return -1;
-    return a.rank!.compareTo(b.rank!);
+  final aRank = a.classificationRank ?? a.rank;
+  final bRank = b.classificationRank ?? b.rank;
+  if (aRank != bRank) {
+    if (aRank == null) return 1;
+    if (bRank == null) return -1;
+    return aRank.compareTo(bRank);
   }
   if (a.totalMs != b.totalMs) {
     if (a.totalMs == null) return 1;

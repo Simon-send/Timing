@@ -11,6 +11,20 @@ RaceResult result(String name, {int? rank, int? totalMs, String status = ''}) =>
     });
 
 void main() {
+  test('rank-only results use official finish rank before name', () {
+    final first = RaceResult.fromMap('zara', {
+      'name': 'Zara',
+      'resultKind': 'classification',
+      'finishRank': 1,
+    });
+    final fourth = RaceResult.fromMap('alma', {
+      'name': 'Alma',
+      'resultKind': 'classification',
+      'rank': 4,
+    });
+    expect([fourth, first]..sort(compareRaceResults), [first, fourth]);
+  });
+
   test('identical names and times use the existing stable document ID', () {
     final a = RaceResult.fromMap('101', {
       'name': 'Ada',

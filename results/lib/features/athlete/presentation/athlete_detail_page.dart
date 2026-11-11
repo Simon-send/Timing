@@ -222,6 +222,9 @@ class _AthleteDetailPageState extends ConsumerState<AthleteDetailPage> {
             classId: widget.classId,
             athleteId: result.athleteId,
             athleteName: result.name,
+            stableResultId: widget.eventId.startsWith('nsf-')
+                ? result.id
+                : null,
           );
           final canShowStageResults =
               result.relayLegNumber != null ||
@@ -541,6 +544,7 @@ Set<String> _publicSplitIds(List<SplitDef>? splitDefs, RaceResult result) {
 }
 
 String _placementLabel(RaceResult result, List<RaceResult>? classResults) {
+  if (result.isClassification) return result.placementLabel;
   if (!result.isFinished) {
     final status = result.status.trim();
     final placement = status.isEmpty ? 'DNF' : status;

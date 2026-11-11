@@ -384,6 +384,19 @@ class AppLocalizationsEt extends AppLocalizations {
   String get splitBreakdown => 'Split breakdown';
 
   @override
+  String get sprintPodiumTitle => 'Koondarvestuse 3 parimat';
+
+  @override
+  String sprintPodiumCumulative(String time, int count) {
+    return 'Keskmine stardist $time ($count kolmest)';
+  }
+
+  @override
+  String sprintPodiumLeg(String time, int count) {
+    return 'Lõigu keskmine $time ($count kolmest)';
+  }
+
+  @override
   String get backToResults => 'Back to results';
 
   @override
