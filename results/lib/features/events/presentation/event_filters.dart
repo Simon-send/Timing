@@ -380,7 +380,10 @@ class _EventFiltersState extends State<EventFilters> {
                                           key: const Key('event-filter-sport'),
                                           label: l10n.sport,
                                           value: widget.criteria.sport,
-                                          options: widget.options.sports,
+                                          options: _options([
+                                            widget.criteria.sport,
+                                            ...widget.options.sports,
+                                          ]),
                                           onChanged: (value) =>
                                               widget.onChanged(
                                                 widget.criteria.copyWith(
