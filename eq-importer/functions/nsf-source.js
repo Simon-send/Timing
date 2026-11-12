@@ -118,7 +118,7 @@ function parseSplitTable(table, distanceKm) {
 function phaseForRun(run) {
   const label = clean(run);
   const key = label.toLowerCase().replace(/[\s_]+/g, "-");
-  if (/^(?:qualification|prolog|kvalifisering)$/.test(key)) {
+  if (/^(?:qualification|prolog|kvalifisering|ground)$/.test(key)) {
     return {id: "prolog", name: "Prolog", phase: "prolog", order: 0};
   }
   const match = key.match(/^(quarterfinal|kvartfinale|semifinal|semifinale|final|finale)-?([1-9]\d*|[a-z])$/);
@@ -269,6 +269,12 @@ function addRosterMetadata(stages, roster) {
 
 async function collectNsfRace(value, options = {}) {
   const {id} = parseNsfRaceUrl(value);
+  const classIds = options.classIds;
+  if (classIds !== undefined && (!Array.isArray(classIds) || !classIds.length ||
+      classIds.some((classId) => typeof classId !== "string" || !/^\d+_\d+$/.test(classId)) ||
+      new Set(classIds).size !== classIds.length)) {
+    throw new Error("Choose a nonempty list of unique public class IDs.");
+  }
   const {chromium} = require("playwright");
   const browser = await chromium.launch(options.channel ? {channel: options.channel} : {});
   try {
@@ -280,15 +286,19 @@ async function collectNsfRace(value, options = {}) {
     const classControl = page.locator("select").first();
     await classControl.locator(`option[value$="_${id}"]`).first()
         .waitFor({state: "attached", timeout: TIMEOUT_MS});
-    const classes = (await optionsOf(classControl, id)).map(({value, name}) =>
+    const available = (await optionsOf(classControl, id)).map(({value, name}) =>
       ({id: value, name}),
     );
-    if (!classes.length) throw new Error("NSF Timing did not show any race classes.");
+    if (!available.length) throw new Error("NSF Timing did not show any race classes.");
+    if (classIds?.some((classId) => !available.some((item) => item.id === classId))) {
+      throw new Error("The class selection contains an unknown public class ID.");
+    }
+    const classes = classIds ? available.filter((item) => classIds.includes(item.id)) : available;
     const name = clean(await page.locator("h1").first().textContent());
     if (!name) throw new Error("NSF Timing did not show a race name.");
     const event = {id, name, date: options.date, place: options.place};
     const distanceKm = options.distanceKm ?? distanceInLabel(name);
-    const isSprint = await page.getByRole("button", {name: "Sprint", exact: true}).count() > 0;
+    let isSprint = false;
     const stages = new Map();
     const runControl = page.locator("select").nth(1);
     const table = page.locator("table").first();
@@ -308,21 +318,28 @@ async function collectNsfRace(value, options = {}) {
         await page.evaluate(firstSplitRow) : undefined;
       await classControl.selectOption(raceClass.id);
       await waitForSplitRows(page, beforeClass);
-      if (!isSprint) {
+      const runs = await optionsOf(runControl, id);
+      // The Sprint navigation button is also present on distance races. Ground
+      // denotes a prolog only when an explicit choice or actual sprint rounds identify one.
+      const sprint = options.sprintPrologOnly === true ||
+        runs.some((run) => !/^ground$/i.test(clean(run.name)));
+      if (!sprint) {
         await save({id: "distance", name, phase: "distance", order: 0}, raceClass);
         continue;
       }
-      const runs = await optionsOf(runControl, id);
-      if (!runs.length || !runs.some((run) => phaseForRun(run.name).phase === "prolog")) {
+      isSprint = true;
+      const rounds = runs.map((run) => ({...run, stage: phaseForRun(run.name)}));
+      if (!rounds.some((run) => run.stage.phase === "prolog")) {
         throw new Error(`NSF Timing did not show the sprint rounds for ${raceClass.name}.`);
       }
-      for (const run of runs) {
+      for (const run of rounds) {
+        if (options.sprintPrologOnly === true && run.stage.phase !== "prolog") continue;
         if (await runControl.inputValue() !== run.value) {
           const beforeRun = await page.evaluate(firstSplitRow);
           await runControl.selectOption(run.value);
           await waitForSplitRows(page, beforeRun);
         }
-        await save(phaseForRun(run.name), raceClass);
+        await save(run.stage, raceClass);
       }
     }
     const result = Array.from(stages.values()).sort((a, b) => a.order - b.order);
@@ -332,7 +349,10 @@ async function collectNsfRace(value, options = {}) {
       }
     }
     addRosterMetadata(result, await readStartlist(page, id));
-    return {schemaVersion: 1, event, classes, stages: result};
+    return {schemaVersion: 1, event, classes, stages: result,
+      ...(classIds ? {classIds: classes.map((item) => item.id)} : {}),
+      ...(options.sprintPrologOnly === true ? {sprintPrologOnly: true} : {}),
+    };
   } finally {
     await browser.close();
   }

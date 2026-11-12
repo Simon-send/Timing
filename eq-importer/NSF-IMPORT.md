@@ -23,6 +23,13 @@ eventuelle avvik. Den skriver ingenting til Firestore.
 
 - **Dato og sted:** Bruk `--date YYYY-MM-DD --place <sted>` når metadata ikke
   finnes i livevisningen eller den offisielle lista.
+- **Klasseutvalg:** Bruk `--classes 'klasse-id-1,klasse-id-2'` for bare de
+  aktuelle NC-klassene når livevisningen også inneholder andre renn eller para.
+  Ukjente, tomme og gjentatte valg avvises. Valget lagres i eksporten.
+- **Avlyste heat:** Bruk `--prolog-only` sammen med en komplett offisiell
+  tidsliste for en sprint der bare prologen ble gjennomført. Eksporten får
+  `sprintPrologOnly: true`. Appen bruker «Prolog (heat avlyst)», uten oppdiktet
+  sluttklassifisering eller pallreferanse. Senere heat i en slik eksport avvises.
 - **Offisiell liste:** Bruk `--official 'klasse-id=sti-eller-lenke-til-PDF'`
   én gang per klasse. I sprint kreves en offisiell sluttliste, ikke bare
   prolog eller A-finale. For distanse kan en offisiell liste avstemme
@@ -94,6 +101,14 @@ plassering, sluttid, status, kilde-ID og mellomtider.
 }
 ```
 
+En avledet distanseklasse som deler utøverfelt med en annen klasse kan angi
+`categoryOf: "forelderklasse-id"`. Forelderen må være en kjent, selvstendig
+klasse i samme eksport. Hvert medlem må ha entydig identitet, samme ledd,
+status og tider i forelderen. Begge klassevisningene beholdes, mens
+arrangementets deltakerantall teller det delte feltet én gang. Ingen slik
+kobling utledes automatisk fra navn. Sprintkategorier støttes ikke av dette
+valget.
+
 Tider er hele millisekunder. Definer punktene i løyperekkefølge. `finish` kan
 oppgis som punkt med `kind: "finish"`; ellers lages det fra sluttiden.
 NSF-resultater har `splitLegsAuthoritative: true`: en utelatt segmenttid er
@@ -137,3 +152,44 @@ I Results ble sluttliste, heatvalg, klassebytte, utøverdetaljer og mellomtider
 åpnet. Begge sprintklassene viste pallreferansen på tvers av heat med tre av
 tre bidrag ved de tilgjengelige målepunktene. JSON-filene og PDF-ene som ble
 brukt i kontrollen er lokale arbeidsdata og følger ikke kildekoden.
+
+## NC 2025/26 kontrollert 12. november 2026
+
+Prøveimporten omfatter 23 unike renndager og 93 klassevisninger for senior
+og junior. Felles senior-/juniorrenn importeres én gang. Tabellen beskriver
+kontroll i lokal emulator, ikke en produksjonskvittering.
+
+| Rennsted | NSF-renn-ID-er | Klassevisninger |
+| --- | --- | ---: |
+| Gålå, november | 696, 703, 709 | 6 |
+| Beitostølen | 1093, 1112 | 11 |
+| NM Steinkjer | 1210, 1293, 1217 | 6 |
+| Granåsen | 1683, 1709, 1720 | 6 |
+| Åsen | 2041, 2047, 2059 | 24 |
+| Skeikampen | 2231, 2279, 2290 | 6 |
+| NM junior Gålå | 2336, 2339 | 12 |
+| Lygna | 2442, 2446, 2448, 2449 | 22 |
+
+Alle 17 440 offentlige dokumenter ble lest tilbake og sammenlignet med
+forhåndsvisningen. Identisk gjenimport skrev null dokumenter. Etter rettelser
+ble skiathlon-metadata og de to delte senior-/juniorfeltene kontrollert på
+nytt. Åsen 2041 har 1071 deltakere og Lygna 2446 har 868; kategorivisningene
+øker ikke arrangementets totalantall.
+
+Avlyst Beitostølen 1142 og avlyst K17-prolog i 1112 er utelatt. De fem
+øvrige 1112-klassene har bare den offisielle prologen. Stafett og støtteklasser
+som ikke teller i NC inngår ikke i denne prøveimporten.
+
+Flere PDF-er har null som publisert deltakerantall. Den generelle PDF-leseren
+avviser dette fortsatt. De kontrollerte manuelle eksportene avstemmer hver
+resultatrad mot en annen komplett offentlig visning og lagrer grunnlaget
+privat utenfor repoet. Et lest radantall alene bekrefter ikke kompletthet.
+Eksplisitt uoffisielle Åsen-lister er erstattet med de offisielle FIS-listene
+for de to aktuelle klassene; uoffisielle valgfrie prolog-PDF-er er utelatt.
+
+Åsen 2041 U20 viser bare sikkert klassifiserte løpere. DNS/DNF uten entydig
+kategoritilhørighet beholdes i seniorfeltet. Lygnas kategorier er avstemt mot
+offisiell klassifisering og offentlig kategoriutvalg; en klassifisert løper
+som manglet i utvalget fikk passeringer fra forelderfeltet. Se
+[kildebegrensningene](../docs/solutions/2026-11-12-nsf-category-report-coverage.md)
+før en senere reimport.

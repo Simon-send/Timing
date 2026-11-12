@@ -1,7 +1,9 @@
 "use strict";
 
+/* eslint-disable require-jsdoc */
+
 const {
-  addRosterMetadata, parseNsfRaceUrl, parseNsfTime, parseSplitTable, phaseForRun,
+  addRosterMetadata, collectNsfRace, parseNsfRaceUrl, parseNsfTime, parseSplitTable, phaseForRun,
 } = require("../nsf-source");
 
 describe("public NSF Timing source", () => {
@@ -99,5 +101,123 @@ describe("public NSF Timing source", () => {
     expect(phaseForRun("Semifinal-2")).toMatchObject({phase: "semifinal", order: 202});
     expect(phaseForRun("Final-A")).toMatchObject({id: "final-a", heat: "A", order: 301});
     expect(() => phaseForRun("Unrecognized")).toThrow("Unsupported");
+  });
+});
+
+
+jest.mock("playwright", () => ({chromium: {launch: jest.fn()}}));
+const {chromium} = require("playwright");
+
+// Model the public selectors and rendered tables at the browser boundary.
+function publicRace(classes) {
+  let selected = classes[0];
+  let run;
+  let roster = false;
+  const visited = [];
+  const attached = {waitFor: jest.fn(async () => {})};
+  const optionLocator = (getOptions) => ({
+    first: () => attached,
+    evaluateAll: async () => getOptions(),
+  });
+  const classControl = {
+    locator: () => optionLocator(() => classes.map(({id, name}) => ({value: id, name}))),
+    inputValue: async () => selected.id,
+    selectOption: async (id) => {
+      selected = classes.find((item) => item.id === id);
+      run = selected.runs?.[0]?.value;
+      visited.push(id);
+    },
+  };
+  const runControl = {
+    locator: () => optionLocator(() => selected.runs || []),
+    inputValue: async () => run,
+    selectOption: async (value) => {
+      run = value;
+    },
+  };
+  const table = {
+    locator: () => ({first: () => attached}),
+    evaluate: async () => roster ? {rows: []} : {
+      headers: ["Rn.", "#", "Name", "Starttime", "Mål"],
+      rows: [{name: selected.name, cells: ["1", "1", selected.name, "12:00", "2:30"]}],
+    },
+  };
+  const page = {
+    goto: async (url) => {
+      page.currentUrl = url;
+      roster = !url.includes("/splits/");
+    },
+    url: () => page.currentUrl,
+    evaluate: async () => "previous row",
+    waitForFunction: async () => {
+      if (selected.empty || selected.runs?.find((item) => item.value === run)?.empty) {
+        throw new Error("No public result rows");
+      }
+    },
+    getByRole: () => ({...attached, first: () => attached, isVisible: async () => false,
+      count: async () => 1, click: async () => {}}),
+    locator: (selector) => ({
+      first: () => selector === "select" ? classControl :
+        selector === "table" ? table : {textContent: async () => "Public race"},
+      nth: () => runControl,
+    }),
+  };
+  const close = jest.fn(async () => {});
+  chromium.launch.mockResolvedValue({newPage: async () => page, close});
+  return {visited, close};
+}
+
+describe("collecting selected public classes and rounds", () => {
+  test("keeps a Ground-only race as distance despite the Sprint navigation button", async () => {
+    publicRace([{id: "10_1683", name: "Senior", runs: [{value: "20_1683", name: "Ground"}]}]);
+    const source = await collectNsfRace("https://live.nsftiming.no/live/1683");
+    expect(source.stages).toMatchObject([{id: "distance", phase: "distance"}]);
+  });
+
+  test("selects only requested classes and records the selection in the export", async () => {
+    const browser = publicRace([
+      {id: "10_703", name: "Empty support class", empty: true},
+      {id: "11_703", name: "NC senior"},
+    ]);
+    const source = await collectNsfRace("https://live.nsftiming.no/live/703", {classIds: ["11_703"]});
+    expect(source.classes).toEqual([{id: "11_703", name: "NC senior"}]);
+    expect(source.classIds).toEqual(["11_703"]);
+    expect(source.stages[0].classes.map((item) => item.classId)).toEqual(["11_703"]);
+    expect(browser.visited).toEqual(["11_703"]);
+  });
+
+  test.each([[], [""], ["12_703"], ["11_703", "11_703"]].map((ids) => [ids]))(
+      "rejects an empty, unknown or repeated class selection (%j)", async (classIds) => {
+        publicRace([{id: "11_703", name: "Senior"}]);
+        await expect(collectNsfRace("https://live.nsftiming.no/live/703", {classIds}))
+            .rejects.toThrow(/class/i);
+      });
+
+  test("never skips a requested class without public results", async () => {
+    publicRace([{id: "11_703", name: "NC senior", empty: true}]);
+    await expect(collectNsfRace("https://live.nsftiming.no/live/703", {classIds: ["11_703"]}))
+        .rejects.toThrow("No public result rows");
+  });
+
+  test("collects only Ground as prolog when later sprint heats were cancelled", async () => {
+    publicRace([{id: "10_1112", name: "M 19-20 år", runs: [
+      {value: "20_1112", name: "Ground"},
+      {value: "21_1112", name: "Final-A", empty: true},
+    ]}]);
+    const source = await collectNsfRace("https://live.nsftiming.no/live/1112", {
+      classIds: ["10_1112"], sprintPrologOnly: true,
+    });
+    expect(source.sprintPrologOnly).toBe(true);
+    expect(source.stages).toMatchObject([{id: "prolog", phase: "prolog"}]);
+    expect(source.stages).toHaveLength(1);
+  });
+
+  test("full sprint still requires the public later round results", async () => {
+    publicRace([{id: "10_1112", name: "M 19-20 år", runs: [
+      {value: "20_1112", name: "Ground"},
+      {value: "21_1112", name: "Final-A", empty: true},
+    ]}]);
+    await expect(collectNsfRace("https://live.nsftiming.no/live/1112"))
+        .rejects.toThrow("No public result rows");
   });
 });

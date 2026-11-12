@@ -17,6 +17,8 @@ Valg for forhåndsvisning:
   --official <klasse-id>=<offisiell PDF-fil eller lenke>  Kan gjentas
   --official-stage <ledd-id>/<klasse-id>=<offisiell PDF>  Valgfri faseliste
   --date YYYY-MM-DD --place <sted>  Hvis kilden mangler rennmetadata
+  --classes <id,id>                 Bare de valgte offentlige klassene
+  --prolog-only                    Sprintprolog når heatene er avlyst
   --channel chrome                  Bruk installert Google Chrome
 
 Skriv en kontrollert forhåndsvisning:
@@ -32,6 +34,8 @@ const options = {
   "date": {type: "string"},
   "place": {type: "string"},
   "channel": {type: "string"},
+  "classes": {type: "string"},
+  "prolog-only": {type: "boolean"},
   "official": {type: "string", multiple: true},
   "official-stage": {type: "string", multiple: true},
   "apply": {type: "boolean"},
@@ -71,7 +75,7 @@ async function attachOfficial(source, entries, stagedEntries) {
       used.add(id);
       const official = await readOfficialNsfPdf(location);
       const isSprint = source.stages.some((item) => item.phase !== "distance");
-      const expectedKind = !staged && isSprint ? "sprint-overall" : "timed";
+      const expectedKind = !staged && isSprint && source.sprintPrologOnly !== true ? "sprint-overall" : "timed";
       if (official.kind !== expectedKind || (staged && stage.phase !== "prolog")) {
         throw new Error(`Feil listetype for ${id}. Bruk sprintens offisielle sluttliste og gi prologlista med --official-stage.`);
       }
@@ -85,13 +89,19 @@ async function attachOfficial(source, entries, stagedEntries) {
       if (!source.event.place && official.place) source.event.place = official.place;
       if (staged) {
         group.official = official.rows;
+        if (source.sprintPrologOnly === true) raceClass.expectedCount = official.expectedCount;
       } else {
         raceClass.official = official.rows;
         raceClass.expectedCount = official.expectedCount;
         for (const target of source.stages) {
           const targetGroup = target.classes.find((item) => String(item.classId) === classId);
           if (!targetGroup) continue;
-          if (official.distanceKm) targetGroup.distanceKm = official.distanceKm;
+          if (official.distanceKm) {
+            targetGroup.distanceKm = official.distanceKm;
+            for (const point of targetGroup.points || []) {
+              if (point.kind === "finish") point.km = official.distanceKm;
+            }
+          }
           if (official.singleCourse === true) targetGroup.courseKey = `official-${classId}`;
         }
       }
@@ -101,7 +111,9 @@ async function attachOfficial(source, entries, stagedEntries) {
     const distances = new Set(stage.classes.map((group) => group.distanceKm).filter(Boolean));
     if (distances.size === 1 && stage.classes.every((group) => group.distanceKm)) {
       const [distance] = distances;
-      if (!stage.distanceKm) stage.distanceKm = distance;
+      stage.distanceKm = distance;
+    } else {
+      delete stage.distanceKm;
     }
   }
 }
@@ -118,15 +130,24 @@ async function main(argv) {
   }
   if (values.apply && (!values.export || !values.project ||
       !/^[a-f0-9]{64}$/.test(values.confirm || "") || values.official ||
-      values["official-stage"] || values.date || values.place || values["preview-out"])) {
+      values["official-stage"] || values.date || values.place || values["preview-out"] ||
+      values.classes !== undefined || values["prolog-only"] || values.channel)) {
     throw new Error("--apply krever den lagrede eksporten, --confirm og et eksplisitt --project.");
   }
   if (!values.apply && (values.resume || values.confirm || values.project)) {
     throw new Error("--resume, --confirm og --project brukes bare med --apply.");
   }
+  if (values.export && (values.classes !== undefined || values["prolog-only"])) {
+    throw new Error("--classes og --prolog-only brukes ved forhåndsvisning med --url; valget lagres i eksporten.");
+  }
+  const classIds = values.classes?.split(",").map((id) => id.trim());
+  if (classIds && (classIds.some((id) => !id) || new Set(classIds).size !== classIds.length)) {
+    throw new Error("--classes krever én eller flere unike klasser uten tomme valg.");
+  }
   const source = values.export ? await readExport(values.export) :
     await require("../nsf-source").collectNsfRace(values.url, {
       date: values.date, place: values.place, channel: values.channel,
+      classIds, sprintPrologOnly: values["prolog-only"],
     });
   if (values.export && source?.event) {
     if (values.date) source.event.date = values.date;

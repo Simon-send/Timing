@@ -7,6 +7,8 @@ const {tmpdir} = require("node:os");
 const {join} = require("node:path");
 const {prepareNsfImport} = require("../nsf-normalize");
 
+jest.mock("../nsf-source", () => ({collectNsfRace: jest.fn()}));
+const {collectNsfRace} = require("../nsf-source");
 jest.mock("../nsf-official", () => ({readOfficialNsfPdf: jest.fn()}));
 const {readOfficialNsfPdf} = require("../nsf-official");
 const {main} = require("../scripts/import-nsf");
@@ -33,6 +35,7 @@ beforeEach(async () => {
   await writeFile(file, JSON.stringify(source()));
   output = jest.spyOn(console, "log").mockImplementation(() => {});
   readOfficialNsfPdf.mockReset();
+  collectNsfRace.mockReset();
 });
 
 afterEach(async () => {
@@ -78,4 +81,60 @@ test("rejects the wrong official list kind, date and class before preview", asyn
         .rejects.toThrow(message);
   }
   expect(output).not.toHaveBeenCalled();
+});
+
+
+test("preview passes explicit class and prolog-only choices into the public collector", async () => {
+  const prolog = source();
+  prolog.sprintPrologOnly = true;
+  prolog.stages[0] = {...prolog.stages[0], id: "prolog", phase: "prolog"};
+  collectNsfRace.mockResolvedValue(prolog);
+  readOfficialNsfPdf.mockResolvedValue({kind: "timed", expectedCount: 1,
+    date: "2026-03-06", className: "Senior", rows: source().stages[0].classes[0].rows});
+  const saved = join(directory, "prolog.json");
+  await main(["--url", "https://live.nsftiming.no/live/2231", "--classes", "senior",
+    "--prolog-only", "--official", "senior=prolog.pdf", "--preview-out", saved]);
+  expect(collectNsfRace).toHaveBeenCalledWith("https://live.nsftiming.no/live/2231",
+      expect.objectContaining({classIds: ["senior"], sprintPrologOnly: true}));
+  expect(JSON.parse(output.mock.calls[0][0]).ready).toBe(true);
+  expect(JSON.parse(await readFile(saved, "utf8")).sprintPrologOnly).toBe(true);
+});
+
+test.each([["--classes", "senior"], ["--prolog-only"]])(
+    "apply rejects source-altering collection flags (%j)", async (...flags) => {
+      await expect(main(["--export", file, "--apply", "--confirm", "0".repeat(64),
+        "--project", "demo-nsf-import-tests", ...flags])).rejects.toThrow(/--apply/);
+      expect(collectNsfRace).not.toHaveBeenCalled();
+    });
+
+test.each(["", "senior,", ",senior", "senior,senior"])(
+    "rejects empty or repeated CLI class selectors (%s)", async (selection) => {
+      await expect(main(["--url", "https://live.nsftiming.no/live/2231", "--classes", selection]))
+          .rejects.toThrow(/klasser|classes/);
+      expect(collectNsfRace).not.toHaveBeenCalled();
+    });
+
+test("official class distances replace a shared live title distance without leaking between classes", async () => {
+  const race = source();
+  race.classes.push({id: "junior", name: "Junior", expectedCount: 1});
+  race.stages[0].distanceKm = 10;
+  race.stages[0].classes[0].points = [{id: "finish", label: "Mål", kind: "finish", km: 10}];
+  race.stages[0].classes.push({
+    classId: "junior", points: [{id: "finish", label: "Mål", kind: "finish", km: 10}],
+    rows: [{name: "Juniorløper", bib: "2", rank: 1, totalMs: 700000}],
+  });
+  await writeFile(file, JSON.stringify(race));
+  readOfficialNsfPdf.mockImplementation(async (location) => {
+    const junior = location === "junior.pdf";
+    return {kind: "timed", date: "2026-03-06", className: junior ? "Junior" : "Senior",
+      distanceKm: junior ? 3.75 : 5, singleCourse: true, expectedCount: 1,
+      rows: race.stages[0].classes[junior ? 1 : 0].rows};
+  });
+  const saved = join(directory, "distances.json");
+  await main(["--export", file, "--official", "senior=senior.pdf",
+    "--official", "junior=junior.pdf", "--preview-out", saved]);
+  const stage = JSON.parse(await readFile(saved, "utf8")).stages[0];
+  expect(stage.distanceKm).toBeUndefined();
+  expect(stage.classes.map((group) => group.points[0].km)).toEqual([5, 3.75]);
+  expect(stage.classes.map((group) => group.distanceKm)).toEqual([5, 3.75]);
 });

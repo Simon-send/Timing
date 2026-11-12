@@ -189,3 +189,133 @@ test("rank-only official distance rows cannot authorize weaker live finish times
   bundle = prepareNsfImport(input);
   expect(bundle.report.ready).toBe(true);
 });
+
+
+function prologOnlySource() {
+  const source = sprintSource();
+  source.sprintPrologOnly = true;
+  source.stages = [source.stages[0]];
+  source.classes[0].official = source.stages[0].classes[0].rows.map((row) => ({...row}));
+  return source;
+}
+
+test("cancelled heats keep an official timed prolog as the primary sprint stage", () => {
+  const input = prologOnlySource();
+  const live = input.stages[0].classes[0].rows;
+  live[0].rank = 9;
+  live[0].totalMs = 131000;
+  live[1].status = "DNF";
+  const bundle = prepareNsfImport(input);
+  expect(bundle.report.ready).toBe(true);
+  expect(bundle.report.event.resultProfile).toBe("sprint");
+  expect(bundle.docs.find(({path}) => path.endsWith(`/classes/${klass}`) &&
+    !path.includes("/stages/")).data.primaryStageId).toBe("prolog");
+  expect(bundle.docs.find(({path}) => path.endsWith("/stages/prolog")).data.name)
+      .toBe("Prolog (heat avlyst)");
+  expect(result(bundle, "prolog", "Løper D").data).toMatchObject({
+    rank: 1, totalMs: 130000, resultAuthority: "official", finishConfirmed: true,
+  });
+  expect(result(bundle, "prolog", "Løper C").data).toMatchObject({
+    rank: 2, status: "", totalMs: 151000, resultAuthority: "official",
+  });
+  expect(bundle.docs.some(({path}) => path.includes("sprint-overall"))).toBe(false);
+  expect(JSON.stringify(bundle.docs)).not.toContain("sprintPodium");
+});
+
+test("prolog-only requires complete official timed results for each selected class", () => {
+  const noOfficial = prologOnlySource();
+  delete noOfficial.classes[0].official;
+  expect(prepareNsfImport(noOfficial).report.ready).toBe(false);
+  const incomplete = prologOnlySource();
+  incomplete.classes[0].official.pop();
+  expect(prepareNsfImport(incomplete).report.ready).toBe(false);
+  const noTimes = prologOnlySource();
+  delete noTimes.classes[0].official[0].totalMs;
+  expect(prepareNsfImport(noTimes).report.ready).toBe(false);
+  const laterPhases = sprintSource();
+  laterPhases.sprintPrologOnly = true;
+  expect(prepareNsfImport(laterPhases).report.ready).toBe(false);
+});
+
+test("a complete stage-scoped official prolog also authorizes the prolog-only import", () => {
+  const source = prologOnlySource();
+  source.stages[0].classes[0].official = source.classes[0].official;
+  delete source.classes[0].official;
+  const bundle = prepareNsfImport(source);
+  expect(bundle.report.ready).toBe(true);
+  expect(result(bundle, "prolog", "Løper D").data.resultAuthority).toBe("official");
+});
+
+test("an official list does not hide the absence of an independent participant total", () => {
+  const input = sprintSource();
+  delete input.classes[0].expectedCount;
+  const bundle = prepareNsfImport(input);
+  expect(bundle.report.ready).toBe(true);
+  expect(bundle.report.issues).toContainEqual(expect.objectContaining({
+    severity: "warning", message: expect.stringMatching(/uavhengig bekreftet deltakerantall/),
+  }));
+});
+
+function categorySource() {
+  return {
+    schemaVersion: 1,
+    event: {id: 2446, name: "Felles felt", date: "2026-03-28", place: "Teststed"},
+    classes: [
+      {id: "parent", name: "Senior", expectedCount: 3},
+      {id: "u20", name: "U20", expectedCount: 2, categoryOf: "parent"},
+    ],
+    stages: [{id: "distance", name: "10 km", phase: "distance", classes: [
+      {classId: "parent", points: [split, finish], rows: [
+        timed("Løper A", 1, 10000, 20000),
+        timed("Løper B", 2, 11000, 21000),
+        entrant("Løper C", null, {status: "DNS"}),
+      ]},
+      {classId: "u20", points: [split, finish], rows: [
+        timed("Løper B", 1, 11000, 21000),
+        entrant("Løper C", null, {status: "DNS"}),
+      ]},
+    ]}],
+  };
+}
+
+test("explicit verified category membership is counted once while both class views remain", () => {
+  const input = categorySource();
+  const bundle = prepareNsfImport(input);
+  expect(bundle.report.ready).toBe(true);
+  expect(bundle.report.event.participantCount).toBe(3);
+  expect(bundle.report.classes.map((item) => item.participants)).toEqual([3, 2]);
+  expect(bundle.docs.filter((doc) => doc.path.includes("/results/"))).toHaveLength(5);
+});
+
+test("matching names in independent classes are not implicitly deduplicated", () => {
+  const input = categorySource();
+  delete input.classes[1].categoryOf;
+  expect(prepareNsfImport(input).report.event.participantCount).toBe(5);
+});
+
+test.each([
+  ["unknown parent", (source) => source.classes[1].categoryOf = "missing"],
+  ["self parent", (source) => source.classes[1].categoryOf = "u20"],
+  ["projection chain", (source) => source.classes[0].categoryOf = "u20"],
+  ["unknown member", (source) => source.stages[0].classes[1].rows[0].name = "Ukjent løper"],
+  ["ambiguous member", (source) => {
+    source.stages[0].classes[0].rows[0].name = "Løper B";
+    source.stages[0].classes[0].rows[0].club = "Annen klubb";
+    delete source.stages[0].classes[1].rows[0].club;
+  }],
+  ["different finish", (source) => source.stages[0].classes[1].rows[0].totalMs++],
+  ["different status", (source) => source.stages[0].classes[1].rows[1].status = "DNF"],
+  ["different split", (source) => source.stages[0].classes[1].rows[0].points.km12.cumMs++],
+  ["different stage", (source) => {
+    const child = source.stages[0].classes.pop();
+    source.stages.push({id: "other", name: "Annet løp", phase: "distance", classes: [child]});
+  }],
+])("category totals reject %s instead of hiding unrelated participants", (_, change) => {
+  const input = categorySource();
+  change(input);
+  const bundle = prepareNsfImport(input);
+  expect(bundle.report.ready).toBe(false);
+  expect(bundle.report.issues).toContainEqual(expect.objectContaining({
+    severity: "error", message: expect.stringMatching(/kategori/i),
+  }));
+});
