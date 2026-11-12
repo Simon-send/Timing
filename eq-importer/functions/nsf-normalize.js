@@ -292,11 +292,49 @@ function buildPodium(timedGroups, officialRows, warn, error, classId) {
   }
 }
 
+function verifiedCategory(raceClass, parent, error) {
+  const identity = (result) => ({
+    name: result.entrant.name, club: result.entrant.clubName || "",
+    country: result.entrant.country || "", sourceId: "", result,
+  });
+  let valid = true;
+  for (const group of raceClass.groups) {
+    const parentGroup = parent.groups.find((item) => item.stage.id === group.stage.id);
+    if (!parentGroup) {
+      error(raceClass.id, "Kategorien mangler samme konkurranseledd i forelderklassen.");
+      valid = false;
+      continue;
+    }
+    const candidates = parentGroup.results.map(identity);
+    const members = new Set();
+    for (const result of group.results) {
+      const matches = matchingEntrants(identity(result), candidates);
+      const parentResult = matches.length === 1 ? matches[0].result : null;
+      const parentPoints = new Map((parentResult?.timingPoints || [])
+          .map((point) => [point.setupUid, point]));
+      const differentTiming = (result.timingPoints || []).some((point) => {
+        const original = parentPoints.get(point.setupUid);
+        return !original || point.cumMs !== original.cumMs || point.legMs !== original.legMs;
+      });
+      if (!parentResult || members.has(parentResult.id) ||
+          result.status !== parentResult.status || result.totalMs !== parentResult.totalMs ||
+          differentTiming) {
+        error(raceClass.id, "Kategorimedlemmet må ha entydig identitet, status og tider i forelderklassen.");
+        valid = false;
+      } else {
+        members.add(parentResult.id);
+      }
+    }
+  }
+  return valid;
+}
+
 function prepareNsfImport(source) {
   const issues = [];
   const issue = (severity) => (location, message) => issues.push({severity, location, message});
   const error = issue("error");
   const warn = issue("warning");
+  const prologOnly = source?.sprintPrologOnly === true;
   const meta = source?.event;
   const sourceId = String(meta?.id ?? "");
   const name = text(meta?.name);
@@ -338,7 +376,8 @@ function prepareNsfImport(source) {
     const distanceKm = typeof raw.distanceKm === "number" &&
       Number.isFinite(raw.distanceKm) && raw.distanceKm > 0 ? raw.distanceKm : null;
     const stage = {
-      id, name: text(raw.name), phase: raw.phase, distanceKm,
+      id, name: prologOnly && raw.phase === "prolog" ? "Prolog (heat avlyst)" : text(raw.name),
+      phase: raw.phase, distanceKm,
       courseKey: text(raw.courseKey), groups: [],
       order: Number.isSafeInteger(raw.order) ? raw.order : PHASE_ORDER.indexOf(raw.phase) * 100,
     };
@@ -370,23 +409,32 @@ function prepareNsfImport(source) {
   if (!stages.size || (hasSprint && hasDistance)) {
     error("ledd", "Én NSF-import må inneholde enten individuelle distanseledd eller én sprint.");
   }
+  if (prologOnly && (!hasSprint || [...stages.values()].some((stage) => stage.phase !== "prolog"))) {
+    error("ledd", "En prolog-only-eksport kan bare inneholde sprintens prolog, uten senere heat.");
+  }
   const overall = {id: "sprint-overall", name: "Sluttresultat", phase: "overall", order: -1, groups: []};
   let participantCount = 0;
+  const classParticipantCounts = new Map();
   for (const raceClass of classRows.values()) {
     const classId = raceClass.id;
-    const official = array(raceClass.official)
-        .map((row) => normalizeRow(row, classId, error)).filter(Boolean);
     const timedGroups = [...raceClass.groups].sort((a, b) => a.stage.order - b.stage.order);
     const initial = timedGroups[0];
+    const officialInput = prologOnly && !array(raceClass.official).length ?
+      initial?.official : raceClass.official;
+    const official = array(officialInput)
+        .map((row) => normalizeRow(row, classId, error)).filter(Boolean);
     const expected = positiveInt(raceClass.expectedCount);
     if (!initial) {
       error(classId, "Klassen mangler konkurranseledd.");
       continue;
     }
-    if (hasSprint && (!official.length ||
+    if (hasSprint && !prologOnly && (!official.length ||
         !timedGroups.some((group) => group.stage.phase === "prolog") ||
         !timedGroups.some((group) => group.stage.phase === "final"))) {
       error(classId, "Sprint krever offisiell sluttliste, prolog og finale.");
+    }
+    if (prologOnly && (!official.length || !expected || timedGroups.length !== 1)) {
+      error(classId, "Sprint med avlyste heat krever én prolog og en komplett offisiell prologliste med deltakerantall.");
     }
     const seeded = official.length ? official : initial.rows;
     const nameCounts = new Map();
@@ -403,22 +451,22 @@ function prepareNsfImport(source) {
     if (expected && expected !== entrants.length) {
       error(classId, `Offisielt antall er ${expected}, men ${entrants.length} rader er avstemt.`);
     }
-    if (!expected && !official.length) {
+    if (!expected) {
       warn(classId, "Kilden har ikke et uavhengig bekreftet deltakerantall.");
     }
     if (official.length && official.some((row) => !row.rank && !row.status)) {
       error(classId, "Offisiell resultatliste har rader uten plassering eller status.");
     }
-    if (!hasSprint && official.some((row) => !row.status && (!row.rank || !row.totalMs))) {
-      error(classId, "Offisiell distanseliste må ha både plassering og sluttid for fullførte utøvere.");
+    if ((!hasSprint || prologOnly) && official.some((row) => !row.status && (!row.rank || !row.totalMs))) {
+      error(classId, `Offisiell ${prologOnly ? "prologliste" : "distanseliste"} må ha både plassering og sluttid for fullførte utøvere.`);
     }
     const seenTimed = new Set();
     const entrantAffiliations = new Map();
     for (const group of timedGroups) {
       const seen = new Set();
-      const groupOfficial = !hasSprint && official.length ?
+      const groupOfficial = (!hasSprint || prologOnly) && official.length ?
         officialById : new Map();
-      for (const input of group.official) {
+      for (const input of prologOnly && officialInput === group.official ? [] : group.official) {
         const row = normalizeRow(input, classId, error);
         if (!row) continue;
         const matches = matchingEntrants(row, entrants);
@@ -485,7 +533,7 @@ function prepareNsfImport(source) {
         if (seenTimed.has(entrant.id)) continue;
         if (!entrant.status) {
           error(classId, `En offisielt plassert utøver mangler i kildetidene (startnr. ${entrant.bib || "ukjent"}).`);
-        } else if (!hasSprint) {
+        } else if (!hasSprint || prologOnly) {
           initial.results.push(resultData({
             eventId, classId, stageId: initial.stage.id, row: entrant, entrant,
             defs: initial.points, error,
@@ -496,7 +544,7 @@ function prepareNsfImport(source) {
         warn(classId, `Kildelista har ${initial.rows.length} rader; offisiell liste har ${official.length}. Se avstemmingen.`);
       }
     }
-    if (hasSprint) {
+    if (hasSprint && !prologOnly) {
       const officialResults = entrants.map((entrant) => resultData({
         eventId, classId, stageId: overall.id, row: entrant,
         entrant: {...entrant, ...entrantAffiliations.get(entrant.id)}, defs: [], error,
@@ -505,9 +553,10 @@ function prepareNsfImport(source) {
       buildPodium(timedGroups, officialResults, warn, error, classId);
     }
     participantCount += entrants.length;
+    classParticipantCounts.set(classId, entrants.length);
     put(`${eventPath}/classes/${classId}`, {
       schemaVersion: 3, eventId, classId, name: text(raceClass.name),
-      primaryStageId: hasSprint ? overall.id : initial.stage.id,
+      primaryStageId: hasSprint && !prologOnly ? overall.id : initial.stage.id,
       participantCount: entrants.length, resultCount: entrants.length, hasResults: true,
       resultProfile: hasSprint ? "sprint" : "standard",
     });
@@ -525,7 +574,16 @@ function prepareNsfImport(source) {
       })),
     });
   }
-  if (hasSprint) stages.set(overall.id, overall);
+  for (const raceClass of classRows.values()) {
+    if (raceClass.categoryOf == null) continue;
+    const parent = classRows.get(key(raceClass.categoryOf));
+    if (hasSprint || !parent || parent === raceClass || parent.categoryOf != null) {
+      error(raceClass.id, "En kategori krever en kjent, selvstendig distanseklasse som forelder.");
+    } else if (verifiedCategory(raceClass, parent, error)) {
+      participantCount -= classParticipantCounts.get(raceClass.id) || 0;
+    }
+  }
+  if (hasSprint && !prologOnly) stages.set(overall.id, overall);
   for (const stage of stages.values()) {
     const stagePath = `${eventPath}/stages/${stage.id}`;
     const resultProfile = hasSprint ? "sprint" : "standard";

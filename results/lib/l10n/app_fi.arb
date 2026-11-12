@@ -1,4 +1,6 @@
 {
+  "eventSportBiathlon": "Ampumahiihto",
+  "eventSportCrossCountry": "Maastohiihto",
   "biathlonStatistics": "Ampumahiihtotilastot",
   "biathlonFinishTime": "Loppuaika",
   "biathlonSkiTime": "Hiihtoaika",

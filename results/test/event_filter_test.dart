@@ -1,8 +1,169 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:results/app/app_theme.dart';
 import 'package:results/features/events/domain/result_event.dart';
 import 'package:results/features/events/presentation/event_filters.dart';
+import 'package:results/l10n/app_localizations.dart';
 
 void main() {
+  for (final width in [390.0, 1000.0]) {
+    testWidgets('sport shortcuts filter without opening the panel at $width', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(Size(width, 850));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+      var criteria = const EventFilterCriteria();
+      final events = [
+        for (final (id, name, sport) in [
+          ('ski', 'Skirennet', 'Langrenn'),
+          ('biathlon', 'Skiskytterrennet', 'Skiskyting'),
+          ('run', 'Løpet', 'Friidrett'),
+        ])
+          ResultEvent(
+            id: id,
+            name: name,
+            sportName: sport,
+            date: DateTime(2026, 2),
+            place: 'Teststed',
+          ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(AppThemeVariant.nordicDark),
+          locale: const Locale('nb'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) => SingleChildScrollView(
+                child: Column(
+                  children: [
+                    EventFilters(
+                      controller: controller,
+                      criteria: criteria,
+                      options: EventFilterOptions.fromEvents(events),
+                      filteredCount: events
+                          .where((event) => criteria.matches(event, ''))
+                          .length,
+                      totalCount: events.length,
+                      onChanged: (next) => setState(() => criteria = next),
+                      onReset: () => setState(
+                        () => criteria = const EventFilterCriteria(),
+                      ),
+                    ),
+                    for (final event in events.where(
+                      (event) => criteria.matches(event, ''),
+                    ))
+                      Text(event.name),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final ski = find.byKey(const Key('event-sport-langrenn'));
+      final biathlon = find.byKey(const Key('event-sport-skiskyting'));
+      expect(ski, findsOneWidget);
+      expect(biathlon, findsOneWidget);
+      final neutral = tester
+          .widget<IconButton>(ski)
+          .style!
+          .backgroundColor!
+          .resolve({});
+      expect(find.byTooltip('Vis filtre'), findsOneWidget);
+      await tester.tap(ski);
+      await tester.pumpAndSettle();
+      expect(find.text('Skirennet'), findsOneWidget);
+      expect(find.text('Skiskytterrennet'), findsNothing);
+      expect(find.text('Løpet'), findsNothing);
+      expect(tester.widget<IconButton>(ski).isSelected, isTrue);
+      expect(
+        tester.widget<IconButton>(ski).style!.backgroundColor!.resolve({}),
+        isNot(neutral),
+      );
+      expect(find.byTooltip('Vis filtre'), findsOneWidget);
+      await tester.tap(biathlon);
+      await tester.pumpAndSettle();
+      expect(find.text('Skiskytterrennet'), findsOneWidget);
+      expect(find.text('Skirennet'), findsNothing);
+      expect(tester.widget<IconButton>(ski).isSelected, isFalse);
+      await tester.tap(biathlon);
+      await tester.pumpAndSettle();
+      expect(find.text('Skirennet'), findsOneWidget);
+      expect(find.text('Skiskytterrennet'), findsOneWidget);
+      expect(find.text('Løpet'), findsOneWidget);
+    });
+  }
+
+  for (final sports in [
+    <String>[],
+    ['Skiskyting'],
+    ['langrenn'],
+  ]) {
+    testWidgets('sport shortcut stays valid with options $sports', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 850));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+      var criteria = const EventFilterCriteria();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(AppThemeVariant.nordicDark),
+          locale: const Locale('nb'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) => SingleChildScrollView(
+                child: EventFilters(
+                  controller: controller,
+                  criteria: criteria,
+                  options: EventFilterOptions(
+                    countries: const [],
+                    sports: sports,
+                    disciplines: const [],
+                    counties: const [],
+                  ),
+                  filteredCount: 0,
+                  totalCount: sports.length,
+                  onChanged: (next) => setState(() => criteria = next),
+                  onReset: () =>
+                      setState(() => criteria = const EventFilterCriteria()),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final ski = find.byKey(const Key('event-sport-langrenn'));
+      await tester.tap(ski);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('Vis filtre'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final selector = tester.widget<DropdownButton<String>>(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is DropdownButton<String> && widget.value == 'Langrenn',
+        ),
+      );
+      expect(
+        selector.items!.where((item) => item.value == 'Langrenn'),
+        hasLength(1),
+      );
+      await tester.tap(ski);
+      await tester.pumpAndSettle();
+      expect(criteria.sport, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   test('maps optional event filter metadata from Firestore data', () {
     final event = ResultEvent.fromMap('event-1', {
       'name': 'Sommerløpet',

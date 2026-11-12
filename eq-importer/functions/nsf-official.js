@@ -60,8 +60,27 @@ function textOnLine(items, y, x1, x2, tolerance = 1.5) {
       .sort((a, b) => a.x - b.x).map((item) => item.text).join(" ");
 }
 
+function publishedCount(items) {
+  const counts = new Set();
+  for (const item of items) {
+    const count = item.x < 40 && item.text.match(/^Number of Competitors\s*:\s*(\d+)$/i);
+    if (count && Number(count[1]) > 0) counts.add(Number(count[1]));
+    if (!/^Entries$/i.test(item.text)) continue;
+    const summary = items.some((heading) => /^(?:COMPETITORS \/ NSA|Participants)$/i.test(heading.text) &&
+      heading.y > item.y && heading.y - item.y < 30);
+    if (!summary) continue;
+    const value = items.find((candidate) => Math.abs(candidate.x - item.x) < 15 &&
+      candidate.y < item.y && item.y - candidate.y < 20 && /^\d+\s*\/\s*\d+$/.test(candidate.text));
+    const total = Number(value?.text.match(/^\d+/)?.[0]);
+    if (total > 0) counts.add(total);
+  }
+  if (counts.size > 1) throw new Error("The official PDF contains conflicting published participant totals.");
+  return counts.values().next().value;
+}
+
 function pageInfo(items) {
-  const official = items.find((item) => /^Offisiell Resultatliste$/i.test(item.text));
+  const official = items.find((item) => /^(?:Offisiell Resultatliste|Official Results|Official Result List)$/i.test(item.text) ||
+    /^Offisiell$/i.test(item.text) && /^Offisiell Resultatliste$/i.test(textOnLine(items, item.y, 200, 400)));
   if (!official) throw new Error("The PDF is not an official NSF result list.");
   const dateLabel = items.find((item) => item.y > official.y &&
     /\b\d{4}-\d{2}-\d{2}\b/.test(item.text));
@@ -71,12 +90,13 @@ function pageInfo(items) {
   const name = textOnLine(items, nameY, 140, 450) || undefined;
   const placeLine = dateLabel && textOnLine(items, dateLabel.y, 130, 475);
   const place = placeLine?.match(/^(.+?)\s*\([A-Z]{3}\)/)?.[1];
-  const classY = Math.min(...items.filter((item) => item.x >= 140 &&
-      item.x < 250 && item.y > official.y).map((item) => item.y));
+  const classLines = items.filter((item) => item.x >= 140 &&
+      item.x < 250 && item.y > official.y);
+  const classStarts = classLines.filter((item) =>
+    /^(?:Kvinner|Menn|Women|Men|[KM]\s+\d+|Senior|Junior)\b/i.test(item.text));
+  const classY = Math.min(...(classStarts.length ? classStarts : classLines).map((item) => item.y));
   const className = textOnLine(items, classY, 140, 390) || undefined;
-  const count = items.find((item) => item.y < official.y && item.x < 40 &&
-    /Number of Competitors\s*:\s*\d+/i.test(item.text));
-  const expectedCount = Number(count?.text.match(/:\s*(\d+)/)?.[1]) || undefined;
+  const expectedCount = publishedCount(items);
   const courseCount = items.filter((item) => item.text === "Course" && item.x > 300).length;
   const lapLength = items.find((item) => /^LENGTH OF LAP$/i.test(item.text));
   const lapCount = items.find((item) => /^NUMBER OF LAPS$/i.test(item.text));
@@ -89,28 +109,82 @@ function pageInfo(items) {
 }
 
 function finishFromPdf(value) {
-  // One official NSF report uses ')' as the decimal separator in this column.
-  const time = value.replace(/(?<=\d)\)(?=\d{1,3}$)/, ".");
+  // Official NSF reports sometimes print a symbol in place of the decimal point.
+  const time = value.replace(/(?<=\d)[)*](?=\d{1,3}$)/, ".");
   return /^(?:\d+:){1,2}\d{2}(?:[.,]\d{1,3})?$/.test(time) ?
     parseNsfTime(time) : undefined;
 }
 
+function fisName(value) {
+  // FIS prints FAMILY Given names; the rest of the import uses Given names Family.
+  const words = value.split(/\s+/);
+  const start = words.findIndex((word) => /\p{Ll}/u.test(word));
+  if (start < 1) return value;
+  const family = words.slice(0, start).map((word) => word.toLocaleLowerCase("nb-NO")
+      .replace(/(^|[-'])\p{L}/gu, (letter) => letter.toLocaleUpperCase("nb-NO"))).join(" ");
+  return [...words.slice(start), family].join(" ");
+}
+
+function parseFisSprint(items) {
+  const heading = items.find((item) => item.text === "Results");
+  const nameHeader = items.find((item) => item.text === "Name" && item.x >= 100 && item.x < 120);
+  if (!heading || !nameHeader ||
+      !items.some(({text}) => text === "Sprint Final") ||
+      !items.some(({text, x}) => text === "Rk." && x > 60 && x < 80) ||
+      !items.some(({text, x}) => text === "Qualification" && x > 280 && x < 320)) return null;
+  const dateLabel = items.find((item) => item.y > heading.y && /^\d{2}-\d{2}-\d{4}$/.test(item.text));
+  const [day, month, year] = dateLabel?.text.split("-") || [];
+  const classLine = items.find((item) => item.y > heading.y && item.y < heading.y + 40 &&
+    item.x > 150 && item.x < 400 && /Sprint/.test(item.text) && item.text !== "Sprint Final");
+  const title = items.filter((item) => item.y > (classLine?.y || heading.y) &&
+    item.x > 140 && item.x < 450).sort((a, b) => b.y - a.y)[0];
+  const footer = items.find(({text}) => /^Sidan \d+ av \d+$/.test(text));
+  const rows = items.filter((item) => item.x >= 100 && item.x < 120 &&
+    item.y < nameHeader.y - 5 && item.y > (footer?.y || 120)).map((item) => {
+    const rankText = textOnLine(items, item.y, 60, 80);
+    const rank = /^\d+$/.test(rankText) ? Number(rankText) : undefined;
+    const section = items.filter((candidate) => candidate.x >= 59 && candidate.x < 80 &&
+      candidate.y > item.y && candidate.y < nameHeader.y &&
+      (nsfStatus(candidate.text) || /^(?:Final|Semifinals|Quarterfinals|Qualification)$/.test(candidate.text)))
+        .sort((a, b) => a.y - b.y)[0];
+    const status = rank ? undefined : nsfStatus(section?.text);
+    if (!rank && !status) throw new Error("An official FIS sprint result row could not be classified.");
+    const country = textOnLine(items, item.y, 235, 260);
+    return {name: fisName(item.text), bib: textOnLine(items, item.y, 80, 100) || undefined,
+      country: /^[A-Z]{3}$/.test(country) ? country : undefined, rank, status};
+  });
+  return {name: title?.text, className: classLine?.text,
+    date: year ? `${year}-${month}-${day}` : undefined,
+    expectedCount: publishedCount(items), kind: "sprint-overall", rows,
+    courseCount: 0};
+}
+
 function parseOfficialPage(rawItems, width = 595.28) {
   const items = positions(rawItems, width);
+  if (items.some(({text}) => /^(?:Uoffisiell|Unofficial)\b/i.test(text))) {
+    throw new Error("The PDF is not an official NSF result list.");
+  }
+  const fis = parseFisSprint(items);
+  if (fis) return fis;
   const info = pageInfo(items);
   const sprint = items.find((item) => /^QUALIF\.$/i.test(item.text) &&
     item.x > 220 && item.x < 300);
   const individual = items.find((item) => /^Finish$/i.test(item.text) &&
     item.x > 420 && item.x < 500);
   if (!sprint && !individual) {
-    if (items.some(({text}) => text === "Jury Decisions")) {
+    if (items.some(({text}) => /^Jury Decisions?$/i.test(text)) ||
+        items.some(({text}) => /^Legend$/i.test(text)) &&
+        items.some(({text}) => /^Did Not (?:Finish|Start)$/i.test(text)) ||
+        items.some(({text, x}) => text === "Jury" && x < 200) &&
+        items.some(({text, x}) => text === "Course" && x > 300) ||
+        info.expectedCount && items.some(({text}) => /^COMPETITORS \/ NSA$/i.test(text))) {
       return {...info, rows: []};
     }
     throw new Error("The official PDF does not use a supported NSF results layout.");
   }
   const upper = sprint ? sprint.y - 30 : individual.y - 5;
   const bottom = items.find((item) => /^Side \d+ av \d+$/i.test(item.text));
-  const bibLeft = sprint ? 46 : 51;
+  const bibLeft = sprint ? 40 : 51;
   const anchors = items.filter((item) => item.x >= bibLeft && item.x < 68 &&
     item.y < upper && item.y > (bottom?.y || 145) && /^\d+$/.test(item.text));
   const rows = [];
@@ -118,7 +192,7 @@ function parseOfficialPage(rawItems, width = 595.28) {
     const rankText = textOnLine(items, bib.y, 20, bibLeft);
     const rank = /^\d+$/.test(rankText) && Number(rankText) > 0 ?
       Number(rankText) : undefined;
-    const finish = sprint ? "" : textOnLine(items, bib.y, 435, 500);
+    const finish = sprint ? "" : textOnLine(items, bib.y, 435, 490);
     const status = sprint ? nsfStatus(rankText) : nsfStatus(finish);
     const totalMs = sprint ? undefined : finishFromPdf(finish);
     const qualification = sprint && textOnLine(items, bib.y, 235, 278);
@@ -179,6 +253,10 @@ async function readOfficialNsfPdf(pathOrUrl) {
           (metadata.date && metadata.date !== info.date)) {
         throw new Error("The official PDF mixes different result lists.");
       }
+      if (info.expectedCount && metadata.expectedCount && info.expectedCount !== metadata.expectedCount) {
+        throw new Error("The official PDF contains conflicting published participant totals.");
+      }
+      if (!info.expectedCount && metadata.expectedCount) info.expectedCount = metadata.expectedCount;
       rows.push(...pageRows);
       courseCount += pageCourses;
       if (pageCourseKm !== undefined) courseDistanceKm = pageCourseKm;

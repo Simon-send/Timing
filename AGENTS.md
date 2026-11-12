@@ -421,14 +421,14 @@ Denne delen avledes deterministisk fra arbeidsomradet. Oppdater den med `tools/u
 | Arbeidsomrade | Oppdagede filer | Manifest/runtime |
 | --- | ---: | --- |
 | `results/` | 287 | results (Dart SDK ^3.11.0) |
-| `eq-importer/` | 82 | Node 22 |
+| `eq-importer/` | 81 | Node 22 |
 | `eq/` | 0 | ikke versjonert |
 | `webScraper/` | 0 | Python-prototyper uten manifest |
 | `AI/` | 0 | Referansemateriale |
 
 - Flutter-kilde: 93 Dart-filer under `results/lib`.
-- Flutter-tester: 37 testfiler med 243 oppdagede `test`/`testWidgets`-tilfeller.
-- Importortester: 25 Jest-fil med 191 oppdagede testtilfeller.
+- Flutter-tester: 37 testfiler med 245 oppdagede `test`/`testWidgets`-tilfeller.
+- Importortester: 26 Jest-fil med 218 oppdagede testtilfeller.
 - Lokaler: de, en, es, et, fi, fr, it, nb, ru, sv.
 - Deklarerte rutesegmenter: /, /login, /forgot-password, /register, /connect-athlete, /me, /events, :eventId/results, :classId/athletes/:resultId.
 - Eksporterte Cloud Functions: getImportStatus, repairImportDispatches, runImportEventChunk, startImportEvent.

@@ -203,6 +203,32 @@ class EventFilters extends StatefulWidget {
 class _EventFiltersState extends State<EventFilters> {
   bool? _expanded;
 
+  Widget _sportShortcut(String sport, String label, {required bool biathlon}) {
+    final selected = widget.criteria.sport.toLowerCase() == sport.toLowerCase();
+    final colors = Theme.of(context).colorScheme;
+    final foreground = selected ? colors.onPrimary : colors.onSurfaceVariant;
+    return IconButton(
+      key: Key('event-sport-${sport.toLowerCase()}'),
+      tooltip: label,
+      isSelected: selected,
+      style: IconButton.styleFrom(
+        foregroundColor: foreground,
+        backgroundColor: selected ? colors.primary : Colors.transparent,
+        side: BorderSide(
+          color: selected ? colors.primary : context.palette.border,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onPressed: () => widget.onChanged(
+        widget.criteria.copyWith(sport: selected ? '' : sport),
+      ),
+      icon: CustomPaint(
+        size: const Size.square(24),
+        painter: _SkiSportPainter(color: foreground, biathlon: biathlon),
+      ),
+    );
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -234,34 +260,57 @@ class _EventFiltersState extends State<EventFilters> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.tune, color: palette.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        activeCount == 0
-                            ? text.filters
-                            : '${text.filters} ($activeCount)',
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+                LayoutBuilder(
+                  builder: (context, constraints) => Row(
+                    children: [
+                      Icon(Icons.tune, color: palette.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          activeCount == 0
+                              ? text.filters
+                              : '${text.filters} ($activeCount)',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    if (activeCount > 0)
-                      TextButton.icon(
-                        key: const Key('event-filters-reset'),
-                        onPressed: widget.onReset,
-                        icon: const Icon(Icons.restart_alt, size: 18),
-                        label: Text(text.reset),
+                      _sportShortcut(
+                        'Skiskyting',
+                        l10n.eventSportBiathlon,
+                        biathlon: true,
                       ),
-                    IconButton(
-                      key: const Key('event-filters-toggle'),
-                      tooltip: expanded ? text.collapse : text.expand,
-                      onPressed: () => setState(() => _expanded = !expanded),
-                      icon: Icon(
-                        expanded ? Icons.expand_less : Icons.expand_more,
+                      const SizedBox(width: 6),
+                      _sportShortcut(
+                        'Langrenn',
+                        l10n.eventSportCrossCountry,
+                        biathlon: false,
                       ),
-                    ),
-                  ],
+                      if (activeCount > 0)
+                        if (constraints.maxWidth < 480)
+                          IconButton(
+                            key: const Key('event-filters-reset'),
+                            tooltip: text.reset,
+                            onPressed: widget.onReset,
+                            icon: const Icon(Icons.restart_alt),
+                          )
+                        else
+                          TextButton.icon(
+                            key: const Key('event-filters-reset'),
+                            onPressed: widget.onReset,
+                            icon: const Icon(Icons.restart_alt, size: 18),
+                            label: Text(text.reset),
+                          ),
+                      IconButton(
+                        key: const Key('event-filters-toggle'),
+                        tooltip: expanded ? text.collapse : text.expand,
+                        onPressed: () => setState(() => _expanded = !expanded),
+                        icon: Icon(
+                          expanded ? Icons.expand_less : Icons.expand_more,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 180),
@@ -331,7 +380,10 @@ class _EventFiltersState extends State<EventFilters> {
                                           key: const Key('event-filter-sport'),
                                           label: l10n.sport,
                                           value: widget.criteria.sport,
-                                          options: widget.options.sports,
+                                          options: _options([
+                                            widget.criteria.sport,
+                                            ...widget.options.sports,
+                                          ]),
                                           onChanged: (value) =>
                                               widget.onChanged(
                                                 widget.criteria.copyWith(
@@ -797,6 +849,65 @@ List<String> _options(Iterable<String> values) {
   final result = normalized.values.toList();
   result.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
   return result;
+}
+
+class _SkiSportPainter extends CustomPainter {
+  const _SkiSportPainter({required this.color, required this.biathlon});
+
+  final Color color;
+  final bool biathlon;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.scale(size.width / 24, size.height / 24);
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawCircle(const Offset(14, 4), 1.7, Paint()..color = color);
+    final skier = Path()
+      ..moveTo(12, 7)
+      ..lineTo(10, 12)
+      ..lineTo(6, 15)
+      ..lineTo(3, 19)
+      ..moveTo(10, 12)
+      ..lineTo(14, 15)
+      ..lineTo(18, 19)
+      ..moveTo(12, 7)
+      ..lineTo(16, 10)
+      ..lineTo(19, 8)
+      ..moveTo(11, 10)
+      ..lineTo(7, 10)
+      ..lineTo(5, 13)
+      ..moveTo(6, 12)
+      ..lineTo(3, 21)
+      ..moveTo(19, 8)
+      ..lineTo(21, 21)
+      ..moveTo(1, 21)
+      ..lineTo(12, 21)
+      ..lineTo(14, 20)
+      ..moveTo(10, 23)
+      ..lineTo(22, 23)
+      ..lineTo(23, 22);
+    canvas.drawPath(skier, stroke);
+    if (biathlon) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(6, 1.5)
+          ..lineTo(10.5, 10.5)
+          ..lineTo(8.5, 11.5),
+        stroke..strokeWidth = 2.2,
+      );
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_SkiSportPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.biathlon != biathlon;
 }
 
 class _FilterText {
