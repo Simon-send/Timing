@@ -379,7 +379,7 @@ test("account deletion barrier blocks old verified tokens from recreating privat
   const other = testEnvironment.authenticatedContext("other", {email_verified: true}).firestore();
   const value = {athleteId: "athlete:1", athleteName: "Test", updatedAt: new Date()};
   await assertSucceeds(setDoc(doc(owner, "users/owner/favoriteAthletes/athlete:1"), value));
-  await testEnvironment.withSecurityRulesDisabled(async context => {
+  await testEnvironment.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), "rundeanalyseAccountDeletions/owner"), {status: "deleting"});
   });
   // Context/token was issued before the deletion request, but cannot read,
