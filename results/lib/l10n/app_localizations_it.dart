@@ -744,7 +744,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get accountPrivacyNoticeBody =>
-      'Hernes Technologies (numero organizzativo 938426074) è il titolare. E-mail, ID ed eventuale nome dal servizio di accesso servono a fornire l’account condiviso richiesto. Firebase/Google Cloud offrono autenticazione e archiviazione. Firebase Authentication tratta i dati negli Stati Uniti. I dati restano fino all’eliminazione dell’account.\n\nLa registrazione non autorizza importazioni di attività, GPS o frequenza cardiaca. Il consenso viene richiesto separatamente in Rundeanalyse e può essere revocato lì.\n\nAccesso, rettifica, cancellazione, limitazione o portabilità: analyse@plotting.live. Risposta entro un mese. Puoi reclamare all’autorità norvegese per la protezione dei dati.\n\nhttps://analyse.plotting.live/privacy.html';
+      'Hernes Technologies (numero organizzativo 938426074) è il titolare. E-mail, ID ed eventuale nome dal servizio di accesso servono a fornire l’account condiviso richiesto. Firebase/Google Cloud offrono autenticazione e archiviazione. Firebase Authentication tratta i dati negli Stati Uniti. I dati restano fino all’eliminazione dell’account.\n\nLa registrazione non autorizza importazioni di attività, GPS o frequenza cardiaca. Il consenso viene richiesto separatamente in Rundeanalyse e può essere revocato lì.\n\nAccesso, rettifica, cancellazione, limitazione o portabilità: contact@plotting.live. Risposta entro un mese. Puoi reclamare all’autorità norvegese per la protezione dei dati.\n\nhttps://analyse.plotting.live/privacy.html';
 
   @override
   String get accountPrivacyNoticeClose => 'Chiudi';

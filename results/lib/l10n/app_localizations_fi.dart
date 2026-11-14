@@ -748,7 +748,7 @@ class AppLocalizationsFi extends AppLocalizations {
 
   @override
   String get accountPrivacyNoticeBody =>
-      'Rekisterinpitäjä on Hernes Technologies (organisaationumero 938426074). Sähköposti, tilitunnus ja kirjautumispalvelun antama nimi käytetään pyydetyn yhteisen tilin tarjoamiseen. Firebase/Google Cloud tarjoavat kirjautumisen ja tallennuksen. Firebase Authentication käsittelee tietoja Yhdysvalloissa. Tilitiedot säilytetään tilin poistamiseen asti.\n\nRekisteröityminen ei anna suostumusta aktiivisuus-, GPS- tai syketietojen tuontiin. Suostumus pyydetään erikseen Rundeanalysessa ja sen voi perua siellä.\n\nPyydä pääsyä tietoihin, oikaisua, poistamista, rajoittamista tai siirtoa: analyse@plotting.live. Vastaamme kuukaudessa. Voit valittaa Norjan tietosuojaviranomaiselle.\n\nhttps://analyse.plotting.live/privacy.html';
+      'Rekisterinpitäjä on Hernes Technologies (organisaationumero 938426074). Sähköposti, tilitunnus ja kirjautumispalvelun antama nimi käytetään pyydetyn yhteisen tilin tarjoamiseen. Firebase/Google Cloud tarjoavat kirjautumisen ja tallennuksen. Firebase Authentication käsittelee tietoja Yhdysvalloissa. Tilitiedot säilytetään tilin poistamiseen asti.\n\nRekisteröityminen ei anna suostumusta aktiivisuus-, GPS- tai syketietojen tuontiin. Suostumus pyydetään erikseen Rundeanalysessa ja sen voi perua siellä.\n\nPyydä pääsyä tietoihin, oikaisua, poistamista, rajoittamista tai siirtoa: contact@plotting.live. Vastaamme kuukaudessa. Voit valittaa Norjan tietosuojaviranomaiselle.\n\nhttps://analyse.plotting.live/privacy.html';
 
   @override
   String get accountPrivacyNoticeClose => 'Sulje';

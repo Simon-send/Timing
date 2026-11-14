@@ -744,7 +744,7 @@ class AppLocalizationsNb extends AppLocalizations {
 
   @override
   String get accountPrivacyNoticeBody =>
-      'Hernes Technologies (org.nr. 938426074) er behandlingsansvarlig. E-post, konto-ID og eventuelt navn fra innloggingsleverandøren brukes for å levere den felles kontoen du ber om. Firebase/Google Cloud leverer innlogging og lagring. Firebase Authentication behandler data i USA. Kontoopplysningene beholdes til kontoen slettes.\n\nRegistrering gir ikke samtykke til aktivitets-, GPS- eller pulsimport. Det innhentes separat i Rundeanalyse og kan trekkes tilbake der.\n\nBe om innsyn, retting, sletting, begrensning eller dataportabilitet på analyse@plotting.live. Vi svarer innen én måned. Du kan klage til Datatilsynet.\n\nhttps://analyse.plotting.live/privacy.html';
+      'Hernes Technologies (org.nr. 938426074) er behandlingsansvarlig. E-post, konto-ID og eventuelt navn fra innloggingsleverandøren brukes for å levere den felles kontoen du ber om. Firebase/Google Cloud leverer innlogging og lagring. Firebase Authentication behandler data i USA. Kontoopplysningene beholdes til kontoen slettes.\n\nRegistrering gir ikke samtykke til aktivitets-, GPS- eller pulsimport. Det innhentes separat i Rundeanalyse og kan trekkes tilbake der.\n\nBe om innsyn, retting, sletting, begrensning eller dataportabilitet på contact@plotting.live. Vi svarer innen én måned. Du kan klage til Datatilsynet.\n\nhttps://analyse.plotting.live/privacy.html';
 
   @override
   String get accountPrivacyNoticeClose => 'Lukk';
