@@ -734,4 +734,18 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get comparisonRelay => 'Stafett';
+
+  @override
+  String get accountPrivacyAcknowledgement =>
+      'Jag har läst integritetsinformationen för det gemensamma kontot i Rundeanalyse och EQ Results.';
+
+  @override
+  String get accountPrivacyNoticeTitle => 'Kontots integritet';
+
+  @override
+  String get accountPrivacyNoticeBody =>
+      'Hernes Technologies (organisationsnummer 938426074) är personuppgiftsansvarig. E-post, konto-ID och eventuellt namn från inloggningsleverantören används för det gemensamma konto du begär. Firebase/Google Cloud tillhandahåller inloggning och lagring. Firebase Authentication behandlar data i USA. Kontouppgifter behålls tills kontot raderas.\n\nRegistrering ger inte samtycke till aktivitets-, GPS- eller pulsimport. Det begärs separat i Rundeanalyse och kan återkallas där.\n\nBegär tillgång, rättelse, radering, begränsning eller dataportabilitet på analyse@plotting.live. Vi svarar inom en månad. Du kan klaga hos norska Datatilsynet.\n\nhttps://analyse.plotting.live/privacy.html';
+
+  @override
+  String get accountPrivacyNoticeClose => 'Stäng';
 }

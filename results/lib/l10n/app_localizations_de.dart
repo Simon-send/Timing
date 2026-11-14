@@ -737,4 +737,18 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get comparisonRelay => 'Staffel';
+
+  @override
+  String get accountPrivacyAcknowledgement =>
+      'Ich habe die Datenschutzhinweise für das gemeinsame Konto von Rundeanalyse und EQ Results gelesen.';
+
+  @override
+  String get accountPrivacyNoticeTitle => 'Datenschutz für das Konto';
+
+  @override
+  String get accountPrivacyNoticeBody =>
+      'Verantwortlich ist Hernes Technologies (Organisationsnummer 938426074). E-Mail-Adresse, Konto-ID und gegebenenfalls der Name des Anmeldeanbieters dienen dem angeforderten gemeinsamen Konto. Firebase/Google Cloud stellen Anmeldung und Speicherung bereit. Firebase Authentication verarbeitet Daten in den USA. Kontodaten bleiben bis zur Kontolöschung gespeichert.\n\nDie Registrierung erteilt keine Einwilligung zum Import von Aktivitäts-, GPS- oder Pulsdaten. Diese wird in Rundeanalyse separat eingeholt und kann dort widerrufen werden.\n\nAuskunft, Berichtigung, Löschung, Einschränkung oder Datenübertragbarkeit: analyse@plotting.live. Antwort innerhalb eines Monats. Beschwerden sind bei der norwegischen Datenschutzbehörde möglich.\n\nhttps://analyse.plotting.live/privacy.html';
+
+  @override
+  String get accountPrivacyNoticeClose => 'Schließen';
 }

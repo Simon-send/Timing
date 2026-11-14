@@ -732,4 +732,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get comparisonRelay => 'Relay';
+
+  @override
+  String get accountPrivacyAcknowledgement =>
+      'I have read the privacy notice for the shared Rundeanalyse and EQ Results account.';
+
+  @override
+  String get accountPrivacyNoticeTitle => 'Account privacy notice';
+
+  @override
+  String get accountPrivacyNoticeBody =>
+      'Hernes Technologies (organisation number 938426074) is the controller. Your email, account ID and any name from your sign-in provider are used to provide the shared account you request. Firebase/Google Cloud provide authentication and storage. Firebase Authentication processes data in the USA. Account information is retained until account deletion.\n\nRegistration does not grant consent to activity, GPS or heart-rate imports. That consent is requested separately in Rundeanalyse and can be withdrawn there.\n\nRequest access, correction, deletion, restriction or portability at analyse@plotting.live. We respond within one month. You may complain to the Norwegian Data Protection Authority.\n\nhttps://analyse.plotting.live/privacy.html';
+
+  @override
+  String get accountPrivacyNoticeClose => 'Close';
 }

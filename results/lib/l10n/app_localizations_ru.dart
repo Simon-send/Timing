@@ -732,4 +732,18 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get comparisonRelay => 'Эстафета';
+
+  @override
+  String get accountPrivacyAcknowledgement =>
+      'Я прочитал(а) уведомление о конфиденциальности общей учётной записи Rundeanalyse и EQ Results.';
+
+  @override
+  String get accountPrivacyNoticeTitle => 'Конфиденциальность учётной записи';
+
+  @override
+  String get accountPrivacyNoticeBody =>
+      'Оператор — Hernes Technologies (регистрационный номер 938426074). Электронная почта, ID и имя от службы входа используются для предоставления запрошенной общей учётной записи. Firebase/Google Cloud обеспечивают вход и хранение. Firebase Authentication обрабатывает данные в США. Данные хранятся до удаления учётной записи.\n\nРегистрация не означает согласия на импорт активности, GPS или пульса. Такое согласие запрашивается отдельно в Rundeanalyse и может быть отозвано там.\n\nДоступ, исправление, удаление, ограничение или переносимость: analyse@plotting.live. Ответ в течение месяца. Можно пожаловаться в норвежский орган защиты данных.\n\nhttps://analyse.plotting.live/privacy.html';
+
+  @override
+  String get accountPrivacyNoticeClose => 'Закрыть';
 }
