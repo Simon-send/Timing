@@ -954,6 +954,104 @@ describe("eq importer helpers", () => {
     },
   );
 
+  test.each(["failure", "slice yield", "completion"])(
+    "exhausted recovery stays blocked after late worker %s", async (scenario) => {
+      const mod = loadModule();
+      const {LEASE_MS} = require("../import-job-state");
+      const {execution} = require("../import-execution");
+      const db = mod._test.getDb();
+      const jobRef = db.collection("importJobs").doc("event-80088");
+      const targetRef = jobRef.collection("runs").doc("run").collection("targets")
+        .doc("330315_1224375");
+      await jobRef.set({eventId: 80088, runId: "run", classCount: 1,
+        manifestVersion: 1, targetCount: 1, initialized: true,
+        status: "queued", done: false, nextClassIndex: 0, recoveryCount: 3,
+        pendingDispatch: {runId: "run", classIndex: 0, dispatchGeneration: 0}});
+      await targetRef.set({ordinal: 0, stageId: 330315, classId: 1224375,
+        status: "queued", attempts: 0});
+      await db.collection("events").doc("80088").set({importState: "importing"});
+
+      let pauseWorker;
+      let resumeWorker;
+      let failWorker;
+      const paused = new Promise((resolve) => {
+        pauseWorker = resolve;
+      });
+      const gate = new Promise((resolve, reject) => {
+        resumeWorker = resolve;
+        failWorker = reject;
+      });
+      const fixtures = buildImportFixtures();
+      const originalTransaction = db.runTransaction;
+      const clock = jest.spyOn(Date, "now").mockReturnValue(1000000);
+      try {
+        if (scenario === "completion") {
+          mockAxiosGet
+            .mockResolvedValueOnce({data: fixtures.event})
+            .mockResolvedValueOnce({data: fixtures.participants})
+            .mockResolvedValueOnce({data: {Items: fixtures.stationTwoTimes.Items.map((row) => ({
+              ...row, Deltaker: fixtures.participants["101"],
+            })), TotalItems: 1}})
+            .mockResolvedValueOnce({data: fixtures.stationOneTimes})
+            .mockResolvedValueOnce({data: fixtures.stationTwoTimes});
+          let outsideTransactions = 0;
+          db.runTransaction = async (callback) => {
+            // Claim is first; final job/event/target completion is second.
+            if (!execution.getStore() && ++outsideTransactions === 2) {
+              pauseWorker();
+              await gate;
+            }
+            return originalTransaction(callback);
+          };
+        } else {
+          mockAxiosGet.mockImplementation(() => {
+            pauseWorker();
+            return gate;
+          });
+        }
+        const res = makeResponse();
+        const worker = mod.runImportEventChunk({method: "POST", body: {
+          jobId: jobRef.id, runId: "run", eventId: 80088, classIndex: 0, classCount: 1,
+        }}, res);
+        await paused;
+        expect(mockState.docs.get(jobRef.path).status).toBe("running");
+        clock.mockReturnValue(1000000 + LEASE_MS + 1);
+        await mod.repairImportDispatches();
+        expect(mockState.docs.get(jobRef.path)).toMatchObject({
+          status: "blocked", lastError: "IMPORT_RECOVERY_EXHAUSTED",
+        });
+        const blockedJob = {...mockState.docs.get(jobRef.path)};
+        const blockedEvent = {...mockState.docs.get("events/80088")};
+        const blockedTarget = {...mockState.docs.get(targetRef.path)};
+        const writesAfterBlock = mockState.writes.length;
+
+        if (scenario === "completion") {
+          resumeWorker();
+        } else {
+          failWorker(Object.assign(new Error("Late source response"), {
+            code: scenario === "slice yield" ? "IMPORT_SLICE_YIELD" : "LATE_SOURCE_FAILURE",
+          }));
+        }
+        await worker;
+
+        expect(mockState.docs.get(jobRef.path).status).toBe("blocked");
+        expect(mockState.docs.get(jobRef.path)).toEqual(blockedJob);
+        expect(mockState.docs.get(jobRef.path).lastError).toBe("IMPORT_RECOVERY_EXHAUSTED");
+        for (const field of ["leaseOwner", "leaseExpiresAtMs", "activeClassIndex", "pendingDispatch"]) {
+          expect(mockState.docs.get(jobRef.path)[field]).toBeUndefined();
+        }
+        expect(mockState.docs.get("events/80088")).toEqual(blockedEvent);
+        expect(mockState.docs.get(targetRef.path)).toEqual(blockedTarget);
+        expect(mockState.writes).toHaveLength(writesAfterBlock);
+        expect(mockCreateTask).not.toHaveBeenCalled();
+        expect(res.statusCode).toBe(scenario === "completion" ? 409 : 500);
+      } finally {
+        db.runTransaction = originalTransaction;
+        clock.mockRestore();
+      }
+    },
+  );
+
   test("incomplete initialization cannot resume even with a complete manifest", async () => {
     const mod = loadModule();
     const jobRef = mod._test.getDb().collection("importJobs").doc("event-80088");
