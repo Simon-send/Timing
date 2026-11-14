@@ -744,7 +744,7 @@ class AppLocalizationsEt extends AppLocalizations {
 
   @override
   String get accountPrivacyNoticeBody =>
-      'Vastutav töötleja on Hernes Technologies (registrinumber 938426074). E-posti, konto ID-d ja sisselogimisteenuse antud nime kasutatakse soovitud ühise konto pakkumiseks. Firebase/Google Cloud pakuvad autentimist ja salvestust. Firebase Authentication töötleb andmeid USAs. Kontoandmed säilivad konto kustutamiseni.\n\nRegistreerumine ei anna nõusolekut tegevus-, GPS- ega pulsiandmete importimiseks. Seda küsitakse Rundeanalyses eraldi ja selle saab seal tagasi võtta.\n\nJuurdepääs, parandamine, kustutamine, piiramine või ülekandmine: analyse@plotting.live. Vastame kuu jooksul. Saate kaevata Norra andmekaitseasutusele.\n\nhttps://analyse.plotting.live/privacy.html';
+      'Vastutav töötleja on Hernes Technologies (registrinumber 938426074). E-posti, konto ID-d ja sisselogimisteenuse antud nime kasutatakse soovitud ühise konto pakkumiseks. Firebase/Google Cloud pakuvad autentimist ja salvestust. Firebase Authentication töötleb andmeid USAs. Kontoandmed säilivad konto kustutamiseni.\n\nRegistreerumine ei anna nõusolekut tegevus-, GPS- ega pulsiandmete importimiseks. Seda küsitakse Rundeanalyses eraldi ja selle saab seal tagasi võtta.\n\nJuurdepääs, parandamine, kustutamine, piiramine või ülekandmine: contact@plotting.live. Vastame kuu jooksul. Saate kaevata Norra andmekaitseasutusele.\n\nhttps://analyse.plotting.live/privacy.html';
 
   @override
   String get accountPrivacyNoticeClose => 'Sulge';
