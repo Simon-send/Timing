@@ -739,7 +739,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get accountPrivacyAcknowledgement =>
-      'J’ai lu la notice de confidentialité du compte commun à Rundeanalyse et EQ Results.';
+      'J’ai lu la notice de confidentialité du compte commun à Rundeanalyse et Results.';
 
   @override
   String get accountPrivacyNoticeTitle => 'Confidentialité du compte';

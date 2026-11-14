@@ -735,7 +735,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get accountPrivacyAcknowledgement =>
-      'I have read the privacy notice for the shared Rundeanalyse and EQ Results account.';
+      'I have read the privacy notice for the shared Rundeanalyse and Results account.';
 
   @override
   String get accountPrivacyNoticeTitle => 'Account privacy notice';

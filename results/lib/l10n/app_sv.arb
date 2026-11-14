@@ -373,7 +373,7 @@
   "comparisonMassStart": "Masstart",
   "comparisonSuperSprint": "Supersprint",
   "comparisonRelay": "Stafett",
-  "accountPrivacyAcknowledgement": "Jag har läst integritetsinformationen för det gemensamma kontot i Rundeanalyse och EQ Results.",
+  "accountPrivacyAcknowledgement": "Jag har läst integritetsinformationen för det gemensamma kontot i Rundeanalyse och Results.",
   "accountPrivacyNoticeTitle": "Kontots integritet",
   "accountPrivacyNoticeBody": "Hernes Technologies (organisationsnummer 938426074) är personuppgiftsansvarig. E-post, konto-ID och eventuellt namn från inloggningsleverantören används för det gemensamma konto du begär. Firebase/Google Cloud tillhandahåller inloggning och lagring. Firebase Authentication behandlar data i USA. Kontouppgifter behålls tills kontot raderas.\n\nRegistrering ger inte samtycke till aktivitets-, GPS- eller pulsimport. Det begärs separat i Rundeanalyse och kan återkallas där.\n\nBegär tillgång, rättelse, radering, begränsning eller dataportabilitet på contact@plotting.live. Vi svarar inom en månad. Du kan klaga hos norska Datatilsynet.\n\nhttps://analyse.plotting.live/privacy.html",
   "accountPrivacyNoticeClose": "Stäng"

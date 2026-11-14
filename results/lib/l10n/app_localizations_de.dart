@@ -740,7 +740,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get accountPrivacyAcknowledgement =>
-      'Ich habe die Datenschutzhinweise für das gemeinsame Konto von Rundeanalyse und EQ Results gelesen.';
+      'Ich habe die Datenschutzhinweise für das gemeinsame Konto von Rundeanalyse und Results gelesen.';
 
   @override
   String get accountPrivacyNoticeTitle => 'Datenschutz für das Konto';

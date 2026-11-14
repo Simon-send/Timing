@@ -741,7 +741,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get accountPrivacyAcknowledgement =>
-      'He leído el aviso de privacidad de la cuenta compartida de Rundeanalyse y EQ Results.';
+      'He leído el aviso de privacidad de la cuenta compartida de Rundeanalyse y Results.';
 
   @override
   String get accountPrivacyNoticeTitle => 'Privacidad de la cuenta';
