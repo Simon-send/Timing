@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/app_providers.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../app/app_theme.dart';
 import '../data/auth_repository.dart';
 
@@ -24,6 +25,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _passwordController = TextEditingController();
   var _obscurePassword = true;
   var _isBusy = false;
+  var _privacyRead = false;
   String? _error;
   bool _redirectErrorDismissed = false;
 
@@ -98,8 +100,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               label: const Text('Logg inn'),
             ),
             const SizedBox(height: 12),
+            _AccountPrivacyChoice(
+              value: _privacyRead,
+              onChanged: _isBusy
+                  ? null
+                  : (value) => setState(() => _privacyRead = value),
+            ),
             OutlinedButton.icon(
-              onPressed: _isBusy ? null : _signInWithGoogle,
+              onPressed: _isBusy || !_privacyRead ? null : _signInWithGoogle,
               icon: const Icon(Icons.account_circle_outlined),
               label: const Text('Fortsett med Google'),
             ),
@@ -140,7 +148,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _signInWithGoogle() async {
-    if (_isBusy) return;
+    if (_isBusy || !_privacyRead) return;
     _redirectErrorDismissed = true;
     setState(() {
       _isBusy = true;
@@ -293,6 +301,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _confirmPasswordController = TextEditingController();
   var _isBusy = false;
   var _created = false;
+  var _privacyRead = false;
   var _obscurePassword = true;
   String? _error;
 
@@ -377,13 +386,19 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                 ? 'Passordene er ikke like.'
                 : null,
           ),
+          _AccountPrivacyChoice(
+            value: _privacyRead,
+            onChanged: _isBusy
+                ? null
+                : (value) => setState(() => _privacyRead = value),
+          ),
           if (_error != null) ...[
             const SizedBox(height: 12),
             _AuthNotice(text: _error!, danger: true),
           ],
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: _isBusy ? null : _createAccount,
+            onPressed: _isBusy || !_privacyRead ? null : _createAccount,
             icon: _isBusy
                 ? const SizedBox.square(
                     dimension: 18,
@@ -404,7 +419,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   }
 
   Future<void> _createAccount() async {
-    if (_isBusy) return;
+    if (_isBusy || !_privacyRead) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() {
       _isBusy = true;
@@ -633,4 +648,51 @@ String authErrorMessage(Object error) {
     return 'Denne innloggingsmetoden er ikke tilgjengelig på denne enheten.';
   }
   return 'Noe gikk galt. Prøv igjen.';
+}
+
+class _AccountPrivacyChoice extends StatelessWidget {
+  const _AccountPrivacyChoice({required this.value, required this.onChanged});
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      CheckboxListTile(
+        value: value,
+        onChanged: onChanged == null
+            ? null
+            : (value) => onChanged!(value == true),
+        title: Text(AppLocalizations.of(context).accountPrivacyAcknowledgement),
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: EdgeInsets.zero,
+      ),
+      TextButton.icon(
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            scrollable: true,
+            title: Text(AppLocalizations.of(context).accountPrivacyNoticeTitle),
+            content: SizedBox(
+              width: 480,
+              child: SelectableText(
+                AppLocalizations.of(context).accountPrivacyNoticeBody,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  AppLocalizations.of(context).accountPrivacyNoticeClose,
+                ),
+              ),
+            ],
+          ),
+        ),
+        icon: const Icon(Icons.privacy_tip_outlined),
+        label: Text(AppLocalizations.of(context).accountPrivacyNoticeTitle),
+      ),
+    ],
+  );
 }

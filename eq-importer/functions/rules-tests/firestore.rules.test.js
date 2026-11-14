@@ -372,3 +372,25 @@ test("Rundeanalyse collections are only available through callable Functions", a
   }
   await assertFails(getDocs(collection(guest, "rundeanalyseEvents")));
 });
+
+
+test("account deletion barrier blocks old verified tokens from recreating private data", async () => {
+  const owner = testEnvironment.authenticatedContext("owner", {email_verified: true}).firestore();
+  const other = testEnvironment.authenticatedContext("other", {email_verified: true}).firestore();
+  const value = {athleteId: "athlete:1", athleteName: "Test", updatedAt: new Date()};
+  await assertSucceeds(setDoc(doc(owner, "users/owner/favoriteAthletes/athlete:1"), value));
+  await testEnvironment.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), "rundeanalyseAccountDeletions/owner"), {status: "deleting"});
+  });
+  // Context/token was issued before the deletion request, but cannot read,
+  // modify, or recreate a private document once the barrier exists.
+  await assertFails(getDoc(doc(owner, "users/owner/favoriteAthletes/athlete:1")));
+  await assertFails(setDoc(doc(owner, "users/owner/favoriteAthletes/athlete:2"), {...value, athleteId: "athlete:2"}));
+  await assertFails(setDoc(doc(owner, "users/owner/profile/main"), {athleteLinkOnboardingCompleted: true}));
+  await assertFails(setDoc(doc(owner, "users/owner/settings/app"), {
+    localeCode: "nb", tableDensity: "comfortable", themeVariant: "nordicDark",
+  }));
+  await assertFails(deleteDoc(doc(owner, "rundeanalyseAccountDeletions/owner")));
+  await assertSucceeds(setDoc(doc(other, "users/other/favoriteAthletes/athlete:1"), value));
+  await assertSucceeds(getDoc(doc(owner, "events/1")));
+});

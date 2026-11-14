@@ -7,6 +7,7 @@ import 'package:results/app/app_providers.dart';
 import 'package:results/app/app_theme.dart';
 import 'package:results/features/auth/data/auth_repository.dart';
 import 'package:results/features/auth/presentation/auth_pages.dart';
+import 'package:results/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeAuth implements AuthRepository {
@@ -57,6 +58,8 @@ void main() {
           ],
           child: MaterialApp(
             theme: buildAppTheme(AppThemeVariant.nordicDark),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: const LoginPage(),
           ),
         ),
@@ -64,6 +67,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.byType(TextFormField), findsNWidgets(2));
+      final google = find.widgetWithText(OutlinedButton, 'Fortsett med Google');
+      expect(tester.widget<OutlinedButton>(google).onPressed, isNull);
+      await tester.ensureVisible(find.byType(CheckboxListTile));
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+      expect(tester.widget<OutlinedButton>(google).onPressed, isNotNull);
+      expect(tester.takeException(), isNull);
     });
   }
   test(
@@ -125,6 +135,8 @@ void main() {
         ],
         child: MaterialApp(
           theme: buildAppTheme(AppThemeVariant.nordicDark),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: const LoginPage(),
         ),
       ),
