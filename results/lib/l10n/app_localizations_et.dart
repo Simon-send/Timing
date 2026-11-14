@@ -737,7 +737,7 @@ class AppLocalizationsEt extends AppLocalizations {
 
   @override
   String get accountPrivacyAcknowledgement =>
-      'Olen lugenud Rundeanalyse ja EQ Resultsi ühise konto privaatsusteavet.';
+      'Olen lugenud Rundeanalyse ja Resultsi ühise konto privaatsusteavet.';
 
   @override
   String get accountPrivacyNoticeTitle => 'Konto privaatsus';

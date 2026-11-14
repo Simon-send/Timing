@@ -735,7 +735,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get accountPrivacyAcknowledgement =>
-      'Я прочитал(а) уведомление о конфиденциальности общей учётной записи Rundeanalyse и EQ Results.';
+      'Я прочитал(а) уведомление о конфиденциальности общей учётной записи Rundeanalyse и Results.';
 
   @override
   String get accountPrivacyNoticeTitle => 'Конфиденциальность учётной записи';

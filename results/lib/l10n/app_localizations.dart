@@ -1364,7 +1364,7 @@ abstract class AppLocalizations {
   /// No description provided for @accountPrivacyAcknowledgement.
   ///
   /// In en, this message translates to:
-  /// **'I have read the privacy notice for the shared Rundeanalyse and EQ Results account.'**
+  /// **'I have read the privacy notice for the shared Rundeanalyse and Results account.'**
   String get accountPrivacyAcknowledgement;
 
   /// No description provided for @accountPrivacyNoticeTitle.

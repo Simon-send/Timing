@@ -741,7 +741,7 @@ class AppLocalizationsFi extends AppLocalizations {
 
   @override
   String get accountPrivacyAcknowledgement =>
-      'Olen lukenut Rundeanalysen ja EQ Resultsin yhteisen tilin tietosuojailmoituksen.';
+      'Olen lukenut Rundeanalysen ja Resultsin yhteisen tilin tietosuojailmoituksen.';
 
   @override
   String get accountPrivacyNoticeTitle => 'Tilin tietosuoja';

@@ -737,7 +737,7 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get accountPrivacyAcknowledgement =>
-      'Jag har läst integritetsinformationen för det gemensamma kontot i Rundeanalyse och EQ Results.';
+      'Jag har läst integritetsinformationen för det gemensamma kontot i Rundeanalyse och Results.';
 
   @override
   String get accountPrivacyNoticeTitle => 'Kontots integritet';
