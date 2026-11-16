@@ -60,13 +60,14 @@ jobs:
           distribution: temurin
           java-version: "21"
       - run: npm ci
-      - name: Test rules against local demo project
+      - run: npm ci --prefix ../rundeanalyse-functions
+      - name: Test rules and access transactions against local demo project
         run: >-
           ./node_modules/.bin/firebase
           --config ../firebase.test.json
           --project demo-eq-results
           emulators:exec --only firestore
-          "npm run test:rules"
+          "npm run test:rules && node --test ../rundeanalyse-functions/emulator-tests/access-contract.test.js"
 
   flutter:
     name: flutter
@@ -107,4 +108,24 @@ jobs:
           cache: npm
           cache-dependency-path: eq-importer/functions/package-lock.json
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+
+  rundeanalyse-access:
+    name: rundeanalyse-access
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: eq-importer/rundeanalyse-functions
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: eq-importer/rundeanalyse-functions/package-lock.json
+      - run: npm ci
+      - run: npm run verify
       - run: npm audit --omit=dev --audit-level=high
