@@ -744,8 +744,60 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get accountPrivacyNoticeBody =>
-      'Hernes Technologies (organisationsnummer 938426074) är personuppgiftsansvarig. E-post, konto-ID och eventuellt namn från inloggningsleverantören används för det gemensamma konto du begär. Firebase/Google Cloud tillhandahåller inloggning och lagring. Firebase Authentication behandlar data i USA. Kontouppgifter behålls tills kontot raderas.\n\nRegistrering ger inte samtycke till aktivitets-, GPS- eller pulsimport. Det begärs separat i Rundeanalyse och kan återkallas där.\n\nBegär tillgång, rättelse, radering, begränsning eller dataportabilitet på contact@plotting.live. Vi svarar inom en månad. Du kan klaga hos norska Datatilsynet.\n\nhttps://analyse.plotting.live/privacy.html';
+      'Hernes Technologies (organisationsnummer 938426074) är personuppgiftsansvarig. E-post, konto-ID och eventuellt namn från inloggningsleverantören används för det gemensamma konto du begär. Firebase/Google Cloud tillhandahåller inloggning och lagring. Firebase Authentication behandlar data i USA. Kontouppgifter behålls tills kontot raderas.\n\nSamtycke till Polar-import och lagring/delning av aktivitetsdata, inklusive eventuell puls, ges separat och frivilligt vid registrering eller på Min sida. Reklammejl är ett eget frivilligt val, avstängt från början och kan återkallas där. Lokal analys kräver ingen avkryssning.\n\nBegär tillgång, rättelse, radering, begränsning eller dataportabilitet på contact@plotting.live. Vi svarar inom en månad. Du kan klaga hos norska Datatilsynet.\n\nhttps://analyse.plotting.live/privacy.html';
 
   @override
   String get accountPrivacyNoticeClose => 'Stäng';
+
+  @override
+  String get finishSignup => 'Slutför registrering';
+
+  @override
+  String get saveConsentChoices => 'Spara val';
+
+  @override
+  String get consentSaveFailed =>
+      'Valen är inte bekräftat sparade. Uppdatera eller försök igen.';
+
+  @override
+  String get reloadConsentChoices => 'Uppdatera val';
+
+  @override
+  String get consentSettingsTitle => 'Integritet och e-post';
+
+  @override
+  String get consentWithdrawTitle => 'Återkalla molnsamtycke?';
+
+  @override
+  String get consentWithdrawBody =>
+      'Detta stoppar Polar-import och ny lagring/delning och raderar sparade analyser, grupper du äger med alla bidrag och dina kontokopplade bidrag i andra grupper. Konto, inställningar och e-postval behålls. Detta kan inte ångras.';
+
+  @override
+  String get consentWithdrawConfirm => 'Återkalla och radera aktivitetsdata';
+
+  @override
+  String get consentCleanupPending =>
+      'Samtycket är återkallat men raderingen är inte klar. Fortsätt rensningen.';
+
+  @override
+  String get consentResumeCleanup => 'Fortsätt radering';
+
+  @override
+  String get consentSaved => 'Valen har sparats.';
+
+  @override
+  String get consentEmailRegistrationFailed =>
+      'Kontot har skapats och bekräftelsemejl skickats, men valen är inte bekräftat sparade. Bekräfta e-post och logga in för att slutföra registreringen.';
+
+  @override
+  String get signupPrivacy =>
+      'Jag har läst integritetsinformationen för det gemensamma kontot.';
+
+  @override
+  String get signupCloud =>
+      'Jag samtycker uttryckligen till Polar-import och att spara/dela aktivitetsfiler när jag ber om det, inklusive GPS och puls som kan vara hälsouppgifter. Valfritt; lokal analys fungerar utan.';
+
+  @override
+  String get signupMarketing =>
+      'Jag vill få nyheter och erbjudanden från Hernes Technologies om Rundeanalyse och Results via e-post. Valfritt, kan återkallas på Mina sidor.';
 }

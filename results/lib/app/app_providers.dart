@@ -1,3 +1,5 @@
+import '../features/consents/data/account_consent_repository.dart';
+import '../features/consents/data/signup_pending.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -37,7 +39,19 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return FirebaseAuthRepository(auth: ref.watch(firebaseAuthProvider));
+  return FirebaseAuthRepository(
+    auth: ref.watch(firebaseAuthProvider),
+    onGoogleUserCreated: (uid) async {
+      markSignupPending(uid, 'results-google');
+      try {
+        await ref
+            .read(accountConsentRepositoryProvider)
+            .begin(uid, 'results-google');
+      } on Object {
+        /* Own-UID marker retains unfinished registration after network failure. */
+      }
+    },
+  );
 });
 
 final settingsSessionTrackerProvider = Provider<SettingsSessionTracker>((ref) {
@@ -70,7 +84,23 @@ final googleRedirectProvider = FutureProvider<User?>(retry: (_, _) => null, (
     if (pending && user == null && repository.currentUser == null) {
       throw FirebaseAuthException(code: 'redirect-cancelled-by-user');
     }
-    return user ?? (pending ? repository.currentUser : null);
+    final result = user ?? (pending ? repository.currentUser : null);
+    if (result != null && repository.currentUser?.uid == result.uid) {
+      try {
+        if ((await ref
+                .read(accountConsentRepositoryProvider)
+                .status(result.uid))
+            .registrationPending) {
+          markSignupPending(
+            result.uid,
+            pendingSignupSource(result.uid) ?? 'results-google',
+          );
+        }
+      } on Object {
+        /* Failed reads never create a subscription or assume a legacy account is new. */
+      }
+    }
+    return result;
   } finally {
     if (pending) await preferences.remove(key);
   }

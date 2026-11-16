@@ -3,6 +3,9 @@ import 'package:go_router/go_router.dart';
 
 import '../features/athlete/presentation/athlete_detail_page.dart';
 import '../features/auth/presentation/auth_pages.dart';
+import '../features/consents/presentation/signup_consent_page.dart';
+import '../features/consents/data/signup_pending.dart';
+import 'app_providers.dart';
 import '../features/events/presentation/events_page.dart';
 import '../features/profile/presentation/athlete_link_onboarding_page.dart';
 import '../features/profile/presentation/me_page.dart';
@@ -12,8 +15,21 @@ import '../features/results/presentation/results_page.dart';
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/events',
+    redirect: (context, state) {
+      final uid = ref.read(authRepositoryProvider).currentUser?.uid;
+      if (uid != null &&
+          pendingSignupSource(uid) != null &&
+          const {'/me', '/connect-athlete'}.contains(state.uri.path)) {
+        return '/signup-consents';
+      }
+      return null;
+    },
     routes: [
       GoRoute(path: '/', redirect: (context, state) => '/events'),
+      GoRoute(
+        path: '/signup-consents',
+        builder: (context, state) => const SignupConsentPage(),
+      ),
       GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(
         path: '/forgot-password',

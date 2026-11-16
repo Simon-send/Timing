@@ -12,6 +12,7 @@ import '../../../core/widgets/loading_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/presentation/account_menu.dart';
 import '../../auth/presentation/login_button.dart';
+import '../../consents/presentation/consent_settings_dialog.dart';
 import '../../events/domain/result_event.dart';
 import '../../results/presentation/result_locations.dart';
 import '../../results/presentation/shooting_selection_panel.dart';
@@ -42,22 +43,38 @@ class MePage extends ConsumerWidget {
         icon: const Icon(Icons.arrow_back),
       ),
       actions: const [AccountMenu(), SettingsMenu()],
-      child: authState.when(
-        loading: () =>
-            const ShellPanel(child: LoadingState(label: 'Sjekker innlogging')),
-        error: (error, _) => ShellPanel(
-          child: ErrorState(
-            title: 'Kunne ikke lese konto',
-            error: error,
-            onRetry: () => refreshAppData(ref),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (user != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => showConsentSettings(context, user.uid),
+                child: Text(AppLocalizations.of(context).consentSettingsTitle),
+              ),
+            ),
+          Expanded(
+            child: authState.when(
+              loading: () => const ShellPanel(
+                child: LoadingState(label: 'Sjekker innlogging'),
+              ),
+              error: (error, _) => ShellPanel(
+                child: ErrorState(
+                  title: 'Kunne ikke lese konto',
+                  error: error,
+                  onRetry: () => refreshAppData(ref),
+                ),
+              ),
+              data: (user) {
+                if (user == null) {
+                  return const ShellPanel(child: _SignedOutPanel());
+                }
+                return _LoggedInMeContent(user: user);
+              },
+            ),
           ),
-        ),
-        data: (user) {
-          if (user == null) {
-            return const ShellPanel(child: _SignedOutPanel());
-          }
-          return _LoggedInMeContent(user: user);
-        },
+        ],
       ),
     );
   }

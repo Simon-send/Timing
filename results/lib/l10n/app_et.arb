@@ -375,6 +375,21 @@
   "comparisonRelay": "Teatesõit",
   "accountPrivacyAcknowledgement": "Olen lugenud Rundeanalyse ja Resultsi ühise konto privaatsusteavet.",
   "accountPrivacyNoticeTitle": "Konto privaatsus",
-  "accountPrivacyNoticeBody": "Vastutav töötleja on Hernes Technologies (registrinumber 938426074). E-posti, konto ID-d ja sisselogimisteenuse antud nime kasutatakse soovitud ühise konto pakkumiseks. Firebase/Google Cloud pakuvad autentimist ja salvestust. Firebase Authentication töötleb andmeid USAs. Kontoandmed säilivad konto kustutamiseni.\n\nRegistreerumine ei anna nõusolekut tegevus-, GPS- ega pulsiandmete importimiseks. Seda küsitakse Rundeanalyses eraldi ja selle saab seal tagasi võtta.\n\nJuurdepääs, parandamine, kustutamine, piiramine või ülekandmine: contact@plotting.live. Vastame kuu jooksul. Saate kaevata Norra andmekaitseasutusele.\n\nhttps://analyse.plotting.live/privacy.html",
-  "accountPrivacyNoticeClose": "Sulge"
+  "accountPrivacyNoticeBody": "Vastutav töötleja on Hernes Technologies (registrinumber 938426074). E-posti, konto ID-d ja sisselogimisteenuse antud nime kasutatakse soovitud ühise konto pakkumiseks. Firebase/Google Cloud pakuvad autentimist ja salvestust. Firebase Authentication töötleb andmeid USAs. Kontoandmed säilivad konto kustutamiseni.\n\nPolari impordi ja tegevusandmete, sealhulgas pulsi salvestamise/jagamise nõusolek on eraldi vabatahtlik valik registreerimisel või Minu lehel. Reklaamkirjad on eraldi vabatahtlik valik, algul välja lülitatud ja seal tagasi võetav. Kohalik analüüs ei vaja märkeruutu.\n\nJuurdepääs, parandamine, kustutamine, piiramine või ülekandmine: contact@plotting.live. Vastame kuu jooksul. Saate kaevata Norra andmekaitseasutusele.\n\nhttps://analyse.plotting.live/privacy.html",
+  "accountPrivacyNoticeClose": "Sulge",
+  "finishSignup": "Lõpeta registreerimine",
+  "saveConsentChoices": "Salvesta valikud",
+  "consentSaveFailed": "Salvestamine pole kinnitatud. Värskenda või proovi uuesti.",
+  "reloadConsentChoices": "Värskenda valikuid",
+  "consentSettingsTitle": "Privaatsus ja e-post",
+  "consentWithdrawTitle": "Võtta pilvenõusolek tagasi?",
+  "consentWithdrawBody": "See peatab Polari impordi ja uue salvestamise/jagamise ning kustutab analüüsid, sinu rühmad koos kõigi panustega ja sinu kontoga seotud panused muudes rühmades. Konto, sätted ja e-posti valik säilivad. Seda ei saa tagasi võtta.",
+  "consentWithdrawConfirm": "Võta tagasi ja kustuta tegevusandmed",
+  "consentCleanupPending": "Nõusolek on tagasi võetud, kuid kustutamine on pooleli. Jätka puhastust.",
+  "consentResumeCleanup": "Jätka kustutamist",
+  "consentSaved": "Valikud on salvestatud.",
+  "consentEmailRegistrationFailed": "Konto loodi ja kinnituskiri saadeti, kuid valikute salvestamine pole kinnitatud. Kinnita e-post ja logi sisse, et registreerimine lõpetada.",
+  "signupPrivacy": "Olen lugenud ühise konto privaatsusteavet.",
+  "signupCloud": "Annan sõnaselge nõusoleku Polari impordiks ja minu soovitud tegevusfailide salvestamiseks/jagamiseks, sh GPS ja pulss võimalike terviseandmetena. Vabatahtlik; kohalik analüüs töötab ka ilma.",
+  "signupMarketing": "Soovin Hernes Technologiesilt e-postiga uudiseid ja pakkumisi Rundeanalyse ja Resultsi kohta. Vabatahtlik, tagasi võetav Minu lehtedel."
 }

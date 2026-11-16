@@ -6,6 +6,7 @@ import 'app_providers.dart';
 import 'app_router.dart';
 import 'app_theme.dart';
 import '../features/settings/presentation/settings_sync_banner.dart';
+import '../features/consents/data/signup_pending.dart';
 
 class ResultsApp extends ConsumerStatefulWidget {
   const ResultsApp({super.key});
@@ -57,7 +58,10 @@ class _ResultsAppState extends ConsumerState<ResultsApp>
       final path = router.routeInformationProvider.value.uri.path;
       if (next.asData?.value != null &&
           const {'/login', '/register', '/connect-athlete'}.contains(path)) {
-        router.go('/events');
+        final uid = next.asData!.value!.uid;
+        router.go(
+          pendingSignupSource(uid) != null ? '/signup-consents' : '/events',
+        );
       }
     });
 

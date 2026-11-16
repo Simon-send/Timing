@@ -17,7 +17,7 @@ class LoadingState extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 12),
-          Text(label),
+          Flexible(child: Text(label)),
         ],
       ),
     );

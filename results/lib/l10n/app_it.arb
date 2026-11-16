@@ -375,6 +375,21 @@
   "comparisonRelay": "Staffetta",
   "accountPrivacyAcknowledgement": "Ho letto l’informativa privacy per l’account condiviso di Rundeanalyse ed Results.",
   "accountPrivacyNoticeTitle": "Privacy dell’account",
-  "accountPrivacyNoticeBody": "Hernes Technologies (numero organizzativo 938426074) è il titolare. E-mail, ID ed eventuale nome dal servizio di accesso servono a fornire l’account condiviso richiesto. Firebase/Google Cloud offrono autenticazione e archiviazione. Firebase Authentication tratta i dati negli Stati Uniti. I dati restano fino all’eliminazione dell’account.\n\nLa registrazione non autorizza importazioni di attività, GPS o frequenza cardiaca. Il consenso viene richiesto separatamente in Rundeanalyse e può essere revocato lì.\n\nAccesso, rettifica, cancellazione, limitazione o portabilità: contact@plotting.live. Risposta entro un mese. Puoi reclamare all’autorità norvegese per la protezione dei dati.\n\nhttps://analyse.plotting.live/privacy.html",
-  "accountPrivacyNoticeClose": "Chiudi"
+  "accountPrivacyNoticeBody": "Hernes Technologies (numero organizzativo 938426074) è il titolare. E-mail, ID ed eventuale nome dal servizio di accesso servono a fornire l’account condiviso richiesto. Firebase/Google Cloud offrono autenticazione e archiviazione. Firebase Authentication tratta i dati negli Stati Uniti. I dati restano fino all’eliminazione dell’account.\n\nIl consenso per importazioni Polar e salvataggio/condivisione delle attività, inclusa la frequenza cardiaca, è separato e facoltativo alla registrazione o in La mia pagina. Le e-mail pubblicitarie sono una scelta distinta facoltativa, inizialmente disattivata e revocabile lì. L’analisi locale non richiede caselle.\n\nAccesso, rettifica, cancellazione, limitazione o portabilità: contact@plotting.live. Risposta entro un mese. Puoi reclamare all’autorità norvegese per la protezione dei dati.\n\nhttps://analyse.plotting.live/privacy.html",
+  "accountPrivacyNoticeClose": "Chiudi",
+  "finishSignup": "Completa registrazione",
+  "saveConsentChoices": "Salva scelte",
+  "consentSaveFailed": "Il salvataggio non è confermato. Aggiorna o riprova.",
+  "reloadConsentChoices": "Aggiorna scelte",
+  "consentSettingsTitle": "Privacy ed e-mail",
+  "consentWithdrawTitle": "Revocare il consenso al cloud?",
+  "consentWithdrawBody": "Questo interrompe importazioni Polar e nuovi salvataggi/condivisioni ed elimina analisi, gruppi di tua proprietà con tutti i contributi e i tuoi contributi collegati all’account in altri gruppi. Account, impostazioni e scelta e-mail restano. L’azione è irreversibile.",
+  "consentWithdrawConfirm": "Revoca ed elimina dati attività",
+  "consentCleanupPending": "Il consenso è revocato, ma l’eliminazione non è completa. Continua la pulizia.",
+  "consentResumeCleanup": "Continua eliminazione",
+  "consentSaved": "Scelte salvate.",
+  "consentEmailRegistrationFailed": "Account creato ed e-mail di verifica inviata, ma il salvataggio delle scelte non è confermato. Verifica l’e-mail e accedi per completare la registrazione.",
+  "signupPrivacy": "Ho letto l’informativa privacy dell’account condiviso.",
+  "signupCloud": "Acconsento espressamente alle importazioni Polar e al salvataggio/condivisione richiesti dei file di attività, inclusi GPS e frequenza cardiaca come possibili dati sanitari. Facoltativo; l’analisi locale resta disponibile.",
+  "signupMarketing": "Desidero ricevere via e-mail notizie e offerte di Hernes Technologies su Rundeanalyse e Results. Facoltativo, revocabile in Le mie pagine."
 }

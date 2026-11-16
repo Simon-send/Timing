@@ -742,8 +742,60 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get accountPrivacyNoticeBody =>
-      'Оператор — Hernes Technologies (регистрационный номер 938426074). Электронная почта, ID и имя от службы входа используются для предоставления запрошенной общей учётной записи. Firebase/Google Cloud обеспечивают вход и хранение. Firebase Authentication обрабатывает данные в США. Данные хранятся до удаления учётной записи.\n\nРегистрация не означает согласия на импорт активности, GPS или пульса. Такое согласие запрашивается отдельно в Rundeanalyse и может быть отозвано там.\n\nДоступ, исправление, удаление, ограничение или переносимость: contact@plotting.live. Ответ в течение месяца. Можно пожаловаться в норвежский орган защиты данных.\n\nhttps://analyse.plotting.live/privacy.html';
+      'Оператор — Hernes Technologies (регистрационный номер 938426074). Электронная почта, ID и имя от службы входа используются для предоставления запрошенной общей учётной записи. Firebase/Google Cloud обеспечивают вход и хранение. Firebase Authentication обрабатывает данные в США. Данные хранятся до удаления учётной записи.\n\nСогласие на импорт Polar и сохранение/публикацию активности, включая пульс, отдельно и добровольно при регистрации или на Моей странице. Рекламные письма — отдельный добровольный выбор, изначально выключенный и отменяемый там же. Локальный анализ не требует флажков.\n\nДоступ, исправление, удаление, ограничение или переносимость: contact@plotting.live. Ответ в течение месяца. Можно пожаловаться в норвежский орган защиты данных.\n\nhttps://analyse.plotting.live/privacy.html';
 
   @override
   String get accountPrivacyNoticeClose => 'Закрыть';
+
+  @override
+  String get finishSignup => 'Завершить регистрацию';
+
+  @override
+  String get saveConsentChoices => 'Сохранить выбор';
+
+  @override
+  String get consentSaveFailed =>
+      'Сохранение не подтверждено. Обновите или повторите попытку.';
+
+  @override
+  String get reloadConsentChoices => 'Обновить выбор';
+
+  @override
+  String get consentSettingsTitle => 'Конфиденциальность и почта';
+
+  @override
+  String get consentWithdrawTitle => 'Отозвать согласие на облако?';
+
+  @override
+  String get consentWithdrawBody =>
+      'Это остановит импорт Polar и новое сохранение/публикацию и удалит анализы, ваши группы со всеми материалами и ваши привязанные к аккаунту материалы в других группах. Аккаунт, настройки и выбор рассылки сохранятся. Отменить это нельзя.';
+
+  @override
+  String get consentWithdrawConfirm => 'Отозвать и удалить данные активности';
+
+  @override
+  String get consentCleanupPending =>
+      'Согласие отозвано, но удаление не завершено. Продолжите очистку.';
+
+  @override
+  String get consentResumeCleanup => 'Продолжить удаление';
+
+  @override
+  String get consentSaved => 'Выбор сохранён.';
+
+  @override
+  String get consentEmailRegistrationFailed =>
+      'Аккаунт создан, письмо подтверждения отправлено, но сохранение выбора не подтверждено. Подтвердите почту и войдите для завершения регистрации.';
+
+  @override
+  String get signupPrivacy =>
+      'Я прочитал(а) уведомление о конфиденциальности общей учётной записи.';
+
+  @override
+  String get signupCloud =>
+      'Я явно соглашаюсь на импорт Polar и запрошенное мной сохранение/публикацию файлов активности, включая GPS и пульс как возможные данные о здоровье. Необязательно; локальный анализ доступен без согласия.';
+
+  @override
+  String get signupMarketing =>
+      'Я хочу получать по электронной почте новости и предложения Hernes Technologies о Rundeanalyse и Results. Необязательно, можно отозвать в Мои страницы.';
 }

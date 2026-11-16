@@ -2501,6 +2501,7 @@ class _FakeAuthRepository implements AuthRepository {
   Future<void> createUserWithEmail({
     required String email,
     required String password,
+    Future<void> Function(String uid)? onCreated,
   }) async {}
 
   @override
@@ -2512,6 +2513,7 @@ class _FakeAuthRepository implements AuthRepository {
   Future<void> signInWithEmail({
     required String email,
     required String password,
+    Future<void> Function(String uid)? onCreated,
   }) async {}
 
   @override

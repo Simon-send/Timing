@@ -744,8 +744,60 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get accountPrivacyNoticeBody =>
-      'Hernes Technologies (numero organizzativo 938426074) è il titolare. E-mail, ID ed eventuale nome dal servizio di accesso servono a fornire l’account condiviso richiesto. Firebase/Google Cloud offrono autenticazione e archiviazione. Firebase Authentication tratta i dati negli Stati Uniti. I dati restano fino all’eliminazione dell’account.\n\nLa registrazione non autorizza importazioni di attività, GPS o frequenza cardiaca. Il consenso viene richiesto separatamente in Rundeanalyse e può essere revocato lì.\n\nAccesso, rettifica, cancellazione, limitazione o portabilità: contact@plotting.live. Risposta entro un mese. Puoi reclamare all’autorità norvegese per la protezione dei dati.\n\nhttps://analyse.plotting.live/privacy.html';
+      'Hernes Technologies (numero organizzativo 938426074) è il titolare. E-mail, ID ed eventuale nome dal servizio di accesso servono a fornire l’account condiviso richiesto. Firebase/Google Cloud offrono autenticazione e archiviazione. Firebase Authentication tratta i dati negli Stati Uniti. I dati restano fino all’eliminazione dell’account.\n\nIl consenso per importazioni Polar e salvataggio/condivisione delle attività, inclusa la frequenza cardiaca, è separato e facoltativo alla registrazione o in La mia pagina. Le e-mail pubblicitarie sono una scelta distinta facoltativa, inizialmente disattivata e revocabile lì. L’analisi locale non richiede caselle.\n\nAccesso, rettifica, cancellazione, limitazione o portabilità: contact@plotting.live. Risposta entro un mese. Puoi reclamare all’autorità norvegese per la protezione dei dati.\n\nhttps://analyse.plotting.live/privacy.html';
 
   @override
   String get accountPrivacyNoticeClose => 'Chiudi';
+
+  @override
+  String get finishSignup => 'Completa registrazione';
+
+  @override
+  String get saveConsentChoices => 'Salva scelte';
+
+  @override
+  String get consentSaveFailed =>
+      'Il salvataggio non è confermato. Aggiorna o riprova.';
+
+  @override
+  String get reloadConsentChoices => 'Aggiorna scelte';
+
+  @override
+  String get consentSettingsTitle => 'Privacy ed e-mail';
+
+  @override
+  String get consentWithdrawTitle => 'Revocare il consenso al cloud?';
+
+  @override
+  String get consentWithdrawBody =>
+      'Questo interrompe importazioni Polar e nuovi salvataggi/condivisioni ed elimina analisi, gruppi di tua proprietà con tutti i contributi e i tuoi contributi collegati all’account in altri gruppi. Account, impostazioni e scelta e-mail restano. L’azione è irreversibile.';
+
+  @override
+  String get consentWithdrawConfirm => 'Revoca ed elimina dati attività';
+
+  @override
+  String get consentCleanupPending =>
+      'Il consenso è revocato, ma l’eliminazione non è completa. Continua la pulizia.';
+
+  @override
+  String get consentResumeCleanup => 'Continua eliminazione';
+
+  @override
+  String get consentSaved => 'Scelte salvate.';
+
+  @override
+  String get consentEmailRegistrationFailed =>
+      'Account creato ed e-mail di verifica inviata, ma il salvataggio delle scelte non è confermato. Verifica l’e-mail e accedi per completare la registrazione.';
+
+  @override
+  String get signupPrivacy =>
+      'Ho letto l’informativa privacy dell’account condiviso.';
+
+  @override
+  String get signupCloud =>
+      'Acconsento espressamente alle importazioni Polar e al salvataggio/condivisione richiesti dei file di attività, inclusi GPS e frequenza cardiaca come possibili dati sanitari. Facoltativo; l’analisi locale resta disponibile.';
+
+  @override
+  String get signupMarketing =>
+      'Desidero ricevere via e-mail notizie e offerte di Hernes Technologies su Rundeanalyse e Results. Facoltativo, revocabile in Le mie pagine.';
 }

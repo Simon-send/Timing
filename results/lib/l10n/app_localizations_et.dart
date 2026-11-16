@@ -744,8 +744,59 @@ class AppLocalizationsEt extends AppLocalizations {
 
   @override
   String get accountPrivacyNoticeBody =>
-      'Vastutav töötleja on Hernes Technologies (registrinumber 938426074). E-posti, konto ID-d ja sisselogimisteenuse antud nime kasutatakse soovitud ühise konto pakkumiseks. Firebase/Google Cloud pakuvad autentimist ja salvestust. Firebase Authentication töötleb andmeid USAs. Kontoandmed säilivad konto kustutamiseni.\n\nRegistreerumine ei anna nõusolekut tegevus-, GPS- ega pulsiandmete importimiseks. Seda küsitakse Rundeanalyses eraldi ja selle saab seal tagasi võtta.\n\nJuurdepääs, parandamine, kustutamine, piiramine või ülekandmine: contact@plotting.live. Vastame kuu jooksul. Saate kaevata Norra andmekaitseasutusele.\n\nhttps://analyse.plotting.live/privacy.html';
+      'Vastutav töötleja on Hernes Technologies (registrinumber 938426074). E-posti, konto ID-d ja sisselogimisteenuse antud nime kasutatakse soovitud ühise konto pakkumiseks. Firebase/Google Cloud pakuvad autentimist ja salvestust. Firebase Authentication töötleb andmeid USAs. Kontoandmed säilivad konto kustutamiseni.\n\nPolari impordi ja tegevusandmete, sealhulgas pulsi salvestamise/jagamise nõusolek on eraldi vabatahtlik valik registreerimisel või Minu lehel. Reklaamkirjad on eraldi vabatahtlik valik, algul välja lülitatud ja seal tagasi võetav. Kohalik analüüs ei vaja märkeruutu.\n\nJuurdepääs, parandamine, kustutamine, piiramine või ülekandmine: contact@plotting.live. Vastame kuu jooksul. Saate kaevata Norra andmekaitseasutusele.\n\nhttps://analyse.plotting.live/privacy.html';
 
   @override
   String get accountPrivacyNoticeClose => 'Sulge';
+
+  @override
+  String get finishSignup => 'Lõpeta registreerimine';
+
+  @override
+  String get saveConsentChoices => 'Salvesta valikud';
+
+  @override
+  String get consentSaveFailed =>
+      'Salvestamine pole kinnitatud. Värskenda või proovi uuesti.';
+
+  @override
+  String get reloadConsentChoices => 'Värskenda valikuid';
+
+  @override
+  String get consentSettingsTitle => 'Privaatsus ja e-post';
+
+  @override
+  String get consentWithdrawTitle => 'Võtta pilvenõusolek tagasi?';
+
+  @override
+  String get consentWithdrawBody =>
+      'See peatab Polari impordi ja uue salvestamise/jagamise ning kustutab analüüsid, sinu rühmad koos kõigi panustega ja sinu kontoga seotud panused muudes rühmades. Konto, sätted ja e-posti valik säilivad. Seda ei saa tagasi võtta.';
+
+  @override
+  String get consentWithdrawConfirm => 'Võta tagasi ja kustuta tegevusandmed';
+
+  @override
+  String get consentCleanupPending =>
+      'Nõusolek on tagasi võetud, kuid kustutamine on pooleli. Jätka puhastust.';
+
+  @override
+  String get consentResumeCleanup => 'Jätka kustutamist';
+
+  @override
+  String get consentSaved => 'Valikud on salvestatud.';
+
+  @override
+  String get consentEmailRegistrationFailed =>
+      'Konto loodi ja kinnituskiri saadeti, kuid valikute salvestamine pole kinnitatud. Kinnita e-post ja logi sisse, et registreerimine lõpetada.';
+
+  @override
+  String get signupPrivacy => 'Olen lugenud ühise konto privaatsusteavet.';
+
+  @override
+  String get signupCloud =>
+      'Annan sõnaselge nõusoleku Polari impordiks ja minu soovitud tegevusfailide salvestamiseks/jagamiseks, sh GPS ja pulss võimalike terviseandmetena. Vabatahtlik; kohalik analüüs töötab ka ilma.';
+
+  @override
+  String get signupMarketing =>
+      'Soovin Hernes Technologiesilt e-postiga uudiseid ja pakkumisi Rundeanalyse ja Resultsi kohta. Vabatahtlik, tagasi võetav Minu lehtedel.';
 }
