@@ -748,8 +748,61 @@ class AppLocalizationsFi extends AppLocalizations {
 
   @override
   String get accountPrivacyNoticeBody =>
-      'Rekisterinpitäjä on Hernes Technologies (organisaationumero 938426074). Sähköposti, tilitunnus ja kirjautumispalvelun antama nimi käytetään pyydetyn yhteisen tilin tarjoamiseen. Firebase/Google Cloud tarjoavat kirjautumisen ja tallennuksen. Firebase Authentication käsittelee tietoja Yhdysvalloissa. Tilitiedot säilytetään tilin poistamiseen asti.\n\nRekisteröityminen ei anna suostumusta aktiivisuus-, GPS- tai syketietojen tuontiin. Suostumus pyydetään erikseen Rundeanalysessa ja sen voi perua siellä.\n\nPyydä pääsyä tietoihin, oikaisua, poistamista, rajoittamista tai siirtoa: contact@plotting.live. Vastaamme kuukaudessa. Voit valittaa Norjan tietosuojaviranomaiselle.\n\nhttps://analyse.plotting.live/privacy.html';
+      'Rekisterinpitäjä on Hernes Technologies (organisaationumero 938426074). Sähköposti, tilitunnus ja kirjautumispalvelun antama nimi käytetään pyydetyn yhteisen tilin tarjoamiseen. Firebase/Google Cloud tarjoavat kirjautumisen ja tallennuksen. Firebase Authentication käsittelee tietoja Yhdysvalloissa. Tilitiedot säilytetään tilin poistamiseen asti.\n\nPolar-tuontiin sekä aktiivisuustietojen, myös sykkeen, tallentamiseen/jakamiseen annetaan erillinen vapaaehtoinen suostumus rekisteröityessä tai Omalla sivulla. Mainossähköposti on erillinen vapaaehtoinen valinta, aluksi pois päältä ja peruttavissa siellä. Paikallinen analyysi ei vaadi valintaruutua.\n\nPyydä pääsyä tietoihin, oikaisua, poistamista, rajoittamista tai siirtoa: contact@plotting.live. Vastaamme kuukaudessa. Voit valittaa Norjan tietosuojaviranomaiselle.\n\nhttps://analyse.plotting.live/privacy.html';
 
   @override
   String get accountPrivacyNoticeClose => 'Sulje';
+
+  @override
+  String get finishSignup => 'Viimeistele rekisteröityminen';
+
+  @override
+  String get saveConsentChoices => 'Tallenna valinnat';
+
+  @override
+  String get consentSaveFailed =>
+      'Tallennusta ei ole vahvistettu. Päivitä tai yritä uudelleen.';
+
+  @override
+  String get reloadConsentChoices => 'Päivitä valinnat';
+
+  @override
+  String get consentSettingsTitle => 'Tietosuoja ja sähköposti';
+
+  @override
+  String get consentWithdrawTitle => 'Perutaanko pilvisuostumus?';
+
+  @override
+  String get consentWithdrawBody =>
+      'Tämä estää Polar-tuonnin ja uuden tallennuksen/jakamisen sekä poistaa tallennetut analyysit, omistamasi ryhmät kaikkine aineistoineen ja tiliisi liittyvät aineistot muista ryhmistä. Tili, asetukset ja sähköpostivalinta säilyvät. Tätä ei voi perua.';
+
+  @override
+  String get consentWithdrawConfirm =>
+      'Peru suostumus ja poista aktiivisuustiedot';
+
+  @override
+  String get consentCleanupPending =>
+      'Suostumus on peruttu, mutta poisto on kesken. Jatka siivousta.';
+
+  @override
+  String get consentResumeCleanup => 'Jatka poistoa';
+
+  @override
+  String get consentSaved => 'Valinnat tallennettiin.';
+
+  @override
+  String get consentEmailRegistrationFailed =>
+      'Tili luotiin ja vahvistussähköposti lähetettiin, mutta valintojen tallennusta ei vahvistettu. Vahvista sähköposti ja kirjaudu viimeistelemään rekisteröityminen.';
+
+  @override
+  String get signupPrivacy =>
+      'Olen lukenut yhteisen tilin tietosuojailmoituksen.';
+
+  @override
+  String get signupCloud =>
+      'Annan nimenomaisen suostumukseni Polar-tuontiin ja pyytämääni aktiivisuustiedostojen tallentamiseen/jakamiseen, mukaan lukien GPS ja syke mahdollisina terveystietoina. Vapaaehtoinen; paikallinen analyysi toimii ilmankin.';
+
+  @override
+  String get signupMarketing =>
+      'Haluan Hernes Technologiesilta uutisia ja tarjouksia Rundeanalysesta ja Resultsista sähköpostitse. Vapaaehtoinen, peruttavissa Omilla sivuilla.';
 }

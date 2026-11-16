@@ -38,6 +38,8 @@ class FakeAuth implements AuthRepository {
 
 class FakeUser implements User {
   @override
+  String get uid => "redirect-user";
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -68,10 +70,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byType(TextFormField), findsNWidgets(2));
       final google = find.widgetWithText(OutlinedButton, 'Fortsett med Google');
-      expect(tester.widget<OutlinedButton>(google).onPressed, isNull);
-      await tester.ensureVisible(find.byType(CheckboxListTile));
-      await tester.tap(find.byType(CheckboxListTile));
-      await tester.pumpAndSettle();
+      expect(find.byType(CheckboxListTile), findsNothing);
       expect(tester.widget<OutlinedButton>(google).onPressed, isNotNull);
       expect(tester.takeException(), isNull);
     });

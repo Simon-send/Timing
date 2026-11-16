@@ -18,6 +18,7 @@ abstract class AuthRepository {
   Future<void> createUserWithEmail({
     required String email,
     required String password,
+    Future<void> Function(String uid)? onCreated,
   });
 
   Future<void> sendPasswordResetEmail({required String email});
@@ -26,10 +27,11 @@ abstract class AuthRepository {
 }
 
 class FirebaseAuthRepository implements AuthRepository {
-  FirebaseAuthRepository({FirebaseAuth? auth})
+  FirebaseAuthRepository({FirebaseAuth? auth, this.onGoogleUserCreated})
     : _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseAuth _auth;
+  final Future<void> Function(String uid)? onGoogleUserCreated;
 
   @override
   User? get currentUser => _auth.currentUser;
@@ -51,7 +53,11 @@ class FirebaseAuthRepository implements AuthRepository {
       await _auth.signInWithRedirect(provider);
       return GoogleSignInOutcome.redirectStarted;
     }
-    await _auth.signInWithPopup(provider);
+    final credential = await _auth.signInWithPopup(provider);
+    if (credential.additionalUserInfo?.isNewUser == true &&
+        credential.user != null) {
+      await onGoogleUserCreated?.call(credential.user!.uid);
+    }
     return GoogleSignInOutcome.signedIn;
   }
 
@@ -59,6 +65,10 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<User?> completeGoogleRedirect() async {
     if (!kIsWeb) return null;
     final credential = await _auth.getRedirectResult();
+    if (credential.additionalUserInfo?.isNewUser == true &&
+        credential.user != null) {
+      await onGoogleUserCreated?.call(credential.user!.uid);
+    }
     return credential.user;
   }
 
@@ -82,13 +92,23 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<void> createUserWithEmail({
     required String email,
     required String password,
+    Future<void> Function(String uid)? onCreated,
   }) async {
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
     );
+    Object? consentError;
     try {
+      if (credential.user != null) {
+        try {
+          await onCreated?.call(credential.user!.uid);
+        } on Object {
+          consentError = const RegistrationConsentSaveException();
+        }
+      }
       await credential.user?.sendEmailVerification();
+      if (consentError != null) throw consentError;
     } finally {
       await _auth.signOut();
     }
@@ -133,4 +153,8 @@ class AuthWebEnvironmentException implements Exception {
 
   @override
   String toString() => 'AuthWebEnvironmentException';
+}
+
+class RegistrationConsentSaveException implements Exception {
+  const RegistrationConsentSaveException();
 }
