@@ -312,6 +312,13 @@ class RundeanalyseAccessService {
     this.nowMs = nowMs;
   }
 
+  async _assertAccountsActive(transaction, ...uids) {
+    for (const uid of new Set(uids.filter(Boolean))) {
+      const marker = await transaction.get(this.db.collection("rundeanalyseAccountDeletions").doc(uid));
+      if (marker.exists) throw new AccessError("failed-precondition", "Account deletion has started. Complete deletion before using this account.");
+    }
+  }
+
   _configRef() {
     return this.db.collection(COLLECTIONS.config).doc("default");
   }
@@ -481,6 +488,7 @@ class RundeanalyseAccessService {
 
     const userRef = this._userRef(actor.uid);
     const user = await this.db.runTransaction(async (transaction) => {
+      await this._assertAccountsActive(transaction, request.auth?.uid);
       const userSnapshot = await transaction.get(userRef);
       if (userSnapshot.exists) return safeData(userSnapshot);
       const enrolledUser = this._buildUserDocument({}, actor, nowMs, nowMs);
@@ -541,6 +549,7 @@ class RundeanalyseAccessService {
     const idempotencyRef = this.db.collection(COLLECTIONS.idempotency).doc(idempotencyKey);
 
     return this.db.runTransaction(async (transaction) => {
+      await this._assertAccountsActive(transaction, request.auth?.uid);
       const existingRequest = await transaction.get(idempotencyRef);
       if (existingRequest.exists) {
         const stored = safeData(existingRequest);
@@ -800,6 +809,7 @@ class RundeanalyseAccessService {
     const codeRef = this._codeRef(codeId);
 
     return this.db.runTransaction(async (transaction) => {
+      await this._assertAccountsActive(transaction, request.auth?.uid);
       const [userSnapshot, codeSnapshot] = await Promise.all([
         transaction.get(userRef),
         transaction.get(codeRef),
@@ -855,6 +865,7 @@ class RundeanalyseAccessService {
     const codeRef = this._codeRef(codeId);
 
     return this.db.runTransaction(async (transaction) => {
+      await this._assertAccountsActive(transaction, request.auth?.uid);
       const existing = await transaction.get(codeRef);
       if (existing.exists) {
         throw new AccessError("already-exists", "This analysis code already exists.");
@@ -908,6 +919,7 @@ class RundeanalyseAccessService {
     }
 
     return this.db.runTransaction(async (transaction) => {
+      await this._assertAccountsActive(transaction, request.auth?.uid);
       const snapshot = await transaction.get(configRef);
       const candidate = Object.assign({}, safeData(snapshot));
       const before = normaliseConfig(candidate);
@@ -953,6 +965,7 @@ class RundeanalyseAccessService {
     }
 
     return this.db.runTransaction(async (transaction) => {
+      await this._assertAccountsActive(transaction, request.auth?.uid);
       const existing = await transaction.get(eventRef);
       const current = safeData(existing);
       const event = {
@@ -1014,6 +1027,8 @@ class RundeanalyseAccessService {
     const userRef = this._userRef(target.uid);
 
     return this.db.runTransaction(async (transaction) => {
+      await this._assertAccountsActive(transaction, request.auth?.uid);
+      await this._assertAccountsActive(transaction, target.uid);
       const snapshot = await transaction.get(userRef);
       const user = this._buildUserDocument(safeData(snapshot), targetActor, nowMs, nowMs);
       const before = Number.isInteger(user.annualAccessUntilMs) ? user.annualAccessUntilMs : null;
@@ -1054,6 +1069,8 @@ class RundeanalyseAccessService {
     const targetActor = {uid: target.uid, email: target.email, displayName: target.displayName, token: {}};
     const userRef = this._userRef(target.uid);
     return this.db.runTransaction(async (transaction) => {
+      await this._assertAccountsActive(transaction, request.auth?.uid);
+      await this._assertAccountsActive(transaction, target.uid);
       const snapshot = await transaction.get(userRef);
       const user = this._buildUserDocument(safeData(snapshot), targetActor, nowMs, nowMs);
       const before = user.bonusAnalysesRemaining;
@@ -1087,6 +1104,7 @@ class RundeanalyseAccessService {
       (data.expiresAtMs == null ? null : optionalFutureMillis(data.expiresAtMs, "expiresAtMs", nowMs)) : undefined;
     const codeRef = this._codeRef(codeId);
     return this.db.runTransaction(async (transaction) => {
+      await this._assertAccountsActive(transaction, request.auth?.uid);
       const snapshot = await transaction.get(codeRef);
       if (!snapshot.exists) throw new AccessError("not-found", "The analysis code was not found.");
       const before = safeData(snapshot);
@@ -1116,6 +1134,7 @@ class RundeanalyseAccessService {
   }
 
   async getAdminUsage(request) {
+    await this.db.runTransaction((transaction) => this._assertAccountsActive(transaction, request.auth?.uid));
     this._requireAdmin(request);
     const data = requireObject(request && request.data || {}, "data");
     const limit = data.limit == null ? 50 : requiredInteger(data.limit, "limit", 1, MAX_ADMIN_LIST_LIMIT);
@@ -1180,6 +1199,7 @@ class RundeanalyseAccessService {
   }
 
   async getAdminAudit(request) {
+    await this.db.runTransaction((transaction) => this._assertAccountsActive(transaction, request.auth?.uid));
     this._requireAdmin(request);
     const data = requireObject(request && request.data || {}, "data");
     const limit = data.limit == null ? 50 : requiredInteger(data.limit, "limit", 1, MAX_ADMIN_LIST_LIMIT);
@@ -1191,6 +1211,7 @@ class RundeanalyseAccessService {
   }
 
   async getAdminOverview(request) {
+    await this.db.runTransaction((transaction) => this._assertAccountsActive(transaction, request.auth?.uid));
     this._requireAdmin(request);
     const data = requireObject(request && request.data || {}, "data");
     const limit = data.limit == null ? 25 : requiredInteger(data.limit, "limit", 1, MAX_ADMIN_LIST_LIMIT);

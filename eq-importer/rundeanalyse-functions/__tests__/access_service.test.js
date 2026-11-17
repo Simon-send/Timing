@@ -191,6 +191,15 @@ function codeDocumentPath(code) {
 }
 
 describe("RundeanalyseAccessService", () => {
+  test("deletion barrier prevents account re-enrollment and quota writes", async () => {
+    const {db, service} = makeService({"rundeanalyseAccountDeletions/athlete-1": {status: "deleting"}});
+    const request = verifiedRequest("athlete-1", {idempotencyKey: "deletion-test-0001"});
+    await expect(service.getAccessStatus(request)).rejects.toMatchObject({code: "failed-precondition"});
+    await expect(service.consumeAnalysis(request)).rejects.toMatchObject({code: "failed-precondition"});
+    expect(db.documents.has("rundeanalyseUsers/athlete-1")).toBe(false);
+    expect([...db.documents.keys()].filter((path) => path.startsWith("rundeanalyseUsage/"))).toHaveLength(0);
+  });
+
   test("history finds older filtered rows and paginates equal timestamps without losses", async () => {
     const seed = {};
     for (let i = 0; i < 1200; i++) {
