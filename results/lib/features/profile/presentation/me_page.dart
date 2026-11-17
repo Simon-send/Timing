@@ -16,6 +16,9 @@ import '../../consents/presentation/consent_settings_dialog.dart';
 import '../../events/domain/result_event.dart';
 import '../../results/presentation/result_locations.dart';
 import '../../results/presentation/shooting_selection_panel.dart';
+import '../../results/domain/shooting_selection.dart';
+import '../domain/season_shooting_statistics.dart';
+import 'season_shooting_distribution_panel.dart';
 import '../../settings/presentation/settings_menu.dart';
 import '../data/athlete_profile_repository.dart';
 import '../domain/athlete_profile.dart';
@@ -489,6 +492,8 @@ class AthleteSeasonResults extends StatefulWidget {
 
 class _AthleteSeasonResultsState extends State<AthleteSeasonResults> {
   AthleteSeasonSelection _selection = const AthleteSeasonSelection.all();
+  ShootingMetric _shootingMetric = ShootingMetric.hits;
+  ShootingSelection _shootingSelection = ShootingSelection.all;
 
   @override
   Widget build(BuildContext context) {
@@ -535,6 +540,13 @@ class _AthleteSeasonResultsState extends State<AthleteSeasonResults> {
           )) ...[
             ShellPanel(
               child: ShootingSelectionPanel(
+                showDistribution: false,
+                metric: _shootingMetric,
+                selection: _shootingSelection,
+                onMetricChanged: (metric) =>
+                    setState(() => _shootingMetric = metric),
+                onSelectionChanged: (selection) =>
+                    setState(() => _shootingSelection = selection),
                 onRaceSelected: (race) {
                   if (race.eventId.isEmpty ||
                       race.classId.isEmpty ||
@@ -616,12 +628,54 @@ class _AthleteSeasonResultsState extends State<AthleteSeasonResults> {
           const SizedBox(height: 14),
         ],
         ShellPanel(
+          key: const Key('season-race-list'),
           child: _RaceList(
             profile: widget.profile,
             races: selectedRaces,
             events: widget.events,
           ),
         ),
+        if (scope.statisticalRaces.any(
+          (race) => race.biathlonMetrics != null,
+        )) ...[
+          const SizedBox(height: 14),
+          ShellPanel(
+            child: SeasonShootingDistributionPanel(
+              statistics: calculateSeasonShootingStatistics(
+                scope.statisticalRaces
+                    .where((race) => race.biathlonMetrics != null)
+                    .toList(),
+                _shootingSelection,
+              ).forMetric(_shootingMetric),
+              metric: _shootingMetric,
+              metricLabel: shootingMetricLabel(
+                _shootingMetric,
+                AppLocalizations.of(context),
+              ),
+              raceLabel: (race) => [
+                dataset.eventsById[race.eventId]?.name ?? race.eventId,
+                dataset.eventsById[race.eventId]?.dateLabel ?? '',
+                race.className,
+              ].where((text) => text.isNotEmpty).join(' · '),
+              onRaceSelected: (race) {
+                if (race.eventId.isEmpty ||
+                    race.classId.isEmpty ||
+                    race.resultId.isEmpty) {
+                  return;
+                }
+                context.go(
+                  athleteLocation(
+                    eventId: race.eventId,
+                    classId: race.classId,
+                    resultId: race.resultId,
+                    stageId: race.stageId,
+                    relayLegNumber: race.relayLegNumber,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ],
     );
   }

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+<!-- Skating silhouette based on the approved biathlete preview. Transparent background. -->
+<g fill="none" stroke="#231f20" stroke-linecap="round" stroke-linejoin="round">
+<path d="M111 44 L88 33 L66 46" stroke-width="10"/>
+<path d="M66 46 L10 16 M76 86 L21 82" stroke-width="3" stroke-linecap="square"/>
+<path d="M111 49 L81 76 L74 104 L53 130 M82 78 L112 106 L94 134" stroke-width="14"/>
+<path d="M22 116 L92 150 Q98 153 101 149 M62 127 L144 143 Q150 144 153 140" stroke-width="5"/>
+</g>
+<circle cx="131" cy="35" r="10" fill="#231f20"/>
+<!-- Rifle carried diagonally behind the shoulder, separated from the body. -->
+<path d="M66 65 L77 69 L101 44 L97 40 Z M96 39 L120 15 L123 18 L100 43 Z M118 13 L122 10 L125 14 L121 17 Z" fill="#231f20"/>
+<path d="M70 59 L75 64 L100 39 L96 35 Z" fill="#231f20"/>
+</svg>

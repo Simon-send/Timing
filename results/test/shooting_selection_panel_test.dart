@@ -6,6 +6,8 @@ import 'package:results/features/events/domain/result_event.dart';
 import 'package:results/features/profile/domain/athlete_profile.dart';
 import 'package:results/features/profile/domain/biathlon_comparison.dart';
 import 'package:results/features/profile/presentation/me_page.dart';
+import 'package:results/features/profile/presentation/season_shooting_distribution_panel.dart';
+import 'package:results/features/results/domain/shooting_selection.dart';
 import 'package:results/features/results/domain/race_result.dart';
 import 'package:results/features/results/presentation/shooting_selection_panel.dart';
 import 'package:results/l10n/app_localizations.dart';
@@ -174,6 +176,34 @@ void main() {
       void value(String id, String text) => expect(
         find.descendant(of: card(id), matching: find.text(text)),
         findsOneWidget,
+      );
+      final distribution = find.byType(SeasonShootingDistributionPanel);
+      expect(distribution, findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ShootingSelectionPanel),
+          matching: distribution,
+        ),
+        findsNothing,
+      );
+      expect(
+        tester.getTopLeft(distribution).dy,
+        greaterThan(
+          tester.getBottomLeft(find.byKey(const Key('season-race-list'))).dy,
+        ),
+      );
+      expect(
+        tester
+            .getTopLeft(find.byKey(const Key('season-shooting-hit-percent')))
+            .dy,
+        lessThan(
+          tester.getTopLeft(find.byKey(const Key('season-race-list'))).dy,
+        ),
+      );
+      await choose(tester, 'shooting-metric-selector', 'Time on the range');
+      expect(
+        tester.widget<SeasonShootingDistributionPanel>(distribution).metric,
+        ShootingMetric.rangeTime,
       );
       value('hit-percent', '76.7 %');
       value('hit-percent', '23 hits / 30 known shots');

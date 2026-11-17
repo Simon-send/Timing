@@ -34,8 +34,18 @@ class ShootingSelectionPanel extends StatefulWidget {
     this.statisticsRaces,
     this.raceLabel,
     this.onRaceSelected,
+    this.showDistribution = true,
+    this.metric,
+    this.selection,
+    this.onMetricChanged,
+    this.onSelectionChanged,
   });
 
+  final bool showDistribution;
+  final ShootingMetric? metric;
+  final ShootingSelection? selection;
+  final ValueChanged<ShootingMetric>? onMetricChanged;
+  final ValueChanged<ShootingSelection>? onSelectionChanged;
   final List<ShootingSelectionEntry> entries;
   final List<AthleteRace>? statisticsRaces;
   final String Function(AthleteRace)? raceLabel;
@@ -46,8 +56,10 @@ class ShootingSelectionPanel extends StatefulWidget {
 }
 
 class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
-  ShootingMetric _metric = ShootingMetric.hits;
-  ShootingSelection _selection = ShootingSelection.all;
+  ShootingMetric _localMetric = ShootingMetric.hits;
+  ShootingMetric get _metric => widget.metric ?? _localMetric;
+  ShootingSelection _localSelection = ShootingSelection.all;
+  ShootingSelection get _selection => widget.selection ?? _localSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +104,10 @@ class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
               ),
           ],
           onChanged: (value) {
-            if (value != null) setState(() => _metric = value);
+            if (value != null) {
+              setState(() => _localMetric = value);
+              widget.onMetricChanged?.call(value);
+            }
           },
         ),
         const SizedBox(height: 10),
@@ -112,20 +127,25 @@ class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
               ),
           ],
           onChanged: (value) {
-            if (value != null) setState(() => _selection = value);
+            if (value != null) {
+              setState(() => _localSelection = value);
+              widget.onSelectionChanged?.call(value);
+            }
           },
         ),
         if (statistics != null) ...[
           const SizedBox(height: 14),
           _SeasonStatistics(statistics: statistics),
-          const SizedBox(height: 14),
-          SeasonShootingDistributionPanel(
-            statistics: statistics.forMetric(_metric),
-            metric: _metric,
-            metricLabel: shootingMetricLabel(_metric, l10n),
-            raceLabel: raceLabel,
-            onRaceSelected: widget.onRaceSelected,
-          ),
+          if (widget.showDistribution) ...[
+            const SizedBox(height: 14),
+            SeasonShootingDistributionPanel(
+              statistics: statistics.forMetric(_metric),
+              metric: _metric,
+              metricLabel: shootingMetricLabel(_metric, l10n),
+              raceLabel: raceLabel,
+              onRaceSelected: widget.onRaceSelected,
+            ),
+          ],
         ],
         for (final entry in widget.entries) ...[
           const SizedBox(height: 14),
