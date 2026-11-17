@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:results/l10n/app_localizations.dart';
 
 import '../../../app/app_theme.dart';
@@ -222,9 +223,14 @@ class _EventFiltersState extends State<EventFilters> {
       onPressed: () => widget.onChanged(
         widget.criteria.copyWith(sport: selected ? '' : sport),
       ),
-      icon: CustomPaint(
-        size: const Size.square(24),
-        painter: _SkiSportPainter(color: foreground, biathlon: biathlon),
+      icon: SvgPicture.asset(
+        biathlon
+            ? 'assets/sports/biathlon.svg'
+            : 'assets/sports/cross_country.svg',
+        width: 24,
+        height: 24,
+        excludeFromSemantics: true,
+        colorFilter: ColorFilter.mode(foreground, BlendMode.srcIn),
       ),
     );
   }
@@ -849,65 +855,6 @@ List<String> _options(Iterable<String> values) {
   final result = normalized.values.toList();
   result.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
   return result;
-}
-
-class _SkiSportPainter extends CustomPainter {
-  const _SkiSportPainter({required this.color, required this.biathlon});
-
-  final Color color;
-  final bool biathlon;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.scale(size.width / 24, size.height / 24);
-    final stroke = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    canvas.drawCircle(const Offset(14, 4), 1.7, Paint()..color = color);
-    final skier = Path()
-      ..moveTo(12, 7)
-      ..lineTo(10, 12)
-      ..lineTo(6, 15)
-      ..lineTo(3, 19)
-      ..moveTo(10, 12)
-      ..lineTo(14, 15)
-      ..lineTo(18, 19)
-      ..moveTo(12, 7)
-      ..lineTo(16, 10)
-      ..lineTo(19, 8)
-      ..moveTo(11, 10)
-      ..lineTo(7, 10)
-      ..lineTo(5, 13)
-      ..moveTo(6, 12)
-      ..lineTo(3, 21)
-      ..moveTo(19, 8)
-      ..lineTo(21, 21)
-      ..moveTo(1, 21)
-      ..lineTo(12, 21)
-      ..lineTo(14, 20)
-      ..moveTo(10, 23)
-      ..lineTo(22, 23)
-      ..lineTo(23, 22);
-    canvas.drawPath(skier, stroke);
-    if (biathlon) {
-      canvas.drawPath(
-        Path()
-          ..moveTo(6, 1.5)
-          ..lineTo(10.5, 10.5)
-          ..lineTo(8.5, 11.5),
-        stroke..strokeWidth = 2.2,
-      );
-    }
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_SkiSportPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.biathlon != biathlon;
 }
 
 class _FilterText {
