@@ -16,7 +16,7 @@ const COLLECTIONS = Object.freeze({
 });
 
 const DEFAULT_CONFIG = Object.freeze({
-  freeAnalysisLimit: 5,
+  freeAnalysisLimit: 15,
   freePeriodDays: 35,
   offerEnabled: true,
 });
@@ -26,7 +26,6 @@ const MAX_FREE_PERIOD_DAYS = 3650;
 const MAX_CODE_CREDITS = 1000000;
 const MAX_LINKED_CODES_PER_USER = 20;
 const MAX_ADMIN_LIST_LIMIT = 100;
-const DAY_MS = 24 * 60 * 60 * 1000;
 const GUEST_SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 
 class AccessError extends Error {
@@ -221,10 +220,10 @@ function accessStatusForUser(config, user, accountCreatedAtMs, nowMs) {
   const freePeriodStartedAtMs = Number.isInteger(user.freePeriodStartedAtMs) ?
     user.freePeriodStartedAtMs : accountCreatedAtMs;
   const freeAnalysesUsed = Number.isInteger(user.freeAnalysesUsed) ? user.freeAnalysesUsed : 0;
-  const freePeriodEndsAtMs = freePeriodStartedAtMs + config.freePeriodDays * DAY_MS;
-  const freePeriodActive = nowMs < freePeriodEndsAtMs;
-  const freeRemainingAnalyses = freePeriodActive ?
-    Math.max(0, config.freeAnalysisLimit - freeAnalysesUsed) : 0;
+  // Starter credits are a lifetime allowance; never reset historical use.
+  const freePeriodEndsAtMs = null;
+  const freePeriodActive = true; // Legacy clients; new clients use the explicit flag.
+  const freeRemainingAnalyses = Math.max(0, config.freeAnalysisLimit - freeAnalysesUsed);
   const annualAccessUntilMs = Number.isInteger(user.annualAccessUntilMs) ? user.annualAccessUntilMs : null;
   const bonusAnalysesRemaining = Number.isInteger(user.bonusAnalysesRemaining) ?
     Math.max(0, user.bonusAnalysesRemaining) : 0;
@@ -238,6 +237,7 @@ function accessStatusForUser(config, user, accountCreatedAtMs, nowMs) {
     freeRemainingAnalyses,
     freePeriodStartsAtMs: freePeriodStartedAtMs,
     freePeriodEndsAtMs,
+    freeAllowanceExpires: false,
     freePeriodActive,
     offerActive: config.offerEnabled && freePeriodActive && freeRemainingAnalyses > 0,
   };
@@ -258,6 +258,7 @@ function normaliseConfig(data) {
       0,
       MAX_FREE_PERIOD_DAYS,
     ),
+    freeAllowanceExpires: false,
     offerEnabled: candidate.offerEnabled !== false,
   };
 }

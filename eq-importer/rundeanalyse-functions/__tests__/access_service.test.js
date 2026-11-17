@@ -215,7 +215,7 @@ describe("RundeanalyseAccessService", () => {
     expect(second.entries.map((row) => row.id)).toEqual(["a"]);
     expect(second.nextCursorId).toBeNull();
   });
-  test("starts the free window on first Rundeanalyse status and consumes exactly once", async () => {
+  test("starts a permanent allowance on first Rundeanalyse status and consumes exactly once", async () => {
     const {db, service} = makeService();
     const status = await service.getAccessStatus(verifiedRequest());
 
@@ -223,8 +223,8 @@ describe("RundeanalyseAccessService", () => {
       signedIn: true,
       isAdmin: false,
       access: {
-        freeAnalysisLimit: 5,
-        freeRemainingAnalyses: 5,
+        freeAnalysisLimit: 15,
+        freeRemainingAnalyses: 15,
         freePeriodStartsAtMs: NOW_MS,
       },
     });
@@ -239,6 +239,47 @@ describe("RundeanalyseAccessService", () => {
     expect(db.data("rundeanalyseUsers/athlete-1").freeAnalysesUsed).toBe(1);
     expect(db.data("rundeanalyseStats/overview").totalAnalyses).toBe(1);
     expect([...db.documents.keys()].filter((path) => path.startsWith("rundeanalyseUsage/"))).toHaveLength(1);
+  });
+
+  test.each([[4, 11, true], [15, 0, false], [20, 0, false]])(
+    "expired starter account with %i spent retains %i credits without a reset",
+    async (used, remaining, allowed) => {
+      const {db, service} = makeService({
+        "rundeanalyseConfig/default": {freeAnalysisLimit: 15, freePeriodDays: 1},
+        "rundeanalyseUsers/athlete-1": {freePeriodStartedAtMs: NOW_MS - 400 * DAY_MS, freeAnalysesUsed: used},
+      });
+      const status = await service.getAccessStatus(verifiedRequest());
+      expect(status.access).toMatchObject({freeRemainingAnalyses: remaining, freeAllowanceExpires: false, freePeriodEndsAtMs: null});
+      const request = verifiedRequest("athlete-1", {idempotencyKey: "expired-starter-0001", useFreeAllowance: true});
+      const result = await service.consumeAnalysis(request);
+      expect(result.allowed).toBe(allowed);
+      if (allowed) expect(await service.consumeAnalysis(request)).toEqual(result);
+      expect(db.data("rundeanalyseUsers/athlete-1").freeAnalysesUsed).toBe(used + (allowed ? 1 : 0));
+    },
+  );
+
+  test("changing the global limit preserves usage and clamps the remaining balance", async () => {
+    const {db, service} = makeService({"rundeanalyseUsers/athlete-1": {freeAnalysesUsed: 9}});
+    await service.setConfig(adminRequest({freeAnalysisLimit: 7, reason: "Lower global starter limit"}));
+    expect((await service.getAccessStatus(verifiedRequest())).access.freeRemainingAnalyses).toBe(0);
+    await service.setConfig(adminRequest({freeAnalysisLimit: 20, freePeriodDays: 0, reason: "Increase global starter limit"}));
+    expect((await service.getAccessStatus(verifiedRequest())).access).toMatchObject({freeRemainingAnalyses: 11, freeAllowanceExpires: false});
+    expect(db.data("rundeanalyseUsers/athlete-1").freeAnalysesUsed).toBe(9);
+  });
+
+  test("self-chosen code labels share one pool and canonical collisions are rejected", async () => {
+    const {db, service} = makeService();
+    const raw = "KLUBB-2026";
+    const created = await service.createCode(adminRequest({code: raw, label: raw, credits: 2, reason: "Shared club code"}));
+    expect(created).toMatchObject({code: raw, label: raw});
+    await expect(service.createCode(adminRequest({code: "klubb2026", label: "klubb2026", credits: 2, reason: "Duplicate"})))
+      .rejects.toMatchObject({code: "already-exists"});
+    const first = verifiedRequest("athlete-1", {idempotencyKey: "custom-code-first-01", code: "klubb2026"});
+    const result = await service.consumeAnalysis(first);
+    expect(await service.consumeAnalysis(first)).toEqual(result);
+    expect((await service.consumeAnalysis(verifiedRequest("athlete-2", {idempotencyKey: "custom-code-second-01", code: raw}))).allowed).toBe(true);
+    expect((await service.consumeAnalysis(verifiedRequest("athlete-3", {idempotencyKey: "custom-code-third-01", code: raw}))).allowed).toBe(false);
+    expect(db.data(codeDocumentPath(raw)).remainingAnalyses).toBe(0);
   });
 
   test("uses a matching event for a guest and persists no candidate coordinates", async () => {
@@ -493,7 +534,7 @@ describe("RundeanalyseAccessService", () => {
       .rejects.toMatchObject({code: "permission-denied"});
 
     const result = await service.setConfig(adminRequest({freeAnalysisLimit: 8, freePeriodDays: 21, reason: "Test"}));
-    expect(result).toEqual({config: {freeAnalysisLimit: 8, freePeriodDays: 21, offerEnabled: true}});
+    expect(result).toEqual({config: {freeAnalysisLimit: 8, freePeriodDays: 21, freeAllowanceExpires: false, offerEnabled: true}});
   });
 
   test("creates protected code records and validates event management", async () => {
@@ -556,7 +597,7 @@ describe("RundeanalyseAccessService", () => {
     const overview = await service.getAdminOverview(adminRequest({limit: 10}));
 
     expect(overview).toEqual(expect.objectContaining({
-      config: expect.objectContaining({freeAnalysisLimit: 5, freePeriodDays: 35}),
+      config: expect.objectContaining({freeAnalysisLimit: 15, freePeriodDays: 35}),
       codes: [expect.objectContaining({remainingAnalyses: 2})],
       users: [expect.objectContaining({uid: "target-1"})],
     }));
