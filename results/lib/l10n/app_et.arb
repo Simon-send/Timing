@@ -1,4 +1,6 @@
 {
+  "showShootingResults": "Näita lasketulemusi",
+  "hideShootingResults": "Peida lasketulemused",
   "eventSportBiathlon": "Laskesuusatamine",
   "eventSportCrossCountry": "Murdmaasuusatamine",
   "biathlonStatistics": "Laskesuusatamise statistika",

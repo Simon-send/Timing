@@ -274,6 +274,22 @@ void main() {
           ),
         ),
       );
+      expect(find.byKey(const Key('season-comparison-open')), findsNothing);
+      final observations = find.byWidgetPredicate(
+        (widget) =>
+            widget.key is Key &&
+            widget.key.toString().contains('shooting-observation-'),
+      );
+      expect(observations, findsNothing);
+      expect(
+        find.byKey(const Key('season-shooting-hit-percent')),
+        findsOneWidget,
+      );
+      final toggle = find.byKey(const Key('shooting-results-toggle'));
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(observations, findsWidgets);
       final panel = find.byType(ShootingSelectionPanel);
       expect(
         tester.widget<ShootingSelectionPanel>(panel).entries,
@@ -296,6 +312,23 @@ void main() {
       expect(
         find.byKey(const Key('shooting-observation-old/class//old-3')),
         findsNothing,
+      );
+      final collapse = find.byKey(const Key('shooting-results-collapse'));
+      await tester.ensureVisible(collapse);
+      await tester.tap(collapse);
+      await tester.pumpAndSettle();
+      expect(observations, findsNothing);
+      expect(find.byKey(const Key('shooting-results-collapse')), findsNothing);
+      expect(
+        find.byKey(const Key('season-shooting-hit-percent')),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('shooting-observation-new/class//new-2')),
+        findsOneWidget,
       );
       expect(tester.takeException(), isNull);
     },

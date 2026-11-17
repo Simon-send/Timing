@@ -35,6 +35,7 @@ class ShootingSelectionPanel extends StatefulWidget {
     this.raceLabel,
     this.onRaceSelected,
     this.showDistribution = true,
+    this.collapsibleResults = false,
     this.metric,
     this.selection,
     this.onMetricChanged,
@@ -42,6 +43,7 @@ class ShootingSelectionPanel extends StatefulWidget {
   });
 
   final bool showDistribution;
+  final bool collapsibleResults;
   final ShootingMetric? metric;
   final ShootingSelection? selection;
   final ValueChanged<ShootingMetric>? onMetricChanged;
@@ -56,6 +58,22 @@ class ShootingSelectionPanel extends StatefulWidget {
 }
 
 class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
+  bool _resultsExpanded = false;
+  final _resultsToggleKey = GlobalKey();
+
+  void _collapseResults() {
+    setState(() => _resultsExpanded = false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _resultsToggleKey.currentContext;
+      if (mounted && context != null) {
+        Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 200),
+        );
+      }
+    });
+  }
+
   ShootingMetric _localMetric = ShootingMetric.hits;
   ShootingMetric get _metric => widget.metric ?? _localMetric;
   ShootingSelection _localSelection = ShootingSelection.all;
@@ -147,9 +165,42 @@ class _ShootingSelectionPanelState extends State<ShootingSelectionPanel> {
             ),
           ],
         ],
-        for (final entry in widget.entries) ...[
-          const SizedBox(height: 14),
-          _Observations(entry: entry, metric: _metric, selection: _selection),
+        if (widget.collapsibleResults && widget.entries.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Center(
+            key: _resultsToggleKey,
+            child: Semantics(
+              expanded: _resultsExpanded,
+              child: IconButton(
+                key: const Key('shooting-results-toggle'),
+                tooltip: _resultsExpanded
+                    ? l10n.hideShootingResults
+                    : l10n.showShootingResults,
+                icon: Icon(
+                  _resultsExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                ),
+                onPressed: () =>
+                    setState(() => _resultsExpanded = !_resultsExpanded),
+              ),
+            ),
+          ),
+        ],
+        if (!widget.collapsibleResults || _resultsExpanded) ...[
+          for (final entry in widget.entries) ...[
+            const SizedBox(height: 14),
+            _Observations(entry: entry, metric: _metric, selection: _selection),
+          ],
+          if (widget.collapsibleResults && widget.entries.isNotEmpty)
+            Center(
+              child: IconButton(
+                key: const Key('shooting-results-collapse'),
+                tooltip: l10n.hideShootingResults,
+                icon: const Icon(Icons.keyboard_arrow_up),
+                onPressed: _collapseResults,
+              ),
+            ),
         ],
       ],
     );

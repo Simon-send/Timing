@@ -9,6 +9,12 @@ class AppLocalizationsEt extends AppLocalizations {
   AppLocalizationsEt([String locale = 'et']) : super(locale);
 
   @override
+  String get showShootingResults => 'Näita lasketulemusi';
+
+  @override
+  String get hideShootingResults => 'Peida lasketulemused';
+
+  @override
   String get eventSportBiathlon => 'Laskesuusatamine';
 
   @override

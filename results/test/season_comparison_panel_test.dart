@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:results/app/app_theme.dart';
 import 'package:results/core/widgets/histogram_chart.dart';
 import 'package:results/features/profile/domain/athlete_season.dart';
+import 'package:results/features/profile/domain/athlete_profile.dart';
+import 'package:results/features/events/domain/result_event.dart';
+import 'package:results/features/results/presentation/result_locations.dart';
 import 'package:results/features/profile/presentation/me_page.dart';
 import 'package:results/features/profile/presentation/season_comparison_panel.dart';
 import 'package:results/l10n/app_localizations.dart';
@@ -123,7 +126,7 @@ void main() {
             path: '/me',
             builder: (context, state) => Scaffold(
               body: SingleChildScrollView(
-                child: AthleteSeasonResults(
+                child: ComparisonTestProfile(
                   profile: profile,
                   races: comparisonRaces(),
                   events: comparisonEvents(),
@@ -198,7 +201,7 @@ void main() {
           path: '/me',
           builder: (context, state) => Scaffold(
             body: SingleChildScrollView(
-              child: AthleteSeasonResults(
+              child: ComparisonTestProfile(
                 profile: profile,
                 races: races,
                 events: [
@@ -324,4 +327,35 @@ void main() {
       },
     );
   }
+}
+
+// Keep the temporarily hidden comparison independently covered, including routing.
+class ComparisonTestProfile extends StatelessWidget {
+  const ComparisonTestProfile({
+    super.key,
+    required this.profile,
+    required this.races,
+    required this.events,
+  });
+  final AthleteProfile profile;
+  final List<AthleteRace> races;
+  final List<ResultEvent> events;
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      AthleteSeasonResults(profile: profile, races: races, events: events),
+      SeasonComparisonButton(
+        dataset: AthleteSeasonDataset(races: races, events: events),
+        onRaceSelected: (race) => context.go(
+          athleteLocation(
+            eventId: race.eventId,
+            classId: race.classId,
+            resultId: race.resultId,
+            stageId: race.stageId,
+            relayLegNumber: race.relayLegNumber,
+          ),
+        ),
+      ),
+    ],
+  );
 }

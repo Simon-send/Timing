@@ -1,4 +1,6 @@
 {
+  "showShootingResults": "Näytä ampumatulokset",
+  "hideShootingResults": "Piilota ampumatulokset",
   "eventSportBiathlon": "Ampumahiihto",
   "eventSportCrossCountry": "Maastohiihto",
   "biathlonStatistics": "Ampumahiihtotilastot",

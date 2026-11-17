@@ -1,4 +1,6 @@
 {
+  "showShootingResults": "Vis skyteresultater",
+  "hideShootingResults": "Skjul skyteresultater",
   "eventSportBiathlon": "Skiskyting",
   "eventSportCrossCountry": "Langrenn",
   "biathlonStatistics": "Skiskytterstatistikk",

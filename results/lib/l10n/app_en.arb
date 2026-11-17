@@ -1,4 +1,6 @@
 {
+  "showShootingResults": "Show shooting results",
+  "hideShootingResults": "Hide shooting results",
   "eventSportBiathlon": "Biathlon",
   "eventSportCrossCountry": "Cross-country skiing",
   "biathlonStatistics": "Biathlon statistics",

@@ -24,7 +24,6 @@ import '../data/athlete_profile_repository.dart';
 import '../domain/athlete_profile.dart';
 import '../domain/athlete_season.dart';
 import 'athlete_season_selector.dart';
-import 'season_comparison_panel.dart';
 import 'biathlon_comparison_panel.dart';
 import 'race_pacing_profile_panel.dart';
 import 'result_history_panel.dart';
@@ -514,26 +513,6 @@ class _AthleteSeasonResultsState extends State<AthleteSeasonResults> {
           ),
         ),
         const SizedBox(height: 14),
-        SeasonComparisonButton(
-          dataset: dataset,
-          onRaceSelected: (race) {
-            if (race.eventId.isEmpty ||
-                race.classId.isEmpty ||
-                race.resultId.isEmpty) {
-              return;
-            }
-            context.go(
-              athleteLocation(
-                eventId: race.eventId,
-                classId: race.classId,
-                resultId: race.resultId,
-                stageId: race.stageId,
-                relayLegNumber: race.relayLegNumber,
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 14),
         if (selectedRaces.isNotEmpty) ...[
           if (scope.statisticalRaces.any(
             (race) => race.biathlonMetrics != null,
@@ -541,6 +520,7 @@ class _AthleteSeasonResultsState extends State<AthleteSeasonResults> {
             ShellPanel(
               child: ShootingSelectionPanel(
                 showDistribution: false,
+                collapsibleResults: true,
                 metric: _shootingMetric,
                 selection: _shootingSelection,
                 onMetricChanged: (metric) =>
