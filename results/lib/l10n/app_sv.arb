@@ -1,4 +1,6 @@
 {
+  "showShootingResults": "Visa skytteresultat",
+  "hideShootingResults": "Dölj skytteresultat",
   "eventSportBiathlon": "Skidskytte",
   "eventSportCrossCountry": "Längdskidåkning",
   "biathlonStatistics": "Skidskyttestatistik",

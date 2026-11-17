@@ -1,4 +1,6 @@
 {
+  "showShootingResults": "Schießergebnisse anzeigen",
+  "hideShootingResults": "Schießergebnisse ausblenden",
   "eventSportBiathlon": "Biathlon",
   "eventSportCrossCountry": "Skilanglauf",
   "biathlonStatistics": "Biathlonstatistik",

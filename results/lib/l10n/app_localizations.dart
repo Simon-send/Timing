@@ -114,6 +114,18 @@ abstract class AppLocalizations {
     Locale('sv'),
   ];
 
+  /// No description provided for @showShootingResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Show shooting results'**
+  String get showShootingResults;
+
+  /// No description provided for @hideShootingResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide shooting results'**
+  String get hideShootingResults;
+
   /// No description provided for @eventSportBiathlon.
   ///
   /// In en, this message translates to:

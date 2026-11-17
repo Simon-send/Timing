@@ -1,4 +1,6 @@
 {
+  "showShootingResults": "Mostra i risultati di tiro",
+  "hideShootingResults": "Nascondi i risultati di tiro",
   "eventSportBiathlon": "Biathlon",
   "eventSportCrossCountry": "Sci di fondo",
   "biathlonStatistics": "Statistiche di biathlon",

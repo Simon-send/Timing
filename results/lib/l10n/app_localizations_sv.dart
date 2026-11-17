@@ -9,6 +9,12 @@ class AppLocalizationsSv extends AppLocalizations {
   AppLocalizationsSv([String locale = 'sv']) : super(locale);
 
   @override
+  String get showShootingResults => 'Visa skytteresultat';
+
+  @override
+  String get hideShootingResults => 'Dölj skytteresultat';
+
+  @override
   String get eventSportBiathlon => 'Skidskytte';
 
   @override

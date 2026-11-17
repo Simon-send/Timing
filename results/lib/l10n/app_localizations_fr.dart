@@ -9,6 +9,12 @@ class AppLocalizationsFr extends AppLocalizations {
   AppLocalizationsFr([String locale = 'fr']) : super(locale);
 
   @override
+  String get showShootingResults => 'Afficher les résultats de tir';
+
+  @override
+  String get hideShootingResults => 'Masquer les résultats de tir';
+
+  @override
   String get eventSportBiathlon => 'Biathlon';
 
   @override
